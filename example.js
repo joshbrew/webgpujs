@@ -110,43 +110,51 @@ function setupWebGPUConverterUI(fn, target=document.body, shaderType) {
 
 let ex1Id = setupWebGPUConverterUI(dft, document.getElementById('ex1'));
 
+setTimeout(() => {     
 console.time('createComputePipeline');
-WebGPUjs.createPipeline(dft).then(pipeline => {
-    console.timeEnd('createComputePipeline');
-    // Create some sample input data
-    const len = 256;
-    const inputData = new Float32Array(len).fill(1.0); // Example data
-    const outputData = new Float32Array(len*2).fill(0); //only need to upload once if len is the same, dfts return real and imag for single vectors (unless we convert gpu-side)
-    //console.log(pipeline);
-    // Run the process method to execute the shader
-    
-    console.time('run DFT with initial buffering');
-    pipeline.process(inputData,outputData).then(result => {
-        console.timeEnd('run DFT with initial buffering');
-        console.log(result); // Log the output
-        // if(result[2]?.buffer) { //we returned the uniform buffer for some reason, double check alignments
-        //     console.log(
-        //         new DataView(result[2].buffer).getInt32(16,true) // the int32 is still correctly encoded
-        //     )
-        // }
+    WebGPUjs.createPipeline(dft).then(pipeline => {
+        console.timeEnd('createComputePipeline');
+        // Create some sample input data
+        const len = 256;
+        const inputData = new Float32Array(len).fill(1.0); // Example data
+        const outputData = new Float32Array(len*2).fill(0); //only need to upload once if len is the same, dfts return real and imag for single vectors (unless we convert gpu-side)
+        //console.log(pipeline);
+        // Run the process method to execute the shader       
+        console.log('Note: single threaded test');
+        console.time('run DFT with initial buffering');
+        pipeline.process(inputData,outputData).then(result => {
+            console.timeEnd('run DFT with initial buffering');
+            console.log('Results can be multiple buffers:',result); // Log the output
 
-        const inputData2 = new Float32Array(len).fill(2.0); // Example data, same length so outputData can be the same
-        console.time('run DFT only updating inputData buffer');
-        pipeline.process(inputData2,outputData).then(() => {
-            console.timeEnd('run DFT only updating inputData buffer');
+            const inputData2 = new Float32Array(len).fill(2.0); // Example data, same length so outputData can be the same
 
-            console.time('addFunction and recompile shader pipeline');
-            pipeline.addFunction(function mul(a=vec2f(2,0),b=vec2f(2,0)) { return a * b; }).then((p) => {
-                console.timeEnd('addFunction and recompile shader pipeline');
-                console.log(p);
-                document.getElementById('t1_'+ex1Id).value = p.compute.code;
-    
+            console.time('run DFT only updating inputData buffer values');
+            pipeline.process(inputData2).then((r2) => {
+                console.timeEnd('run DFT only updating inputData buffer values');
+                console.log('Result2:',r2); // Log the output
+
+                const len2 = 1024;
+                const inputData3 = new Float32Array(len2).fill(3.0); // Example data
+                const outputData3 = new Float32Array(len2*2).fill(0); //only need to upload once if len is the same, dfts return real and imag for single vectors (unless we convert gpu-side)
+
+                console.time('run DFT dynamically resizing inputData and outputData');
+                pipeline.process(inputData3,outputData3).then((r3) => {
+                    console.timeEnd('run DFT dynamically resizing inputData and outputData');
+                    console.log('Results can be dynamically resized:', r3); // Log the output
+                    console.time('addFunction and recompile shader pipeline');
+                    pipeline.addFunction(function mul(a=vec2f(2,0),b=vec2f(2,0)) { return a * b; }).then((p) => {
+                        console.timeEnd('addFunction and recompile shader pipeline');
+                        console.log(p);
+                        document.getElementById('t1_'+ex1Id).value = p.compute.code;
+            
+                    });
+                });
             });
-        })
-
+        });
 
     });
-});
+
+}, 1000);
 
 
 const dftReference = `
