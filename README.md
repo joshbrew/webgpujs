@@ -5,6 +5,7 @@
 The compute shaders work great but rendering is currently broken so docs and examples are forthcoming, but check this out!
 
 ![cap](./compute.PNG)
+![code](./workflow.PNG)
 ![cap2](./fragvert.PNG)
 
 Write full featured WebGPU compute and rendering shaders with implicit javascript! ... Inspired by GPUjs

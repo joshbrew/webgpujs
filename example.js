@@ -118,7 +118,7 @@ WebGPUjs.createPipeline(dft).then(pipeline => {
     // Create some sample input data
     const len = 256;
     const inputData = new Float32Array(len).fill(1.0); // Example data
-    const outputData = new Float32Array(len*2).fill(0);
+    const outputData = new Float32Array(len*2).fill(0); //only need to upload once
     //console.log(pipeline);
     // Run the process method to execute the shader
     
