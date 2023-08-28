@@ -1,5 +1,7 @@
 ## WebGPUjs
 
+Write full featured WGSL pipelines in plain javascript.
+
 **Work in Progress**
 
 The compute shaders work great but rendering is currently broken so docs and examples are forthcoming, but check this out!
