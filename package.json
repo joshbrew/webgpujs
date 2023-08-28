@@ -1,0 +1,36 @@
+{
+  "name": "webgpujs",
+  "version": "0.0.0",
+  "description": "Barebones esbuild and test node server implementation. For building",
+  "main": "./webgpujs.js",
+  "module": "./dist/webgpujs.esm.js",
+  "type": "module",
+  "scripts": {
+    "start": "tinybuild",
+    "build": "tinybuild build",
+    "serve": "tinybuild serve",
+    "init": "node tinybuild/init.js",
+    "concurrent": "concurrently \"npm run python\" \"npm start\"",
+    "dev": "npm run pip && npm i --save-dev concurrently && npm i --save-dev nodemon && npm run concurrent",
+    "startdev": "nodemon --exec \"node tinybuild.js\" -e ejs,js,ts,jsx,tsx,css,html,jpg,png,scss,txt,csv",
+    "python": "python python/server.py",
+    "pip": "pip install quart && pip install websockets",
+    "pwa": "npm i workbox-cli && workbox generateSW node_server/pwa/workbox-config.js && npm run build && npm start"
+  },
+  "keywords": [
+    "esbuild"
+  ],
+  "author": "",
+  "license": "AGPL-3.0-or-later",
+  "dependencies": {},
+  "devDependencies": {},
+  "nodemonConfig": {
+    "env": {
+      "NODEMON": true
+    },
+    "ignore": [
+      "dist/",
+      ".temp/"
+    ]
+  }
+}
