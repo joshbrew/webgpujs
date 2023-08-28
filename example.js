@@ -8,8 +8,7 @@ function dft(
     outp3 = mat2x2(vec2(1.0,1.0),vec2(1.0,1.0)), //approximate data structure wrappers will infer float or int from decimal usage
     outp4 = 4,
     outp5 = vec3(1,2,3),
-    outp6 = [vec2(1.0,1.0)],
-    tex1 = [255,255,255,1] //rgba uint8 texture
+    outp6 = [vec2(1.0,1.0)]
 ) {
 
     function add(a=vec2f(0.0,0.0),b=vec2f(0.0,0.0)) { //transpiled out of main body
@@ -29,7 +28,6 @@ function dft(
 
     var sum2 = add(sum,sum);
 
-    let y = resX;
 
     const b = 3 + outp4;
 
@@ -118,26 +116,34 @@ WebGPUjs.createPipeline(dft).then(pipeline => {
     // Create some sample input data
     const len = 256;
     const inputData = new Float32Array(len).fill(1.0); // Example data
-    const outputData = new Float32Array(len*2).fill(0); //only need to upload once
+    const outputData = new Float32Array(len*2).fill(0); //only need to upload once if len is the same, dfts return real and imag for single vectors (unless we convert gpu-side)
     //console.log(pipeline);
     // Run the process method to execute the shader
     
-    console.time('runDFT');
+    console.time('run DFT with initial buffering');
     pipeline.process(inputData,outputData).then(result => {
-        console.timeEnd('runDFT');
+        console.timeEnd('run DFT with initial buffering');
         console.log(result); // Log the output
-        if(result[2]?.buffer) { //we returned the uniform buffer for some reason, double check alignments
-            console.log(
-                new DataView(result[2].buffer).getInt32(16,true) // the int32 is still correctly encoded
-            )
-        }
+        // if(result[2]?.buffer) { //we returned the uniform buffer for some reason, double check alignments
+        //     console.log(
+        //         new DataView(result[2].buffer).getInt32(16,true) // the int32 is still correctly encoded
+        //     )
+        // }
 
-        console.time('addFunction');
-        pipeline.addFunction(function mul(a=vec2f(2,0),b=vec2f(2,0)) { return a * b; }).then((p) => {
-            console.timeEnd('addFunction');
-            console.log(p);
-            document.getElementById('t1_'+ex1Id).value = p.compute.code;
-        });
+        const inputData2 = new Float32Array(len).fill(2.0); // Example data, same length so outputData can be the same
+        console.time('run DFT only updating inputData buffer');
+        pipeline.process(inputData2,outputData).then(() => {
+            console.timeEnd('run DFT only updating inputData buffer');
+
+            console.time('addFunction and recompile shader pipeline');
+            pipeline.addFunction(function mul(a=vec2f(2,0),b=vec2f(2,0)) { return a * b; }).then((p) => {
+                console.timeEnd('addFunction and recompile shader pipeline');
+                console.log(p);
+                document.getElementById('t1_'+ex1Id).value = p.compute.code;
+    
+            });
+        })
+
 
     });
 });

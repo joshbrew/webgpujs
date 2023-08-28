@@ -528,10 +528,6 @@ fn frag_main(
     
     updateVBO(shaders, vertices, index, bufferOffset=0, dataOffset=0) { //update
         
-        function isTypedArray(x) { //https://stackoverflow.com/a/40319428
-            return (ArrayBuffer.isView(x) && Object.prototype.toString.call(x) !== "[object DataView]");
-        }
-
         if(vertices) {
             // 4: Create vertex buffer to contain vertex data]
         
@@ -653,9 +649,6 @@ fn frag_main(
         let result = [];
         for (let i = 0; i < arr.length; i++) {
             if (Array.isArray(arr[i])) {
-                function isTypedArray(x) { //https://stackoverflow.com/a/40319428
-                    return (ArrayBuffer.isView(x) && Object.prototype.toString.call(x) !== "[object DataView]");
-                }
                 result = result.concat(this.flattenArray(isTypedArray(arr[i]) ? Array.from(arr[i]) : arr[i]));
             } else {
                 result.push(arr[i]);
@@ -796,7 +789,8 @@ fn frag_main(
             const vecSize = typeInfo.size / 4;
             for (let j = 0; j < vecSize; j++) {
                 //console.log(dataView,offset + j * 4)
-                dataView.setFloat32(offset + j * 4, input[j], true);
+                if(inputTypes[i].type.includes('f')) dataView.setFloat32(offset + j * 4, input[j], true);
+                else dataView.setInt32(offset + j * 4, input[j], true);
             }
         } else if (inputTypes[i].type.startsWith('mat')) {
             const flatMatrix = typeof input[0] === 'object' ? this.flattenArray(input) : input;
@@ -841,7 +835,6 @@ fn frag_main(
             // Use a DataView to set values at specific byte offsets
             const dataView = new DataView(this.uniformBuffer.getMappedRange()); //little endian
     
-
             let offset = 0; // Initialize the offset
 
             this.params.forEach((node, i) => {
@@ -860,35 +853,15 @@ fn frag_main(
 
         if(this.defaultUniforms) { //update built-in uniforms (you can add whatever you want to the builtInUniforms list)
 
-            function isTypedArray(x) { //https://stackoverflow.com/a/40319428
-                return (ArrayBuffer.isView(x) && Object.prototype.toString.call(x) !== "[object DataView]");
-            }
-
             let values = [];
-            let totalUniformBufferSize = 0;
-            this.defaultUniforms.forEach((u) => {
-                const typeInfo = wgslTypeSizes[u];
+            this.defaultUniforms.forEach((u) => { 
                 let value = this.builtInUniforms[u]?.callback();
-                if(Array.isArray(value)) {
-                    if(!isTypedArray(value)) value = new Float32Array(value);
-                    if(!this.defaultUniformBuffer) totalUniformBufferSize += value.byteLength;
-                } else if(!this.defaultUniformBuffer) totalUniformBufferSize += 4; //assume 4 bytes per float/int (32 bit)
                 values.push(value);
             });
 
-            if(!this.defaultUniformBuffer) {
-                this.defaultUniformBuffer = this.uniformBuffer = this.device.createBuffer({
-                    size: totalUniformBufferSize, // This should be the sum of byte sizes of all uniforms
-                    usage: GPUBufferUsage.UNIFORM  | GPUBufferUsage.COPY_SRC,
-                    mappedAtCreation: true
-                });
-                this.bufferGroup.defaultUniformBuffer = this.defaultUniformBuffer;
-                
-            }
-
             // Use a DataView to set values at specific byte offsets
             const dataView = new DataView(this.defaultUniformBuffer.getMappedRange()); //little endian
-
+            console.log(this.defaultUniformBuffer,dataView);
             let offset = 0; // Initialize the offset
 
             values.forEach((v,i) => {
@@ -898,7 +871,6 @@ fn frag_main(
             })
 
             this.defaultUniformBuffer.unmap();
-            this.defaultUniformBinding = this.inputBuffers.length; //latest binding in series
         }
     }
 
@@ -1018,9 +990,11 @@ fn frag_main(
                                 }
                             }); 
 
-                            totalUniformBufferSize -= totalUniformBufferSize % 16; //correct final buffer size (IDK)
+                            if(totalUniformBufferSize < 8) totalUniformBufferSize += 8 - totalUniformBufferSize; 
+                            else totalUniformBufferSize -= totalUniformBufferSize % 16; //correct final buffer size (IDK)
                             
                             this.uniformBuffer = this.device.createBuffer({
+                                label:'uniform buffer',
                                 size: totalUniformBufferSize ? totalUniformBufferSize : 4, // This should be the sum of byte sizes of all uniforms
                                 usage: GPUBufferUsage.UNIFORM  | GPUBufferUsage.COPY_SRC,
                                 mappedAtCreation: true
@@ -1066,13 +1040,44 @@ fn frag_main(
                 }
             });
 
-        
+            
+            if(this.defaultUniforms && !this.defaultUniformBuffer) {
+                
+                let totalUniformBufferSize = 0;
+                this.defaultUniforms.forEach((u) => {
+                    if(!this.builtInUniforms[u]) return;
+                    let value = this.builtInUniforms[u].callback();
+                    if(Array.isArray(value)) {
+                        if(!isTypedArray(value)) value = new Float32Array(value);
+                        if(!this.defaultUniformBuffer) totalUniformBufferSize += value.byteLength;
+                    } else if(!this.defaultUniformBuffer) totalUniformBufferSize += 4; //assume 4 bytes per float/int (32 bit)
+                });
+
+                if(totalUniformBufferSize < 8) totalUniformBufferSize += 8 - totalUniformBufferSize; 
+                else totalUniformBufferSize -= totalUniformBufferSize % 16;                            //correct final buffer size (IDK)
+
+                this.defaultUniformBuffer = this.device.createBuffer({
+                    label:'default uniforms',
+                    size: totalUniformBufferSize, // This should be the sum of byte sizes of all uniforms
+                    usage: GPUBufferUsage.UNIFORM  | GPUBufferUsage.COPY_SRC,
+                    mappedAtCreation: true
+                });
+
+                if(this.defaultUniformBinding)
+                    this.inputBuffers[this.defaultUniformBinding] = this.defaultUniformBuffer;
+                else {
+                    this.defaultUniformBinding = this.inputBuffers.length; //latest binding in series
+                }
+                this.bufferGroup.defaultUniformBuffer = this.defaultUniformBuffer;
+            }
+
             //run the buffer() call now for each group tied to each shader based on load order
             bindGroupAlts.forEach((inp,i) => {
                 if(inp) {
                     let groupOwner = Object.entries(shaders).find((obj) => {
                         if(obj.bindGroupNumber === i) {
-                            obj.buffer({vbos,textures,samplerSettings},shaders,...inp);
+                            obj.buffer({vbos,textures,samplerSettings},...inp);
+                            return true;
                         }
                     });
                 }  
@@ -2129,6 +2134,11 @@ fn frag_main(
         return {code:webGPUCode.code, bindings, ast, params:webGPUCode.params, funcStr, defaultUniforms:webGPUCode.defaultUniforms};
     }
 
+}
+
+         
+function isTypedArray(x) { //https://stackoverflow.com/a/40319428
+    return (ArrayBuffer.isView(x) && Object.prototype.toString.call(x) !== "[object DataView]");
 }
 
 function capitalizeFirstLetter(string) {
