@@ -6,7 +6,7 @@ function dft(
     outputData = [], 
     //dummy inputs
     outp3 = mat2x2(vec2(1.0,1.0),vec2(1.0,1.0)), //approximate data structure wrappers will infer float or int from decimal usage
-    outp4 = 4,
+    outp4 = "i32",
     outp5 = vec3(1,2,3),
     outp6 = [vec2(1.0,1.0)]
 ) {

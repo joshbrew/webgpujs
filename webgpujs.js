@@ -1450,6 +1450,7 @@ fn frag_main(
     inferTypeFromValue(value, funcStr, ast) {
         value=value.trim()
         if(value === 'true' || value === 'false') return 'bool';
+        else if(value.startsWith('"') || value.startsWith("'") || value.startsWith('`')) return value.substring(1,value.length-1); //should extract string types
         else if (value.startsWith('vec')) {
             const floatVecMatch = value.match(/vec(\d)f/);
             if (floatVecMatch) {
@@ -1774,7 +1775,6 @@ fn frag_main(
         // Transpose the main body
         let transposed = this.transposeBody(mainBody, funcStr, params, shaderType, shaderType === 'fragment', shaderHead, true);
         code += transposed.code;
-        console.log(transposed.consts);
         if(transposed.consts?.length > 0) 
             code = transposed.consts.join('\n') + '\n\n' + code;
 
@@ -1827,7 +1827,7 @@ fn frag_main(
                 if (p1 || arrayVars.includes(p2)) return match;  // if match is one of the keywords or is an array variable, return it as is
                 return `${p2}.values[${p3}]`;  // otherwise, apply the transformation
             });
-}
+        }
         
         code = code.replace(/(\w+)\.length/g, 'arrayLength(&$1.values)');
 
@@ -2007,7 +2007,6 @@ fn frag_main(
         }
 
 
-        
         // ------ ------ ------ ------ ------ ------ ------ ------ ------ ------
 
         // Ensure lines not ending with a semicolon or open bracket have a semicolon appended. Not sure if this is stable
