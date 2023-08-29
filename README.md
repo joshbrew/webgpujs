@@ -9,6 +9,8 @@ The compute shaders work great but rendering is currently broken so docs and exa
 ![cap](./compute.PNG)
 ![code](./workflow.PNG)
 ![cap2](./fragvert.PNG)
+And the big bug is an issue with how the render pipeline descriptor is set up I think. Another bug recycling uniform buffers (but I may just be doing it wrong). The regex is not perfect either but I covered the most obvious cases, though there is room for improvement.
+![bug](./renderbug.PNG)
 
 Write full featured WebGPU compute and rendering shaders with implicit javascript! ... Inspired by GPUjs
 

@@ -256,11 +256,14 @@ WebGPUjs.createPipeline({
     canvas,
     renderOptions:{
         vertexCount:3,
-        vbos:[
+        vbos:[ //we can upload vbos, though not necessary in current example (think)
             {
-                colors:new Array(3*4).fill(0)
+                //position
+                color:new Array(3*4).fill(0)
+                //
             }
-        ]
+        ],
+        //textures:{}
     }
 }).then(pipeline => {
     console.timeEnd('createRenderPipeline and render triangle');

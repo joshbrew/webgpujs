@@ -12,7 +12,7 @@ export class WebGPUjs {
     // Examples/tests todo: return types, not returning, render, compute + render, compute + compute + render, video texture example (https://webgpu.github.io/webgpu-samples/samples/videoUploading#../../shaders/fullscreenTexturedQuad.wgsl)
     // - whatever else seems important in the wgsl spec. e.g. https://developer.mozilla.org/en-US/docs/Web/API/GPURenderBundle
     // - we could generalze the shader object keys more so it's not just compute/fragment/vertex names
-
+    
 
     static createPipeline = async (
         shaderFunctions,  
