@@ -13,6 +13,8 @@ export class WebGPUjs {
     // - whatever else seems important in the wgsl spec. e.g. https://developer.mozilla.org/en-US/docs/Web/API/GPURenderBundle
     // - we could generalze the shader object keys more so it's not just compute/fragment/vertex names
     
+    // - Uniform buffer recycling doesn't work? Also just merge defaultUniformBuffer with uniformBuffer?
+    // - 
 
     static createPipeline = async (
         shaderFunctions,  
@@ -145,7 +147,7 @@ export class WebGPUjs {
             }
             if(shaderPipeline['fragment']) {
                 let inps = inputs? [...inputs] : [];
-                shaderPipeline.render(renderOptions, ...inps);
+                shaderPipeline.render({...renderOptions}, ...inps);
             }
         }
 
@@ -256,11 +258,19 @@ export class WebGPUjs {
             if(!shaderObj) continue;
 
             if(shaderObj && shaderType === 'fragment' && !shaders.vertex) {
+                let vboInputStrings = [];
 
                 let vboStrings = Array.from({length: nVertexBuffers}, (_, i) => {
+                    vboInputStrings.push(
+                
+`@location(${4*i}) color${i>0 ? i+1 : ''}In: vec4<f32>,
+    @location(${4*i+1}) vertex${i>0 ? i+1 : ''}In: vec3<f32>, 
+    @location(${4*i+2}) normals${i>0 ? i+1 : ''}In: vec3<f32>,
+    @location(${4*i+3}) uv${i>0 ? i+1 : ''}In: vec4<f32>${i===nVertexBuffers-1 ? '' : ','}`
+                    );
                 return `
-    @location(${4*i}) vertex${i>0 ? i+1 : ''}: vec3<f32>, 
-    @location(${4*i+1}) color${i>0 ? i+1 : ''}: vec4<f32>,
+    @location(${4*i}) color${i>0 ? i+1 : ''}: vec4<f32>,
+    @location(${4*i+1}) vertex${i>0 ? i+1 : ''}: vec3<f32>, 
     @location(${4*i+2}) normals${i>0 ? i+1 : ''}: vec3<f32>,
     @location(${4*i+3}) uv${i>0 ? i+1 : ''}: vec4<f32>${i===nVertexBuffers-1 ? '' : ','}`;
             });
@@ -275,14 +285,14 @@ export class WebGPUjs {
 struct Vertex {
     @builtin(position) position: vec4<f32>, //pixel location
     //uploaded vertices from CPU, in interleaved format
-    ${vboStrings.join('\n')}
+    ${vtxInps.join('\n')}
 };
 
 @vertex
 fn vtx_main(
     @builtin(vertex_index) vertexIndex : u32,   //current vertex
     @builtin(instance_index) instanceIndex: u32, //current instance
-    ${vtxInps}
+    ${vboInputStrings}
 ) -> Vertex {
     var pixel: Vertex;
     pixel.color = pixel.position[vertexId];
@@ -542,7 +552,6 @@ fn frag_main(
                 }
                 else vertices = new Float32Array(typeof vertices === 'object' ? this.flattenArray(vertices) : vertices);
             }
-            
             if(!shaders.vertexBuffers || shaders.vertexBuffers[index]?.size !== vertices.byteLength) {
                 if(!shaders.vertexBuffers) shaders.vertexBuffers = [];
 
@@ -555,7 +564,7 @@ fn frag_main(
 
             }
             // Copy the vertex data over to the GPUBuffer using the writeBuffer() utility function
-            this.device.queue.writeBuffer(shaders.vertex.vertexBuffer, bufferOffset, vertices, dataOffset, vertices.length);
+            this.device.queue.writeBuffer(shaders.vertexBuffers[index], bufferOffset, vertices, dataOffset, vertices.length);
         }
     }
 
@@ -583,8 +592,8 @@ fn frag_main(
         const vertexBuffers = Array.from({length:nVertexBuffers}, (_,i) => {return {
             arrayStride: 48,
             attributes: [
-                {format: "float32x3", offset: 0, shaderLocation:  4*i},     //position
-                {format: "float32x4", offset: 12, shaderLocation: 4*i+1},   //color
+                {format: "float32x4", offset: 12, shaderLocation: 4*i},   //color
+                {format: "float32x3", offset: 0, shaderLocation:  4*i+1},     //position
                 {format: "float32x3", offset: 28, shaderLocation: 4*i+2},   //normal
                 {format: "float32x2", offset: 40, shaderLocation: 4*i+3}    //uv
             ]
@@ -645,7 +654,7 @@ fn frag_main(
         return shaders;
     }
     
-    static flattenArray(arr) {
+    flattenArray(arr) {
         let result = [];
         for (let i = 0; i < arr.length; i++) {
             if (Array.isArray(arr[i])) {
@@ -657,13 +666,13 @@ fn frag_main(
         return result;
     }
 
-    static combineVertices(
-        positions, //3d vec array
+    combineVertices(
         colors,    //4d vec array
+        positions, //3d vec array
         normals,   //3d vec array
         uvs        //2d vec array
     ) {
-        const vertexCount = positions.length / 3; // Assuming each position has 3 components
+        const vertexCount = (positions | colors | normals | uvs).length / 3; // Assuming each position has 3 components
         const interleavedVertices = new Float32Array(vertexCount * 12); // 12 values per vertex
 
         for (let i = 0; i < vertexCount; i++) {
@@ -673,13 +682,13 @@ fn frag_main(
             const uvOffset = i * 2;
             const interleavedOffset = i * 12;
 
-            interleavedVertices[interleavedOffset] = positions ? positions[posOffset] || 0 : 0;
-            interleavedVertices[interleavedOffset + 1] = positions ? positions[posOffset + 1] || 0 : 0;
-            interleavedVertices[interleavedOffset + 2] = positions ? positions[posOffset + 2] || 0 : 0;
-            interleavedVertices[interleavedOffset + 3] = colors ? colors[colOffset] || 0 : 0;
-            interleavedVertices[interleavedOffset + 4] = colors ? colors[colOffset + 1] || 0 : 0;
-            interleavedVertices[interleavedOffset + 5] = colors ? colors[colOffset + 2] || 0 : 0;
-            interleavedVertices[interleavedOffset + 6] = colors ? colors[colOffset + 3] || 0 : 0;
+            interleavedVertices[interleavedOffset] = colors ? colors[colOffset] || 0 : 0;
+            interleavedVertices[interleavedOffset + 1] = colors ? colors[colOffset + 1] || 0 : 0;
+            interleavedVertices[interleavedOffset + 2] = colors ? colors[colOffset + 2] || 0 : 0;
+            interleavedVertices[interleavedOffset + 3] = colors ? colors[colOffset + 3] || 0 : 0;
+            interleavedVertices[interleavedOffset + 4] = positions ? positions[posOffset] || 0 : 0;
+            interleavedVertices[interleavedOffset + 5] = positions ? positions[posOffset + 1] || 0 : 0;
+            interleavedVertices[interleavedOffset + 6] = positions ? positions[posOffset + 2] || 0 : 0;
             interleavedVertices[interleavedOffset + 7] = normals ? normals[norOffset] || 0 : 0;
             interleavedVertices[interleavedOffset + 8] = normals ? normals[norOffset + 1] || 0 : 0;
             interleavedVertices[interleavedOffset + 9] = normals ? normals[norOffset + 2] || 0 : 0;
@@ -694,8 +703,8 @@ fn frag_main(
         const vertexCount = interleavedVertices.length / 12;  // Because 12 values per vertex
 
         // Pre-allocating space
-        const positions = new Float32Array(vertexCount * 3);
         const colors = new Float32Array(vertexCount * 4);
+        const positions = new Float32Array(vertexCount * 3);
         const normals = new Float32Array(vertexCount * 3);
         const uvs = new Float32Array(vertexCount * 2);
 
@@ -706,14 +715,14 @@ fn frag_main(
             const norOffset = i * 3;
             const uvOffset = i * 2;
 
-            positions[posOffset] = interleavedVertices[offset];
-            positions[posOffset + 1] = interleavedVertices[offset + 1];
-            positions[posOffset + 2] = interleavedVertices[offset + 2];
+            colors[colOffset] = interleavedVertices[offset];
+            colors[colOffset + 1] = interleavedVertices[offset + 1];
+            colors[colOffset + 2] = interleavedVertices[offset + 2];
+            colors[colOffset + 3] = interleavedVertices[offset + 3];
 
-            colors[colOffset] = interleavedVertices[offset + 3];
-            colors[colOffset + 1] = interleavedVertices[offset + 4];
-            colors[colOffset + 2] = interleavedVertices[offset + 5];
-            colors[colOffset + 3] = interleavedVertices[offset + 6];
+            positions[posOffset] = interleavedVertices[offset + 4];
+            positions[posOffset + 1] = interleavedVertices[offset + 5];
+            positions[posOffset + 2] = interleavedVertices[offset + 6];
 
             normals[norOffset] = interleavedVertices[offset + 7];
             normals[norOffset + 1] = interleavedVertices[offset + 8];
@@ -830,6 +839,7 @@ fn frag_main(
     }
 
     updateUBO(inputs, inputTypes) {
+        if(!inputs) return;
         if(this.uniformBuffer) { //update custom uniforms
 
             // Use a DataView to set values at specific byte offsets
@@ -838,37 +848,41 @@ fn frag_main(
             let offset = 0; // Initialize the offset
 
             this.params.forEach((node, i) => {
-                let input = inputs?.[node.name];
-                if(typeof input !== 'undefined') input = inputs?.[i];
-                if(typeof input !== 'undefined' && node.isUniform && node.isReturned) {
-                    
-                    const typeInfo = wgslTypeSizes[inputTypes[i].type];
-
-                    offset = this.setUBOposition(dataView, inputTypes, typeInfo, offset, input, i);
+                if(node.isUniform && node.isReturned) {
+                    let input;
+                    if(Array.isArray(inputs)) input = inputs[i];
+                    else input = inputs?.[node.name];
+                    if(typeof input !== 'undefined' && node.isUniform && node.isReturned) {
+                        
+                        const typeInfo = wgslTypeSizes[inputTypes[i].type];
+    
+                        offset = this.setUBOposition(dataView, inputTypes, typeInfo, offset, input, i);
+                    }
                 }
             });
+
+            // if(this.defaultUniforms) {
+            //     values.forEach((v,i) => {
+            //         const typeInfo = wgslTypeSizes[this.builtInUniforms[this.defaultUniforms[i]].type];
+    
+            //         offset = this.setUBOposition(dataView,inputTypes,typeInfo,offset,v,i);
+            //     })
+            // }
 
             this.uniformBuffer.unmap();
         }
 
         if(this.defaultUniforms) { //update built-in uniforms (you can add whatever you want to the builtInUniforms list)
 
-            let values = [];
-            this.defaultUniforms.forEach((u) => { 
-                let value = this.builtInUniforms[u]?.callback();
-                values.push(value);
-            });
-
             // Use a DataView to set values at specific byte offsets
             const dataView = new DataView(this.defaultUniformBuffer.getMappedRange()); //little endian
-            console.log(this.defaultUniformBuffer,dataView);
             let offset = 0; // Initialize the offset
 
-            values.forEach((v,i) => {
+            this.defaultUniforms.forEach((u,i) => { 
+                let value = this.builtInUniforms[u]?.callback();
                 const typeInfo = wgslTypeSizes[this.builtInUniforms[this.defaultUniforms[i]].type];
-
-                offset = this.setUBOposition(dataView,inputTypes,typeInfo,offset,values,i);
-            })
+                offset = this.setUBOposition(dataView,inputTypes,typeInfo,offset,value,i);
+            });
 
             this.defaultUniformBuffer.unmap();
         }
@@ -884,7 +898,6 @@ fn frag_main(
         shaders, 
         ...inputs
     ) {
-
         if(vbos) { //todo: we should make a robust way to set multiple inputs on bindings
             vbos.forEach((vertices,i) => {this.updateVBO(shaders, vertices, i)});
         }
@@ -904,10 +917,9 @@ fn frag_main(
             return this.inputBuffers[index].byteLength === inp.length * inputTypes[index].byteSize
         })) allSameSize = true;
         
-        if (!allSameSize || textures) {
-            // Create or recreate input buffers      // Extract all returned variables from the function string
-            // Separate input and output AST nodes
-
+        // Create or recreate input buffers      // Extract all returned variables from the function string
+        // Separate input and output AST nodes
+        if(!allSameSize) {
             const bufferGroup = { };
 
             this.inputBuffers = [];
@@ -915,11 +927,6 @@ fn frag_main(
             this.outputBuffers = [];
             this.textures = {};
             this.samplers = {};
-            let uBufferPushed = false;
-            let inputBufferIndex = 0;
-            let hasUniformBuffer = 0;
-            let textureIncr = 0;
-            let samplerIncr = 0;
 
             bufferGroup.inputBuffers = this.inputBuffers;
             bufferGroup.outputBuffers = this.outputBuffers;
@@ -930,163 +937,170 @@ fn frag_main(
 
             if(!shaders.bufferGroups) shaders.bufferGroups = new Array(2);
             shaders.bufferGroups[this.computePipeline ? 0 : 1] = bufferGroup;
-
-            let bindGroupAlts = [];
-            let hasTextureBuffers = false;
-            this.params.forEach((node, i) => {
-                if(this.altBindings?.[node.name] && this.altBindings?.[node.name].group !== this.bindGroupNumber) {
-                    if(!bindGroupAlts[this.altBindings?.[node.name].group]) {
-                        if(bindGroupAlts[this.altBindings?.[node.name].group].length < this.altBindings?.[node.name].group) bindGroupAlts[this.altBindings?.[node.name].group].length = this.altBindings?.[node.name].group+1; 
-                        bindGroupAlts[this.altBindings?.[node.name].group] = [];
-                    }
-                    if(!bindGroupAlts[this.altBindings?.[node.name].group].length >= binding) bindGroupAlts[this.altBindings?.[node.name].group].length = binding+1;
-                    bindGroupAlts[this.altBindings?.[node.name].group][binding] = inputs[i];
-                }
-                else if(node.isTexture) {
-                    const texture = textures?.[textureIncr] ? textures?.[textureIncr] : textures?.[node.name];
-                    if(texture) {
-                        this.textures[node.name] = this.device.createTexture({
-                            label:texture.label ? texture.label :`texture_g${this.bindGroupNumber}_b${i}`,
-                            format:texture.format ? texture.format : 'rgba8unorm',
-                            size: [texture.width, texture.height],
-                            usage: texture.usage ? texture.usage : (GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUBufferUsage.COPY_SRC) //assume read/write (e.g. transforming a texture and returning it)
-                        });
-
-                        this.device.queue.writeTexture(
-                            { texture:texture.data },
-                            textureData,
-                            { bytesPerRow: texture[textureIncr].width * 4 },
-                            { width: texture[textureIncr].width, height: texture[textureIncr].height },
-                        );
-                        
-                        hasTextureBuffers = true; //we need to update the bindGroupLayout and pipelines accordingly
-                    }
-                    textureIncr++;
-                } else if (node.isSampler) {
-                    const sampler = this.samplers[node.name];
-                    if(!sampler) {
-                        this.samplers[node.name] = this.device.createSampler(
-                            samplerSettings ? (samplerSettings?.[node.name] ? samplerSettings[node.name] : samplerSettings) : {
-                                magFilter: "linear",
-                                minFilter: "linear",
-                                mipmapFilter: "linear",
-                                addressModeU: "repeat",
-                                addressModeV: "repeat",
-                            }
-                        );
-                    }
-                    samplerIncr++;
-                } else {
-                    if(node.isUniform) {
-                        // Assuming you've determined the total size of the uniform buffer beforehand
-                        if (!this.uniformBuffer) {
-
-                            let totalUniformBufferSize = 0;
-                            this.ast.forEach((node,j) => {
-                                if(node.isInput && node.isUniform && inputTypes[j]){
-                                    totalUniformBufferSize += inputTypes[j].size;
-                                    if(totalUniformBufferSize % 8 !== 0) 
-                                        totalUniformBufferSize += wgslTypeSizes[inputTypes[j].type].alignment;
-                                }
-                            }); 
-
-                            if(totalUniformBufferSize < 8) totalUniformBufferSize += 8 - totalUniformBufferSize; 
-                            else totalUniformBufferSize -= totalUniformBufferSize % 16; //correct final buffer size (IDK)
-                            
-                            this.uniformBuffer = this.device.createBuffer({
-                                label:'uniform buffer',
-                                size: totalUniformBufferSize ? totalUniformBufferSize : 4, // This should be the sum of byte sizes of all uniforms
-                                usage: GPUBufferUsage.UNIFORM  | GPUBufferUsage.COPY_SRC,
-                                mappedAtCreation: true
-                            });
-                            this.inputBuffers.push(this.uniformBuffer);
-                            this.bufferGroup.uniformBuffer = this.uniformBuffer;
-                        }
-                        if(!hasUniformBuffer) {
-                            hasUniformBuffer = 1;
-                            inputBufferIndex++;
-                        }
-                    }
-                    // Create or recreate input buffers
-                    else {
-                        if (!allSameSize) {
-                            if(!inputs[i]?.byteLength && Array.isArray(inputs[i]?.[0])) inputs[i] = this.flattenArray(inputs[i]);
-                            this.inputBuffers.push(
-                                this.device.createBuffer({
-                                    size:  inputs[i] ? (inputs[i].byteLength ? inputs[i].byteLength : inputs[i]?.length ? inputs[i].length*4 : 4) : 4,
-                                    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
-                                    mappedAtCreation: true
-                                })  
-                            );
-                        }
-
-                        if(inputs[i] != undefined) {
-                            new Float32Array(this.inputBuffers[inputBufferIndex].getMappedRange()).set(inputs[i]);
-                        }
-                        this.inputBuffers[inputBufferIndex].unmap();
-                        inputBufferIndex++;
-                    }
-
-                    //set output buffers
-                    if(!skipOutputDef && node.isReturned && (!node.isUniform || (node.isUniform && !uBufferPushed))) {
-                        // Create or recreate the output buffers for all returned variables
-                        if(!node.isUniform) {
-                            this.outputBuffers.push(this.inputBuffers[this.inputBuffers.length - 1]);
-                        } else if(!uBufferPushed) {
-                            uBufferPushed = true;
-                            this.outputBuffers.push(this.uniformBuffer);
-                        }
-                    }
-                }
-            });
-
-            
-            if(this.defaultUniforms && !this.defaultUniformBuffer) {
-                
-                let totalUniformBufferSize = 0;
-                this.defaultUniforms.forEach((u) => {
-                    if(!this.builtInUniforms[u]) return;
-                    let value = this.builtInUniforms[u].callback();
-                    if(Array.isArray(value)) {
-                        if(!isTypedArray(value)) value = new Float32Array(value);
-                        if(!this.defaultUniformBuffer) totalUniformBufferSize += value.byteLength;
-                    } else if(!this.defaultUniformBuffer) totalUniformBufferSize += 4; //assume 4 bytes per float/int (32 bit)
-                });
-
-                if(totalUniformBufferSize < 8) totalUniformBufferSize += 8 - totalUniformBufferSize; 
-                else totalUniformBufferSize -= totalUniformBufferSize % 16;                            //correct final buffer size (IDK)
-
-                this.defaultUniformBuffer = this.device.createBuffer({
-                    label:'default uniforms',
-                    size: totalUniformBufferSize, // This should be the sum of byte sizes of all uniforms
-                    usage: GPUBufferUsage.UNIFORM  | GPUBufferUsage.COPY_SRC,
-                    mappedAtCreation: true
-                });
-
-                if(this.defaultUniformBinding)
-                    this.inputBuffers[this.defaultUniformBinding] = this.defaultUniformBuffer;
-                else {
-                    this.defaultUniformBinding = this.inputBuffers.length; //latest binding in series
-                }
-                this.bufferGroup.defaultUniformBuffer = this.defaultUniformBuffer;
-            }
-
-            //run the buffer() call now for each group tied to each shader based on load order
-            bindGroupAlts.forEach((inp,i) => {
-                if(inp) {
-                    let groupOwner = Object.entries(shaders).find((obj) => {
-                        if(obj.bindGroupNumber === i) {
-                            obj.buffer({vbos,textures,samplerSettings},...inp);
-                            return true;
-                        }
-                    });
-                }  
-            })
         }
 
+        let uBufferPushed = false;
+        let inputBufferIndex = 0;
+        let hasUniformBuffer = 0;
+        let textureIncr = 0;
+        let samplerIncr = 0;
+
+        let bindGroupAlts = [];
+        let hasTextureBuffers = false;
+        this.params.forEach((node, i) => {
+            if(typeof inputs[i] !== 'undefined' && this.altBindings?.[node.name] && this.altBindings?.[node.name].group !== this.bindGroupNumber) {
+                if(!bindGroupAlts[this.altBindings?.[node.name].group]) {
+                    if(bindGroupAlts[this.altBindings?.[node.name].group].length < this.altBindings?.[node.name].group) bindGroupAlts[this.altBindings?.[node.name].group].length = this.altBindings?.[node.name].group+1; 
+                    bindGroupAlts[this.altBindings?.[node.name].group] = [];
+                }
+                if(!bindGroupAlts[this.altBindings?.[node.name].group].length >= binding) bindGroupAlts[this.altBindings?.[node.name].group].length = binding+1;
+                bindGroupAlts[this.altBindings?.[node.name].group][binding] = inputs[i];
+            }
+            else if(node.isTexture) {
+                const texture = textures?.[textureIncr] ? textures?.[textureIncr] : textures?.[node.name];
+                if(texture) {
+                    this.textures[node.name] = this.device.createTexture({
+                        label:texture.label ? texture.label :`texture_g${this.bindGroupNumber}_b${i}`,
+                        format:texture.format ? texture.format : 'rgba8unorm',
+                        size: [texture.width, texture.height],
+                        usage: texture.usage ? texture.usage : (GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUBufferUsage.COPY_SRC) //assume read/write (e.g. transforming a texture and returning it)
+                    });
+
+                    this.device.queue.writeTexture(
+                        { texture:texture.data },
+                        textureData,
+                        { bytesPerRow: texture[textureIncr].width * 4 },
+                        { width: texture[textureIncr].width, height: texture[textureIncr].height },
+                    );
+                    
+                    hasTextureBuffers = true; //we need to update the bindGroupLayout and pipelines accordingly
+                }
+                textureIncr++;
+            } else if (node.isSampler) {
+                const sampler = this.samplers[node.name];
+                if(!sampler) {
+                    this.samplers[node.name] = this.device.createSampler(
+                        samplerSettings ? (samplerSettings?.[node.name] ? samplerSettings[node.name] : samplerSettings) : {
+                            magFilter: "linear",
+                            minFilter: "linear",
+                            mipmapFilter: "linear",
+                            addressModeU: "repeat",
+                            addressModeV: "repeat",
+                        }
+                    );
+                }
+                samplerIncr++;
+            } else {
+                if(node.isUniform) {
+                    // Assuming you've determined the total size of the uniform buffer beforehand
+                    if (!this.uniformBuffer) {
+
+                        let totalUniformBufferSize = 0;
+                        this.ast.forEach((node,j) => {
+                            if(node.isInput && node.isUniform && inputTypes[j]){
+                                totalUniformBufferSize += inputTypes[j].size;
+                                if(totalUniformBufferSize % 8 !== 0) 
+                                    totalUniformBufferSize += wgslTypeSizes[inputTypes[j].type].alignment;
+                            }
+                        }); 
+
+                        // if(this.defaultUniforms) {
+                        //     this.defaultUniforms.forEach((u) => {
+                        //         totalUniformBufferSize += wgslTypeSizes[this.builtInUniforms[u].type].size; //assume 4 bytes per float/int (32 bit)
+                        //     });
+                        // }
+
+                        if(totalUniformBufferSize < 8) totalUniformBufferSize += 8 - totalUniformBufferSize; 
+                        else totalUniformBufferSize -= totalUniformBufferSize % 16; //correct final buffer size (IDK)
+                        
+                        this.uniformBuffer = this.device.createBuffer({
+                            label:'uniform buffer',
+                            size: totalUniformBufferSize ? totalUniformBufferSize : 4, // This should be the sum of byte sizes of all uniforms
+                            usage: GPUBufferUsage.UNIFORM  | GPUBufferUsage.COPY_SRC,
+                            mappedAtCreation: true
+                        });
+                        this.inputBuffers.push(this.uniformBuffer);
+                        this.bufferGroup.uniformBuffer = this.uniformBuffer;
+                    }
+                    if(!hasUniformBuffer) {
+                        hasUniformBuffer = 1;
+                        inputBufferIndex++;
+                    }
+                }
+                // Create or recreate input buffers
+                else {
+                    if (!allSameSize) {
+                        if(!inputs?.[i]?.byteLength && Array.isArray(inputs[i]?.[0])) inputs[i] = this.flattenArray(inputs[i]);
+                        this.inputBuffers.push(
+                            this.device.createBuffer({
+                                size:  inputs[i] ? (inputs[i].byteLength ? inputs[i].byteLength : inputs[i]?.length ? inputs[i].length*4 : 4) : 4,
+                                usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
+                                mappedAtCreation: true
+                            })  
+                        );
+                        
+                        if(typeof inputs[i] !== 'undefined') {
+                            new Float32Array(this.inputBuffers[inputBufferIndex].getMappedRange()).set(inputs[i]);
+                        }
+                        
+                        this.inputBuffers[inputBufferIndex].unmap();
+                    }
+
+                    inputBufferIndex++;
+                }
+
+                //set output buffers
+                if(!skipOutputDef && node.isReturned && (!node.isUniform || (node.isUniform && !uBufferPushed))) {
+                    // Create or recreate the output buffers for all returned variables
+                    if(!node.isUniform) {
+                        this.outputBuffers.push(this.inputBuffers[this.inputBuffers.length - 1]);
+                    } else if(!uBufferPushed) {
+                        uBufferPushed = true;
+                        this.outputBuffers.push(this.uniformBuffer);
+                    }
+                }
+            }
+        });
+
+        //run the buffer() call now for each group tied to each shader based on load order
+        bindGroupAlts.forEach((inp,i) => {
+            if(typeof inp !== 'undefined') {
+                Object.entries(shaders).find((obj) => {
+                    if(obj.bindGroupNumber === i) {
+                        obj.buffer({vbos,textures,samplerSettings},...inp);
+                        return true;
+                    }
+                });
+            }  
+        })
+                                    //temp fix till we figure out why this one errors on 2nd pass
+        if(this.defaultUniforms){// && !this.defaultUniformBuffer) { 
+            
+            let totalUniformBufferSize = 0;
+            this.defaultUniforms.forEach((u) => {
+                totalUniformBufferSize += wgslTypeSizes[this.builtInUniforms[u].type].size; //assume 4 bytes per float/int (32 bit)
+            });
+
+            if(totalUniformBufferSize < 8) totalUniformBufferSize += 8 - totalUniformBufferSize; 
+            else totalUniformBufferSize -= totalUniformBufferSize % 16;                            //correct final buffer size (IDK)
+
+            this.defaultUniformBuffer = this.device.createBuffer({
+                label:'default uniforms',
+                size: totalUniformBufferSize, // This should be the sum of byte sizes of all uniforms
+                usage: GPUBufferUsage.UNIFORM  | GPUBufferUsage.COPY_SRC,
+                mappedAtCreation: true
+            });
+
+            if(!this.defaultUniformBinding) {
+                this.defaultUniformBinding = this.inputBuffers.length; //latest binding in series
+            }
+            this.bufferGroup.defaultUniformBuffer = this.defaultUniformBuffer;
+        }
+
+        
         this.updateUBO(inputs, inputTypes);
 
-        if(!allSameSize) {
+        if(!allSameSize || this.defaultUniforms) {
             // Update bind group creation to include both input and output buffers
             const bindGroupEntries = this.inputBuffers.map((buffer, index) => ({
                 binding: index,
@@ -1177,9 +1191,9 @@ fn frag_main(
             {
                 vbos,  //[{vertices:[]}]
                 textures, //[{data:Uint8Array([]), width:800, height:600, format:'rgba8unorm' (default), bytesPerRow: width*4 (default rgba) }], //all required
-                bufferOnly,
-                skipOutputDef
-            }={}, shaders, ...inputs
+                skipOutputDef,
+                samplerSettings
+            }, shaders, ...inputs
         );
 
         if(!bufferOnly) { //todo: combine more shaders
@@ -1664,9 +1678,10 @@ fn frag_main(
             const funcBody = match[3];
 
             // Transpose the function body
-            const transposedBody = this.transposeBody(funcBody, funcBody, params, shaderType, true); // Assuming AST is not used in your current implementation
+            const transposedBody = this.transposeBody(funcBody, funcBody, params, shaderType, true, undefined, false).code; // Assuming AST is not used in your current implementation
 
-            extractedFunctions += `fn ${funcName}(${params}) -> ${outputParam} {\n${transposedBody}\n}\n\n`;
+            //todo: infer output types better, instead of just assuming from the first input type
+            extractedFunctions += `fn ${funcName}(${params}) -> ${outputParam} {${transposedBody}}\n\n`;
         }
 
         // Remove the inner functions from the main body
@@ -1692,12 +1707,20 @@ fn frag_main(
         code += extractedFunctions;
 
         let vtxInps;
+        let vboInputStrings = [];
         if(shaderType === 'vertex' || shaderType === 'fragment') {
 
             let vboStrings = Array.from({length: nVertexBuffers}, (_, i) => {
+                if(shaderType === 'vertex') vboInputStrings.push(
+                    
+`@location(${4*i}) color${i>0 ? i+1 : ''}In: vec4<f32>,
+    @location(${4*i+1}) vertex${i>0 ? i+1 : ''}In: vec3<f32>, 
+    @location(${4*i+2}) normals${i>0 ? i+1 : ''}In: vec3<f32>,
+    @location(${4*i+3}) uv${i>0 ? i+1 : ''}In: vec4<f32>${i===nVertexBuffers-1 ? '' : ','}`
+                );
                 return `
-    @location(${4*i}) vertex${i>0 ? i+1 : ''}: vec3<f32>, 
-    @location(${4*i+1}) color${i>0 ? i+1 : ''}: vec4<f32>,
+    @location(${4*i}) color${i>0 ? i+1 : ''}: vec4<f32>,
+    @location(${4*i+1}) vertex${i>0 ? i+1 : ''}: vec3<f32>, 
     @location(${4*i+2}) normals${i>0 ? i+1 : ''}: vec3<f32>,
     @location(${4*i+3}) uv${i>0 ? i+1 : ''}: vec4<f32>${i===nVertexBuffers-1 ? '' : ','}`;
             });
@@ -1705,7 +1728,7 @@ fn frag_main(
             vtxInps = `
     @builtin(position) position: vec4<f32>, //pixel location
     //uploaded vertices from CPU, in interleaved format
-    ${vboStrings.join('\n')}`;
+${vboStrings.join('\n')}`;
 
             code += `
 struct Vertex {
@@ -1733,7 +1756,8 @@ fn compute_main(
 @vertex
 fn vtx_main(
     @builtin(vertex_index) vertexIndex : u32,   //current vertex
-    @builtin(instance_index) instanceIndex: u32, //current instance`
+    @builtin(instance_index) instanceIndex: u32, //current instance
+    ${vboInputStrings.join('\n')}`
             code += '\n) -> Vertex {\n var pixel: Vertex;\n'; //pixel is predeclared, can we can reference color, position, etc in our js-side shaders
 
         } else if (shaderType === 'fragment') {
@@ -1748,14 +1772,18 @@ fn frag_main(
         }
         let shaderHead = code;
         // Transpose the main body
-        code += this.transposeBody(mainBody, funcStr, params, shaderType, shaderType === 'fragment', shaderHead); 
+        let transposed = this.transposeBody(mainBody, funcStr, params, shaderType, shaderType === 'fragment', shaderHead, true);
+        code += transposed.code;
+        console.log(transposed.consts);
+        if(transposed.consts?.length > 0) 
+            code = transposed.consts.join('\n') + '\n\n' + code;
 
         if (shaderType === 'vertex') code += `\n  return pixel; \n`; //
-        code += '}\n';
+        code += '\n}\n';
         return code;
     }
 
-    transposeBody = (body, funcStr, params, shaderType, returns = false, shaderHead='') => {
+    transposeBody = (body, funcStr, params, shaderType, returns = false, shaderHead='', extractConsts=false) => {
         let code = '';
 
         // Capture commented lines and replace with a placeholder
@@ -1773,15 +1801,17 @@ fn frag_main(
         code = body.replace(/for \((let|var) (\w+) = ([^;]+); ([^;]+); ([^\)]+)\)/g, 'for (var $2 = $3; $4; $5)');
 
         //code = code.replace(/const/g, 'let');
-        code = code.replace(/const (\w+) = (?!(vec\d+|mat\d+))/g, 'let $1 =');
-        const vecMatDeclarationRegex = /let (\w+) = (vec\d+|mat\d+)/g;
-        code = code.replace(vecMatDeclarationRegex, 'var $1 = $2');
+        code = code.replace(/const (\w+) = (?!(vec\d+|mat\d+|\[.*\]))/g, 'let $1 = ');
+        const vecMatDeclarationRegex = /(let|var) (\w+) = (vec\d+|mat\d+)/g;
+        code = code.replace(vecMatDeclarationRegex, 'var $2 = $3');
+        const vecMatDeclarationRegex2 = /const (\w+) = (vec\d+|mat\d+)/g;
+        code = code.replace(vecMatDeclarationRegex2, 'const $2 = $3');
 
         // ------ Array conversion ------ ------ ------ ------ ------ ------ ------
 
         // Extract array variable names
         const arrayVars = [];
-        code.replace(/(let|var) (\w+) = array/g, (match, p1, varName) => {
+        code.replace(/(let|var|const) (\w+) = array/g, (match, p1, varName) => {
             arrayVars.push(varName);
             return match; // Just to keep the replace function working
         });
@@ -1805,7 +1835,7 @@ fn frag_main(
         code = code.replace(/(\/\/[^\n]*);/gm, '$1'); //trim off semicolons after comments
 
         // Convert arrays with explicit values (like let a = [1,2,3];)
-        code = code.replace(/(let|var) (\w+) = \[([\s\S]*?)\];/gm, (match, varType, varName, values) => {
+        code = code.replace(/(let|var|const) (\w+) = \[([\s\S]*?)\];/gm, (match, varType, varName, values) => {
             const valuesLines = values.trim().split('\n');
             const vals = [];
             const cleanedValues = valuesLines.map(line => {
@@ -1830,7 +1860,7 @@ fn frag_main(
                 arrayValueType = arrayValueTypeMatch[0];
             }
 
-            return `var ${varName} : array<${arrayValueType}, ${size}> = array<${arrayValueType}, ${size}>(\n${vals.join('\n')}\n);`;
+            return `${varType} ${varName} : array<${arrayValueType}, ${size}> = array<${arrayValueType}, ${size}>(\n${vals.join('\n')}\n);`;
         });
 
         function transformArrays(input) {
@@ -1896,7 +1926,7 @@ fn frag_main(
 
         code = transformArrays(code);
 
-        code = code.replace(/let (\w+) = new (Float|Int|UInt)(\d+)Array\((\d+)\);/g, (match, varName, typePrefix, bitSize, arraySize) => {
+        code = code.replace(/(let|var|const) (\w+) = new (Float|Int|UInt)(\d+)Array\((\d+)\);/g, (match, keyword, varName, typePrefix, bitSize, arraySize) => {
             let typeChar;
             switch(typePrefix) {
                 case 'Float': 
@@ -1915,7 +1945,7 @@ fn frag_main(
         });
 
         // Convert new Arrays with explicit sizes last
-        code = code.replace(/let (\w+) = new Array\((\d+)\);/g, 'var $1 : array<f32, $2>;');
+        code = code.replace(/(let|var|const) (\w+) = new Array\((\d+)\);/g, 'var $2 : array<f32, $2>;');
 
         // ------ ------ ------ ------ ------ ------ ------ ------ ------ ------
 
@@ -1987,11 +2017,85 @@ fn frag_main(
         code = code.replace(/(\/\/[^\n]*);/gm, '$1'); //trim off semicolons after comments
         code = code.replace(/;([^\n]*)\s*(\n\s*)\)/gm, '$1$2)');
 
+        let consts;
+        if(extractConsts) {
+            function extrConsts(text) {
+                const pattern = /const\s+[a-zA-Z_][a-zA-Z0-9_]*\s*:\s*[a-zA-Z_][a-zA-Z0-9_<>,\s]*\s*=\s*[a-zA-Z_][a-zA-Z0-9_<>,\s]*(\([\s\S]*?\)|\d+\.?\d*);/g;
+
+                let match;
+                const extractedConsts = [];
+
+                while ((match = pattern.exec(text)) !== null) {
+                    extractedConsts.push(match[0]);
+                }
+
+                const modifiedText = text.replace(pattern, '').trim();
+
+                return {
+                    consts:extractedConsts,
+                    code:modifiedText
+                };
+            }
+            
+            
+            //we will move these to outside the function loop to speed things up
+            let extracted = extrConsts(code);
+            code = extracted.code;
+            consts = extracted.consts;
+        }
 
         if(!returns) code = code.replace(/(return [^;]+;)/g, '//$1');
         this.mainBody = code;
 
-        return code;
+        return {code, consts};
+    }
+
+    indentCode(code) {
+        let depth = 0;
+        const tab = '    ';  // 4 spaces for indentation, can be adjusted
+        let result = '';
+        let needsIndent = false;
+        let leadingSpaceDetected = false;
+    
+        for (let i = 0; i < code.length; i++) {
+            const char = code[i];
+    
+            // If a newline is detected, set the flag to true to apply indentation
+            if (char === '\n') {
+                result += char;
+                needsIndent = true;
+                leadingSpaceDetected = false;
+                continue;
+            }
+    
+            // Check if there's leading space
+            if (char === ' ' && needsIndent) {
+                leadingSpaceDetected = true;
+            }
+    
+            // Apply the necessary indentation if no leading space is detected
+            if (needsIndent && !leadingSpaceDetected) {
+                result += tab.repeat(depth);
+                needsIndent = false;
+            }
+    
+            // Increase the depth when an opening brace or parenthesis is detected
+            if (char === '{' || char === '(') {
+                depth++;
+            }
+    
+            // Decrease the depth when a closing brace or parenthesis is detected
+            if (char === '}' || char === ')') {
+                if (depth > 0) depth--;
+                if (result.slice(-tab.length) === tab) {
+                    result = result.slice(0, -tab.length);
+                }
+            }
+    
+            result += char;
+        }
+    
+        return result;
     }
 
     addFunction = (func, shaders) => {
@@ -2003,6 +2107,7 @@ fn frag_main(
         }
         return this.init(shaders, undefined, shaders.device);
     }
+
     //combine input bindings and create mappings so input arrays can be shared based on variable names, assuming same types in a continuous pipeline (the normal thing)
     combineBindings(bindings1str, bindings2str) {
         const bindingRegex = /@group\((\d+)\) @binding\((\d+)\)[\s\S]*?var[\s\S]*? (\w+):/g;
@@ -2121,6 +2226,8 @@ fn frag_main(
          */
     }
 
+
+
     //this pipeline is set to only use javascript functions so it can generate asts and infer all of the necessary buffering orders and types
     convertToWebGPU(func, shaderType='compute', bindGroupNumber=0, nVertexBuffers=1, workGroupSize=256) {
         let funcStr = typeof func === 'string' ? func : func.toString();
@@ -2131,7 +2238,7 @@ fn frag_main(
         let webGPUCode = this.generateDataStructures(funcStr, ast, bindGroupNumber); //simply share bindGroups 0 and 1 between compute and render
         const bindings = webGPUCode.code;
         webGPUCode.code += '\n' + this.generateMainFunctionWorkGroup(funcStr, ast, webGPUCode.params, shaderType, nVertexBuffers, workGroupSize); // Pass funcStr as the first argument
-        return {code:webGPUCode.code, bindings, ast, params:webGPUCode.params, funcStr, defaultUniforms:webGPUCode.defaultUniforms};
+        return {code:this.indentCode(webGPUCode.code), bindings, ast, params:webGPUCode.params, funcStr, defaultUniforms:webGPUCode.defaultUniforms};
     }
 
 }

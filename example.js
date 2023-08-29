@@ -16,8 +16,8 @@ function dft(
     }
 
     let x = new Float32Array(32); //float32 array<f32, 32> (default)
-    let x2 = new Array(32).fill(1); //array<i32, 32> array (no decimal)
-    let x3 = [1,2,3]; // array<i32, 3>
+    let x2 = new Array(32).fill(inputData[0]); //array<i32, 32> array (no decimal)
+    const x3 = [1,2,3]; // array<i32, 3>
     let x4 = new Array(100).fill(vec3(0,0,0)) //array<vec3<i32>, 100>
     let x5 = new Array(100).fill(mat2x2(vec2(1,1),vec2(1,1)));
     //let x6 = new Array(inputData.length).fill(0.0) //cannot dynamically size const arrays
@@ -28,6 +28,7 @@ function dft(
 
     var sum2 = add(sum,sum);
 
+    let width = resX;
 
     const b = 3 + outp4;
 
@@ -122,14 +123,14 @@ console.time('createComputePipeline');
         // Run the process method to execute the shader       
         console.log('Note: single threaded test');
         console.time('run DFT with initial buffering');
-        pipeline.process(inputData,outputData).then(result => {
+        pipeline.process(inputData, outputData, undefined, 4).then(result => {
             console.timeEnd('run DFT with initial buffering');
             console.log('Results can be multiple buffers:',result); // Log the output
 
             const inputData2 = new Float32Array(len).fill(2.0); // Example data, same length so outputData can be the same
 
             console.time('run DFT only updating inputData buffer values');
-            pipeline.process(inputData2).then((r2) => {
+            pipeline.process(inputData2, outputData, undefined, 4).then((r2) => {
                 console.timeEnd('run DFT only updating inputData buffer values');
                 console.log('Result2:',r2); // Log the output
 
@@ -138,7 +139,7 @@ console.time('createComputePipeline');
                 const outputData3 = new Float32Array(len2*2).fill(0); //only need to upload once if len is the same, dfts return real and imag for single vectors (unless we convert gpu-side)
 
                 console.time('run DFT dynamically resizing inputData and outputData');
-                pipeline.process(inputData3,outputData3).then((r3) => {
+                pipeline.process(inputData3,outputData3, undefined, 4).then((r3) => {
                     console.timeEnd('run DFT dynamically resizing inputData and outputData');
                     console.log('Results can be dynamically resized:', r3); // Log the output
                     console.time('addFunction and recompile shader pipeline');
