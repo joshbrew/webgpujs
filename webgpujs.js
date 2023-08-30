@@ -339,7 +339,7 @@ fn frag_main(
             shaders.fragment.pipelineLayout = shaders.vertex.pipelineLayout;
 
             shaders.fragment.bindGroupLayout = this.device.createBindGroupLayout({
-                entries:this.createBindGroupFromEntries(shaders.fragment, 'vertex', textureSettings, samplerSettings)
+                entries:this.createBindGroupFromEntries(shaders.fragment, 'fragment', textureSettings, samplerSettings)
             });
             shaders.vertex.bindGroupLayout = shaders.fragment.bindGroupLayout;
             
@@ -531,7 +531,6 @@ fn frag_main(
         }
 
         shaderObj.bindGroupLayoutEntries = entries;
-    
         return entries;
     }
 
@@ -633,8 +632,8 @@ fn frag_main(
         const renderPassDescriptor = { //some assumptions
             colorAttachments: [{
                 view: view,
+                loadValue: { r: 0.0, g: 0.0, b: 0.0, a: 1.0 },
                 loadOp: "clear",
-                loadValue: [0.0, 0.0, 0.0, 1],
                 storeOp: "store"
             }],
             // depthStencilAttachment: {
@@ -1249,7 +1248,7 @@ fn frag_main(
                 if(useRenderBundle && (newInputBuffer || !this.renderBundle)) { 
                     //record a render pass
                     renderPass = this.device.createRenderBundleEncoder({
-                        colorFormat: navigator.gpu.getPreferredCanvasFormat(),
+                        colorFormat: [navigator.gpu.getPreferredCanvasFormat()],
                         //depthStencilFormat: "depth24plus" //etc...
                     });
                     this.firstPass = true;
