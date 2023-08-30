@@ -16,6 +16,7 @@ What's left todo:
 - Test uniform alignment
 - Test buffer cycling more to understand how persistence works on the GPU better. Maybe split uniform buffers up but it's a little cleaner grouping them.
 - Think up more desirable regex cases without going overboard (I don't really care if this runs in javascript itself for example)
+   - - e.g. more customizable vertex and fragment shader conditions, primarily for what the fragment actually outputs (we can infer all of this)
 - Test assets, multiple vbos, multiple render passes, etc. Typical renderer stuff.
 - A dozen or so examples
 
