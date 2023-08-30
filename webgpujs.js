@@ -592,8 +592,8 @@ fn frag_main(
         const vertexBuffers = Array.from({length:nVertexBuffers}, (_,i) => {return {
             arrayStride: 48,
             attributes: [
-                {format: "float32x4", offset: 12, shaderLocation: 4*i},   //color
-                {format: "float32x3", offset: 0, shaderLocation:  4*i+1},     //position
+                {format: "float32x4", offset: 0, shaderLocation:  4*i},   //color
+                {format: "float32x3", offset: 16, shaderLocation: 4*i+1},     //position
                 {format: "float32x3", offset: 28, shaderLocation: 4*i+2},   //normal
                 {format: "float32x2", offset: 40, shaderLocation: 4*i+3}    //uv
             ]
@@ -621,14 +621,14 @@ fn frag_main(
         shaders.vertex.graphicsPipeline = this.device.createRenderPipeline(pipeline);
         shaders.fragment.graphicsPipeline = shaders.vertex.graphicsPipeline;
         
-        const canvasView = this.device.createTexture({
-            size: [this.canvas.width, this.canvas.height],
-            sampleCount:4,
-            format: navigator.gpu.getPreferredCanvasFormat(),
-            usage: GPUTextureUsage.RENDER_ATTACHMENT,
-        });
+        // const canvasView = this.device.createTexture({
+        //     size: [this.canvas.width, this.canvas.height],
+        //     sampleCount:4,
+        //     format: navigator.gpu.getPreferredCanvasFormat(),
+        //     usage: GPUTextureUsage.RENDER_ATTACHMENT,
+        // });
 
-        const view = canvasView.createView();
+        const view = this.context.getCurrentTexture().createView();
 
         const renderPassDescriptor = { //some assumptions
             colorAttachments: [{
@@ -637,15 +637,15 @@ fn frag_main(
                 loadValue: [0.0, 0.0, 0.0, 1],
                 storeOp: "store"
             }],
-            depthStencilAttachment: {
-                view: depthTexture.createView(),
-                depthLoadOp: "clear",
-                depthClearValue: 1.0,
-                depthStoreOp: "store",
-                stencilLoadOp: "clear",
-                stencilClearValue: 0,
-                stencilStoreOp: "store"
-            }
+            // depthStencilAttachment: {
+            //     view: depthTexture.createView(),
+            //     depthLoadOp: "clear",
+            //     depthClearValue: 1.0,
+            //     depthStoreOp: "store",
+            //     stencilLoadOp: "clear",
+            //     stencilClearValue: 0,
+            //     stencilStoreOp: "store"
+            // }
         };
 
         shaders.vertex.renderPassDescriptor = renderPassDescriptor;
@@ -791,47 +791,49 @@ fn frag_main(
         utcTime:{type:'f32',callback:()=>{return Date.now();}} //utc time                 
     } //etc.. more we can add from shaderToy
 
-    setUBOposition(dataView, inputTypes, typeInfo, offset, input, i) { //utility function, should clean up later (i.e. provide the values instead of objects to reference)
+    setUBOposition(dataView, inputTypes, typeInfo, offset, input, inpIdx) { //utility function, should clean up later (i.e. provide the values instead of objects to reference)
         // Ensure the offset is aligned correctly
         offset = Math.ceil(offset / typeInfo.alignment) * typeInfo.alignment;
-        if (inputTypes[i].type.startsWith('vec')) {
-            const vecSize = typeInfo.size / 4;
-            for (let j = 0; j < vecSize; j++) {
-                //console.log(dataView,offset + j * 4)
-                if(inputTypes[i].type.includes('f')) dataView.setFloat32(offset + j * 4, input[j], true);
-                else dataView.setInt32(offset + j * 4, input[j], true);
-            }
-        } else if (inputTypes[i].type.startsWith('mat')) {
-            const flatMatrix = typeof input[0] === 'object' ? this.flattenArray(input) : input;
-            for (let j = 0; j < flatMatrix.length; j++) {
-                dataView.setFloat32(offset + j * 4, flatMatrix[j], true); //we don't have Float16 in javascript :-\
-            }
-        } else{
-            switch (inputTypes[i].type) {
-                case 'f32':
-                    dataView.setFloat32(offset, input, true); // true for little-endian
-                    break;
-                case 'i32':
-                    dataView.setInt32(offset, input, true); // true for little-endian
-                    break;
-                case 'u32':
-                    dataView.setUInt32(offset, input, true); // true for little-endian 
-                    break;
-                case 'f16':
-                    dataView.setFloat16(offset, input, true); // true for little-endian
-                    break;
-                case 'i16':
-                    dataView.setInt16(offset, input, true); // true for little-endian
-                    break;
-                case 'u16':
-                    dataView.setUInt16(offset, input, true); // true for little-endian 
-                    break;
-                case 'i8':
-                    dataView.setInt8(offset, input, true); // true for little-endian 
-                    break;
-                case 'u8':
-                    dataView.setUInt8(offset, input, true); // true for little-endian 
-                    break;
+        if(input !== undefined) {
+            if (inputTypes[inpIdx].type.startsWith('vec')) {
+                const vecSize = typeInfo.size / 4;
+                for (let j = 0; j < vecSize; j++) {
+                    //console.log(dataView,offset + j * 4)
+                    if(inputTypes[inpIdx].type.includes('f')) dataView.setFloat32(offset + j * 4, input[j], true);
+                    else dataView.setInt32(offset + j * 4, input[j], true);
+                }
+            } else if (inputTypes[inpIdx].type.startsWith('mat')) {
+                const flatMatrix = typeof input[0] === 'object' ? this.flattenArray(input) : input;
+                for (let j = 0; j < flatMatrix.length; j++) {
+                    dataView.setFloat32(offset + j * 4, flatMatrix[j], true); //we don't have Float16 in javascript :-\
+                }
+            } else{
+                switch (inputTypes[inpIdx].type) {
+                    case 'f32':
+                        dataView.setFloat32(offset, input, true); // true for little-endian
+                        break;
+                    case 'i32':
+                        dataView.setInt32(offset, input, true); // true for little-endian
+                        break;
+                    case 'u32':
+                        dataView.setUInt32(offset, input, true); // true for little-endian 
+                        break;
+                    case 'f16':
+                        dataView.setFloat16(offset, input, true); // true for little-endian
+                        break;
+                    case 'i16':
+                        dataView.setInt16(offset, input, true); // true for little-endian
+                        break;
+                    case 'u16':
+                        dataView.setUInt16(offset, input, true); // true for little-endian 
+                        break;
+                    case 'i8':
+                        dataView.setInt8(offset, input, true); // true for little-endian 
+                        break;
+                    case 'u8':
+                        dataView.setUInt8(offset, input, true); // true for little-endian 
+                        break;
+                }
             }
         }
         offset += typeInfo.size; // Increment the offset by the size of the type
@@ -841,24 +843,28 @@ fn frag_main(
     updateUBO(inputs, inputTypes) {
         if(!inputs) return;
         if(this.uniformBuffer) { //update custom uniforms
-
             // Use a DataView to set values at specific byte offsets
             const dataView = new DataView(this.uniformBuffer.getMappedRange()); //little endian
     
             let offset = 0; // Initialize the offset
-
+            let inpIdx = 0;
             this.params.forEach((node, i) => {
-                if(node.isUniform && node.isReturned) {
+                if(node.isUniform) {
                     let input;
-                    if(Array.isArray(inputs)) input = inputs[i];
+                    if(Array.isArray(inputs)) input = inputs[inpIdx];
                     else input = inputs?.[node.name];
-                    if(typeof input !== 'undefined' && node.isUniform && node.isReturned) {
+                    if(typeof input === 'undefined' && typeof this.uniformBufferInputs?.[inpIdx] !== 'undefined') input = this.uniformBufferInputs[inpIdx]; //save data
+                    
                         
-                        const typeInfo = wgslTypeSizes[inputTypes[i].type];
-    
-                        offset = this.setUBOposition(dataView, inputTypes, typeInfo, offset, input, i);
-                    }
+                    const typeInfo = wgslTypeSizes[inputTypes[inpIdx].type];
+
+                    if(!this.uniformBufferInputs) {
+                        this.uniformBufferInputs = {};
+                    } this.uniformBufferInputs[inpIdx] = input;
+
+                    offset = this.setUBOposition(dataView, inputTypes, typeInfo, offset, input, inpIdx);
                 }
+                if(node.isInput) inpIdx++;
             });
 
             // if(this.defaultUniforms) {
@@ -868,12 +874,10 @@ fn frag_main(
             //         offset = this.setUBOposition(dataView,inputTypes,typeInfo,offset,v,i);
             //     })
             // }
-
             this.uniformBuffer.unmap();
         }
 
         if(this.defaultUniforms) { //update built-in uniforms (you can add whatever you want to the builtInUniforms list)
-
             // Use a DataView to set values at specific byte offsets
             const dataView = new DataView(this.defaultUniformBuffer.getMappedRange()); //little endian
             let offset = 0; // Initialize the offset
@@ -909,24 +913,31 @@ fn frag_main(
             }
             return wgslTypeSizes[type];
         });
-        const inputTypes = this.inputTypes;
 
-        let allSameSize = false;
-        if ((this.inputBuffers?.length === inputs.length) && this.inputBuffers && inputs.every((inp, index) => {
-            if(!inp || !inp?.length) return true;
-            return this.inputBuffers[index].byteLength === inp.length * inputTypes[index].byteSize
-        })) allSameSize = true;
+        const inputTypes = this.inputTypes;
+        let newInputBuffer = false;
+        if(this.inputBuffers) {
+            inputs.forEach((inp,index) => {
+                if(inp && inp?.length) {
+                    if(this.inputBuffers[index].byteLength !== inp.length * inputTypes[index].byteSize) {
+                        newInputBuffer = true;
+                    }
+                }
+            });
+        } else newInputBuffer = true; //will trigger bindGroups to be set
         
         // Create or recreate input buffers      // Extract all returned variables from the function string
         // Separate input and output AST nodes
-        if(!allSameSize) {
+        if(!this.textures) {
+            this.textures = {};
+            this.samplers = {};
+        }
+        if(!this.inputBuffers) {
             const bufferGroup = { };
 
             this.inputBuffers = [];
             this.uniformBuffer = undefined;
             this.outputBuffers = [];
-            this.textures = {};
-            this.samplers = {};
 
             bufferGroup.inputBuffers = this.inputBuffers;
             bufferGroup.outputBuffers = this.outputBuffers;
@@ -940,15 +951,18 @@ fn frag_main(
         }
 
         let uBufferPushed = false;
-        let inputBufferIndex = 0;
+        let inpBuf_i = 0; let inpIdx = 0;
         let hasUniformBuffer = 0;
+        let uBufferCreated = false;
         let textureIncr = 0;
         let samplerIncr = 0;
 
         let bindGroupAlts = [];
+        let uniformValues = [];
         let hasTextureBuffers = false;
-        this.params.forEach((node, i) => {
-            if(typeof inputs[i] !== 'undefined' && this.altBindings?.[node.name] && this.altBindings?.[node.name].group !== this.bindGroupNumber) {
+        for(let i = 0; i < this.params.length; i++ ) {
+            const node = this.params[i];
+            if(typeof inputs[inpBuf_i] !== 'undefined' && this.altBindings?.[node.name] && this.altBindings?.[node.name].group !== this.bindGroupNumber) {
                 if(!bindGroupAlts[this.altBindings?.[node.name].group]) {
                     if(bindGroupAlts[this.altBindings?.[node.name].group].length < this.altBindings?.[node.name].group) bindGroupAlts[this.altBindings?.[node.name].group].length = this.altBindings?.[node.name].group+1; 
                     bindGroupAlts[this.altBindings?.[node.name].group] = [];
@@ -992,75 +1006,91 @@ fn frag_main(
                 samplerIncr++;
             } else {
                 if(node.isUniform) {
+                    if(inputs[inpIdx] !== undefined) 
+                        uniformValues[inpIdx] = inputs[inpIdx];
                     // Assuming you've determined the total size of the uniform buffer beforehand
-                    if (!this.uniformBuffer) {
+                    if (!this.uniformBuffer || (!uBufferCreated && inputs[inpBuf_i] !== undefined)) {
 
-                        let totalUniformBufferSize = 0;
-                        this.ast.forEach((node,j) => {
-                            if(node.isInput && node.isUniform && inputTypes[j]){
-                                totalUniformBufferSize += inputTypes[j].size;
-                                if(totalUniformBufferSize % 8 !== 0) 
-                                    totalUniformBufferSize += wgslTypeSizes[inputTypes[j].type].alignment;
-                            }
-                        }); 
+                        if(!this.totalUniformBufferSize) {
+                            let totalUniformBufferSize = 0;
+                            this.params.forEach((node,j) => {
+                                if(node.isInput && node.isUniform){
+                                    if(inputTypes[j]) {
+                                        let size; 
+                                        if(inputs[inpBuf_i]?.byteLength) size = inputs[inpBuf_i].byteLength;
+                                        else if (inputs[inpBuf_i]?.length) size = 4 * inputs[inpBuf_i].length;
+                                        else size = inputTypes[j].size;
+                                        totalUniformBufferSize += inputTypes[j].size;
+                                        if(totalUniformBufferSize % 8 !== 0) 
+                                            totalUniformBufferSize += wgslTypeSizes[inputTypes[j].type].alignment;
+                                    }
+                                }
+                            }); 
 
-                        // if(this.defaultUniforms) {
-                        //     this.defaultUniforms.forEach((u) => {
-                        //         totalUniformBufferSize += wgslTypeSizes[this.builtInUniforms[u].type].size; //assume 4 bytes per float/int (32 bit)
-                        //     });
-                        // }
+                            // if(this.defaultUniforms) {
+                            //     this.defaultUniforms.forEach((u) => {
+                            //         totalUniformBufferSize += wgslTypeSizes[this.builtInUniforms[u].type].size; //assume 4 bytes per float/int (32 bit)
+                            //     });
+                            // }
 
-                        if(totalUniformBufferSize < 8) totalUniformBufferSize += 8 - totalUniformBufferSize; 
-                        else totalUniformBufferSize -= totalUniformBufferSize % 16; //correct final buffer size (IDK)
-                        
+                            if(totalUniformBufferSize < 8) totalUniformBufferSize += 8 - totalUniformBufferSize; 
+                            else totalUniformBufferSize -= totalUniformBufferSize % 16; //correct final buffer size (IDK)
+
+                            this.totalUniformBufferSize = totalUniformBufferSize;
+                        }
+
                         this.uniformBuffer = this.device.createBuffer({
-                            label:'uniform buffer',
-                            size: totalUniformBufferSize ? totalUniformBufferSize : 4, // This should be the sum of byte sizes of all uniforms
+                            size: this.totalUniformBufferSize ? this.totalUniformBufferSize : 8, // This should be the sum of byte sizes of all uniforms
                             usage: GPUBufferUsage.UNIFORM  | GPUBufferUsage.COPY_SRC,
-                            mappedAtCreation: true
+                            mappedAtCreation:true
                         });
-                        this.inputBuffers.push(this.uniformBuffer);
+                        
+                        this.inputBuffers[inpBuf_i] = (this.uniformBuffer);
                         this.bufferGroup.uniformBuffer = this.uniformBuffer;
+                        uBufferCreated = true;
                     }
                     if(!hasUniformBuffer) {
                         hasUniformBuffer = 1;
-                        inputBufferIndex++;
+                        inpBuf_i++;
                     }
+                    inpIdx++;
                 }
                 // Create or recreate input buffers
                 else {
-                    if (!allSameSize) {
-                        if(!inputs?.[i]?.byteLength && Array.isArray(inputs[i]?.[0])) inputs[i] = this.flattenArray(inputs[i]);
-                        this.inputBuffers.push(
+                    //I guess we need to make a new buffer every time we want to write new data
+                    if (typeof inputs[inpBuf_i] !== 'undefined' || !this.inputBuffers[inpBuf_i]) {
+                        
+                        if(!inputs?.[inpBuf_i]?.byteLength && Array.isArray(inputs[inpBuf_i]?.[0])) inputs[inpBuf_i] = this.flattenArray(inputs[inpBuf_i]);
+                        
+                        this.inputBuffers[inpBuf_i] = (
                             this.device.createBuffer({
-                                size:  inputs[i] ? (inputs[i].byteLength ? inputs[i].byteLength : inputs[i]?.length ? inputs[i].length*4 : 4) : 4,
+                                size:  inputs[inpBuf_i] ? (inputs[inpBuf_i].byteLength ? inputs[inpBuf_i].byteLength : inputs[inpBuf_i]?.length ? inputs[inpBuf_i].length*4 : 8) : 8,
                                 usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
                                 mappedAtCreation: true
                             })  
                         );
-                        
-                        if(typeof inputs[i] !== 'undefined') {
-                            new Float32Array(this.inputBuffers[inputBufferIndex].getMappedRange()).set(inputs[i]);
-                        }
-                        
-                        this.inputBuffers[inputBufferIndex].unmap();
+
+                        new Float32Array(this.inputBuffers[inpBuf_i].getMappedRange()).set(inputs[inpBuf_i]);
+                    
+                        this.inputBuffers[inpBuf_i].unmap();
                     }
 
-                    inputBufferIndex++;
+                    inpBuf_i++;
+                    inpIdx++;
                 }
 
                 //set output buffers
                 if(!skipOutputDef && node.isReturned && (!node.isUniform || (node.isUniform && !uBufferPushed))) {
                     // Create or recreate the output buffers for all returned variables
                     if(!node.isUniform) {
-                        this.outputBuffers.push(this.inputBuffers[this.inputBuffers.length - 1]);
+                        this.outputBuffers[inpBuf_i-1] = (this.inputBuffers[inpBuf_i-1]);
                     } else if(!uBufferPushed) {
                         uBufferPushed = true;
-                        this.outputBuffers.push(this.uniformBuffer);
+                        this.outputBuffers[inpBuf_i-1] = (this.uniformBuffer);
                     }
                 }
             }
-        });
+        };
 
         //run the buffer() call now for each group tied to each shader based on load order
         bindGroupAlts.forEach((inp,i) => {
@@ -1073,22 +1103,26 @@ fn frag_main(
                 });
             }  
         })
-                                    //temp fix till we figure out why this one errors on 2nd pass
-        if(this.defaultUniforms){// && !this.defaultUniformBuffer) { 
+                                    
+        if(this.defaultUniforms) {  //make new buffer each input
             
-            let totalUniformBufferSize = 0;
-            this.defaultUniforms.forEach((u) => {
-                totalUniformBufferSize += wgslTypeSizes[this.builtInUniforms[u].type].size; //assume 4 bytes per float/int (32 bit)
-            });
+            if(!this.totalDefaultUniformBufferSize) {
+                let totalUniformBufferSize = 0;
+                this.defaultUniforms.forEach((u) => {
+                    totalUniformBufferSize += wgslTypeSizes[this.builtInUniforms[u].type].size; //assume 4 bytes per float/int (32 bit)
+                });
 
-            if(totalUniformBufferSize < 8) totalUniformBufferSize += 8 - totalUniformBufferSize; 
-            else totalUniformBufferSize -= totalUniformBufferSize % 16;                            //correct final buffer size (IDK)
+                if(totalUniformBufferSize < 8) totalUniformBufferSize += 8 - totalUniformBufferSize; 
+                else totalUniformBufferSize -= totalUniformBufferSize % 16; //correct final buffer size (I think)
+
+                this.totalDefaultUniformBufferSize = totalUniformBufferSize;
+                    
+            }                           
 
             this.defaultUniformBuffer = this.device.createBuffer({
-                label:'default uniforms',
-                size: totalUniformBufferSize, // This should be the sum of byte sizes of all uniforms
+                size: this.totalDefaultUniformBufferSize, // This should be the sum of byte sizes of all uniforms
                 usage: GPUBufferUsage.UNIFORM  | GPUBufferUsage.COPY_SRC,
-                mappedAtCreation: true
+                mappedAtCreation:true
             });
 
             if(!this.defaultUniformBinding) {
@@ -1096,11 +1130,10 @@ fn frag_main(
             }
             this.bufferGroup.defaultUniformBuffer = this.defaultUniformBuffer;
         }
-
         
-        this.updateUBO(inputs, inputTypes);
+        this.updateUBO(uniformValues, inputTypes);
 
-        if(!allSameSize || this.defaultUniforms) {
+        if(newInputBuffer) {
             // Update bind group creation to include both input and output buffers
             const bindGroupEntries = this.inputBuffers.map((buffer, index) => ({
                 binding: index,
@@ -1121,7 +1154,7 @@ fn frag_main(
             shaders.bindGroups[this.bindGroupNumber] = this.bindGroup;
         }
 
-        return allSameSize;
+        return newInputBuffer;
         
     }
 
@@ -1187,7 +1220,7 @@ fn frag_main(
     ...inputs
 ) {
 
-        const allSameSize = this.buffer(
+        const newInputBuffer = this.buffer(
             {
                 vbos,  //[{vertices:[]}]
                 textures, //[{data:Uint8Array([]), width:800, height:600, format:'rgba8unorm' (default), bytesPerRow: width*4 (default rgba) }], //all required
@@ -1195,7 +1228,6 @@ fn frag_main(
                 samplerSettings
             }, shaders, ...inputs
         );
-
         if(!bufferOnly) { //todo: combine more shaders
             const commandEncoder = this.device.createCommandEncoder();
             if (this.computePipeline) { // If compute pipeline is defined
@@ -1214,11 +1246,11 @@ fn frag_main(
 
                 let renderPass;
                 //faster repeat calls with useRenderBundle if input array buffers don't change size and are instead simply written to when needed. Our system handles the sizing and writing for us
-                if(useRenderBundle && (!allSameSize || !this.renderBundle)) { 
+                if(useRenderBundle && (newInputBuffer || !this.renderBundle)) { 
                     //record a render pass
                     renderPass = this.device.createRenderBundleEncoder({
-                        colorFormat: [navigator.gpu.getPreferredCanvasFormat()],
-                        depthStencilFormat: "depth24plus" //etc...
+                        colorFormat: navigator.gpu.getPreferredCanvasFormat(),
+                        //depthStencilFormat: "depth24plus" //etc...
                     });
                     this.firstPass = true;
                 } else renderPass = commandEncoder.beginRenderPass(this.renderPassDescriptor);
@@ -1271,7 +1303,7 @@ fn frag_main(
 
             if(!skipOutputDef) {
                 return this.getOutputData(commandEncoder);
-            } else return new Promise((resolve) => {resolve(true)});
+            } else return new Promise((r) => r(true));
             
         }
         
