@@ -308,7 +308,7 @@ fn frag_main(
     @builtin(sample_index) sampleIndex: u32, //sample index for the current fragment
     @builtin(sample_mask) sampleMask: u32,   //contains a bitmask indicating which samples in this fragment are covered by the primitive being rendered
     @builtin(frag_depth) depth: f32          //Updated depth of the fragment, in the viewport depth range.
-) -> @location(1) vec4<f32> {
+) -> @location(0) vec4<f32> {
     return pixel.color;
 }`
                 };
