@@ -543,8 +543,8 @@ fn frag_main(
             if(!isTypedArray(vertices)) {
                 if(!Array.isArray(vertices)) {
                     vertices = this.combineVertices(
-                        typeof vertices.position?.[0] === 'object' ? this.flattenArray(vertices.position) : vertices.position,
                         typeof vertices.color?.[0] === 'object' ? this.flattenArray(vertices.color) : vertices.color,
+                        typeof vertices.position?.[0] === 'object' ? this.flattenArray(vertices.position) : vertices.position,
                         typeof vertices.normals?.[0] === 'object' ? this.flattenArray(vertices.normals) : vertices.normals,
                         typeof vertices.uv?.[0] === 'object' ? this.flattenArray(vertices.uv) : vertices.uv
                     );
@@ -553,7 +553,6 @@ fn frag_main(
             }
             if(!shaders.vertexBuffers || shaders.vertexBuffers[index]?.size !== vertices.byteLength) {
                 if(!shaders.vertexBuffers) shaders.vertexBuffers = [];
-
                 const vertexBuffer = this.device.createBuffer({
                     size: vertices.byteLength,
                     usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC, //assume read/write
@@ -575,7 +574,7 @@ fn frag_main(
         this.context?.configure(contextSettings ? contextSettings : {
             device: shaders.device, 
             format: swapChainFormat, 
-            usage: GPUTextureUsage.RENDER_ATTACHMENT,
+            //usage: GPUTextureUsage.RENDER_ATTACHMENT,
             alphaMode: 'premultiplied'
         });
 
@@ -591,8 +590,8 @@ fn frag_main(
         const vertexBuffers = Array.from({length:nVertexBuffers}, (_,i) => {return {
             arrayStride: 48,
             attributes: [
-                {format: "float32x4", offset: 0, shaderLocation:  4*i},   //color
-                {format: "float32x3", offset: 16, shaderLocation: 4*i+1},     //position
+                {format: "float32x4", offset: 0, shaderLocation:  4*i},     //color
+                {format: "float32x3", offset: 16, shaderLocation: 4*i+1},   //position
                 {format: "float32x3", offset: 28, shaderLocation: 4*i+2},   //normal
                 {format: "float32x2", offset: 40, shaderLocation: 4*i+3}    //uv
             ]
@@ -636,15 +635,15 @@ fn frag_main(
                 loadOp: "clear",
                 storeOp: "store"
             }],
-            // depthStencilAttachment: {
-            //     view: depthTexture.createView(),
-            //     depthLoadOp: "clear",
-            //     depthClearValue: 1.0,
-            //     depthStoreOp: "store",
-            //     stencilLoadOp: "clear",
-            //     stencilClearValue: 0,
-            //     stencilStoreOp: "store"
-            // }
+            depthStencilAttachment: {
+                view: depthTexture.createView(),
+                depthLoadOp: "clear",
+                depthClearValue: 1.0,
+                depthStoreOp: "store",
+                //stencilLoadOp: "clear",
+                //stencilClearValue: 0,
+                //stencilStoreOp: "store"
+            }
         };
 
         shaders.vertex.renderPassDescriptor = renderPassDescriptor;
@@ -671,7 +670,12 @@ fn frag_main(
         normals,   //3d vec array
         uvs        //2d vec array
     ) {
-        const vertexCount = (positions | colors | normals | uvs).length / 3; // Assuming each position has 3 components
+        let length = 0;
+        if(colors) length = colors.length / 4; 
+        if (positions?.length > length) length = positions.length / 3;
+        if (normals?.length > length) length = normals.length / 3;
+        if (uvs?.length > length) length = uvs.length / 2;
+        const vertexCount = length; // Assuming each position has 3 components
         const interleavedVertices = new Float32Array(vertexCount * 12); // 12 values per vertex
 
         for (let i = 0; i < vertexCount; i++) {
@@ -1380,6 +1384,8 @@ fn frag_main(
     excludedNames = {
         'color':true,
         'position':true,
+        'uv':true,
+        'normal':true,
         'pixel':true
     }
 
@@ -1396,15 +1402,15 @@ fn frag_main(
         const functionBody = fstr.substring(fstr.indexOf('{')); 
         //basic function splitting, we dont support object inputs right now, anyway. e.g. we could add {x,y,z} objects to define vectors
 
-        tokens.forEach(({ token, isInput }) => {
+        tokens.forEach(({ token, isInput },i) => {
             let isReturned = returnedVars?.find((v) => {
                 if(token.includes(v)) {
                     if(
-                        shaderType !== 'compute' &&
-                        Object.keys(this.excludedNames).find((t) => token.includes(t)) &&
-                        Object.keys(this.builtInUniforms).find((t) => token.includes(t))
+                        (shaderType !== 'compute' &&
+                        Object.keys(this.excludedNames).find((t) => token.includes(t)) ||
+                        Object.keys(this.builtInUniforms).find((t) => token.includes(t)))
                     ) {
-                        isInput = false;
+                        tokens[i].isInput = false;
                     }
                     else return true;
                 }
@@ -1800,7 +1806,7 @@ fn frag_main(
     @builtin(front_facing) is_front: bool,   //true when current fragment is on front-facing primitive
     @builtin(sample_index) sampleIndex: u32, //sample index for the current fragment
     @builtin(sample_mask) sampleMask: u32   //contains a bitmask indicating which samples in this fragment are covered by the primitive being rendered
-) -> @location(1) vec4<f32> {`;
+) -> @location(0) vec4<f32> {`;
         }
         let shaderHead = code;
         // Transpose the main body
@@ -1842,7 +1848,7 @@ fn frag_main(
 
         // Extract array variable names
         const arrayVars = [];
-        code.replace(/(let|var|const) (\w+) = array/g, (match, p1, varName) => {
+        code.replace(/(let|var|const) (\w+) = (array|\[)/g, (match, p1, varName) => {
             arrayVars.push(varName);
             return match; // Just to keep the replace function working
         });

@@ -234,7 +234,7 @@ function vertexExample() {
         vec4f(0, 1, 0, 1), 
         vec4f(0, 0, 1, 1) 
     ];
-
+    color = cols[vertexIndex];
     position = vec4f(tri[vertexIndex], 0.0, 1.0);
 }
 
@@ -250,6 +250,7 @@ document.getElementById('ex2').appendChild(canvas);
 let ex12Id1 = setupWebGPUConverterUI(vertexExample, document.getElementById('ex2'), 'vertex');
 let ex12Id2 = setupWebGPUConverterUI(fragmentExample, document.getElementById('ex2'), 'fragment');
 console.time('createRenderPipeline and render triangle');
+
 WebGPUjs.createPipeline({
     vertex:vertexExample,
     fragment:fragmentExample
