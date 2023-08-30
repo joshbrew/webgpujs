@@ -7,7 +7,7 @@ Write full featured WGSL pipelines in plain javascript.
 ![cap](./compute.PNG)
 ![code](./workflow.PNG)
 ![cap2](./fragvert.PNG)
-![render](./rendertest.PNG)
+![render](./render.PNG)
 
 What's left todo:
 
