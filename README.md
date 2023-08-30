@@ -19,6 +19,7 @@ What's left todo:
    - - e.g. more customizable vertex and fragment shader conditions, primarily for what the fragment actually outputs (we can infer all of this)
 - Test assets, multiple vbos, multiple render passes, etc. Typical renderer stuff.
 - A dozen or so examples
+- Make the transpiler demo actually update the render or compute outputs
 
 
 What's cooking? 
