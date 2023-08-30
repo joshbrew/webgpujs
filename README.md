@@ -20,6 +20,7 @@ What's left todo:
 - Test assets, multiple vbos, multiple render passes, etc. Typical renderer stuff.
 - A dozen or so examples
 - Make the transpiler demo actually update the render or compute outputs
+- more recyclability in each step of the pipeline (just need to build stuff out more now that the worst bugs are out of the way)
 
 
 What's cooking? 

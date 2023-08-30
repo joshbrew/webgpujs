@@ -13,8 +13,6 @@ export class WebGPUjs {
     // - whatever else seems important in the wgsl spec. e.g. https://developer.mozilla.org/en-US/docs/Web/API/GPURenderBundle
     // - we could generalze the shader object keys more so it's not just compute/fragment/vertex names
     
-    // - Uniform buffer recycling doesn't work? Also just merge defaultUniformBuffer with uniformBuffer?
-    // - 
 
     static createPipeline = async (
         shaderFunctions,  
