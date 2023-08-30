@@ -266,13 +266,13 @@ export class WebGPUjs {
 `@location(${4*i}) color${i>0 ? i+1 : ''}In: vec4<f32>,
     @location(${4*i+1}) vertex${i>0 ? i+1 : ''}In: vec3<f32>, 
     @location(${4*i+2}) normals${i>0 ? i+1 : ''}In: vec3<f32>,
-    @location(${4*i+3}) uv${i>0 ? i+1 : ''}In: vec4<f32>${i===nVertexBuffers-1 ? '' : ','}`
+    @location(${4*i+3}) uv${i>0 ? i+1 : ''}In: vec2<f32>${i===nVertexBuffers-1 ? '' : ','}`
                     );
                 return `
     @location(${4*i}) color${i>0 ? i+1 : ''}: vec4<f32>,
     @location(${4*i+1}) vertex${i>0 ? i+1 : ''}: vec3<f32>, 
     @location(${4*i+2}) normals${i>0 ? i+1 : ''}: vec3<f32>,
-    @location(${4*i+3}) uv${i>0 ? i+1 : ''}: vec4<f32>${i===nVertexBuffers-1 ? '' : ','}`;
+    @location(${4*i+3}) uv${i>0 ? i+1 : ''}: vec2<f32>${i===nVertexBuffers-1 ? '' : ','}`;
             });
 
                 const vtxInps = `
@@ -1754,13 +1754,13 @@ fn frag_main(
 `@location(${4*i}) color${i>0 ? i+1 : ''}In: vec4<f32>,
     @location(${4*i+1}) vertex${i>0 ? i+1 : ''}In: vec3<f32>, 
     @location(${4*i+2}) normals${i>0 ? i+1 : ''}In: vec3<f32>,
-    @location(${4*i+3}) uv${i>0 ? i+1 : ''}In: vec4<f32>${i===nVertexBuffers-1 ? '' : ','}`
+    @location(${4*i+3}) uv${i>0 ? i+1 : ''}In: vec2<f32>${i===nVertexBuffers-1 ? '' : ','}`
                 );
                 return `
     @location(${4*i}) color${i>0 ? i+1 : ''}: vec4<f32>,
     @location(${4*i+1}) vertex${i>0 ? i+1 : ''}: vec3<f32>, 
     @location(${4*i+2}) normals${i>0 ? i+1 : ''}: vec3<f32>,
-    @location(${4*i+3}) uv${i>0 ? i+1 : ''}: vec4<f32>${i===nVertexBuffers-1 ? '' : ','}`;
+    @location(${4*i+3}) uv${i>0 ? i+1 : ''}: vec2<f32>${i===nVertexBuffers-1 ? '' : ','}`;
             });
 
             vtxInps = `
@@ -1838,7 +1838,8 @@ fn frag_main(
         code = body.replace(/for \((let|var) (\w+) = ([^;]+); ([^;]+); ([^\)]+)\)/g, 'for (var $2 = $3; $4; $5)');
 
         //code = code.replace(/const/g, 'let');
-        code = code.replace(/const (\w+) = (?!(vec\d+|mat\d+|\[.*\]))/g, 'let $1 = ');
+        code = code.replace(/const (\w+) = (?!(vec\d+|mat\d+|\[.*|array))/g, 'let $1 = ')
+
         const vecMatDeclarationRegex = /(let|var) (\w+) = (vec\d+|mat\d+)/g;
         code = code.replace(vecMatDeclarationRegex, 'var $2 = $3');
         const vecMatDeclarationRegex2 = /const (\w+) = (vec\d+|mat\d+)/g;
@@ -2065,7 +2066,13 @@ fn frag_main(
                     extractedConsts.push(match[0]);
                 }
 
-                const modifiedText = text.replace(pattern, '').trim();
+                const pattern2 = /const\s+[a-zA-Z_][a-zA-Z0-9_]*\s*=\s*[a-zA-Z_][a-zA-Z0-9_]*\s*\([\s\S]*?\)\s*;/g;
+
+                while ((match = pattern2.exec(text)) !== null) {
+                    extractedConsts.push(match[0]);
+                }
+
+                const modifiedText = text.replace(pattern, '').replace(pattern2,'').trim();
 
                 return {
                     consts:extractedConsts,

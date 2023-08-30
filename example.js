@@ -223,13 +223,13 @@ function matrixMultiply(
 
 
 function vertexExample() {
-    let tri = array(
+    const tri = array(
         vec2f( 0.0,  0.5),  
         vec2f(-0.5, -0.5),  
         vec2f( 0.5, -0.5)   
     );
 
-    var cols = [
+    const cols = [
         vec4f(1, 0, 0, 1), 
         vec4f(0, 1, 0, 1), 
         vec4f(0, 0, 1, 1) 
