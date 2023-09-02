@@ -1854,41 +1854,50 @@ fn frag_main(
 
         // Replace common patterns
         
-        code = body.replace(/for \((let|var) (\w+) = ([^;]+); ([^;]+); ([^\)]+)\)/g, 'for (var $2 = $3; $4; $5)');
+        code = body.replace(/for \((let|var) (\w+) = ([^;]+); ([^;]+); ([^\)]+)\)/gm, 'for (var $2 = $3; $4; $5)');
 
-        code = code.replace(/('|"|`)/g,''); //replace quotes with nothing. E.g. write in a shader code string
+        const stringPlaceholders = {};
+        let stringPlaceholderIndex = 0;
+        code = code.replace(/('|"|`)([\s\S]*?)\1/gm, (match) => {
+            const placeholder = `__CODE_PLACEHOLDER_${stringPlaceholderIndex}__`;
+
+            stringPlaceholders[placeholder] = match.substring(1,match.length-1);
+            stringPlaceholderIndex++;
+            return placeholder;
+        });
+
 
         //code = code.replace(/const/g, 'let');
-        code = code.replace(/const (\w+) = (?!(vec\d+|mat\d+|\[.*|array))/g, 'let $1 = ')
+        code = code.replace(/const (\w+) = (?!(vec\d+|mat\d+|\[.*|array))/gm, 'let $1 = ')
 
-        const vecMatDeclarationRegex = /(let|var) (\w+) = (vec\d+|mat\d+)/g;
+        const vecMatDeclarationRegex = /(let|var) (\w+) = (vec\d+|mat\d+)/gm;
         code = code.replace(vecMatDeclarationRegex, 'var $2 = $3');
-        const vecMatDeclarationRegex2 = /const (\w+) = (vec\d+|mat\d+)/g;
+        const vecMatDeclarationRegex2 = /const (\w+) = (vec\d+|mat\d+)/gm;
         code = code.replace(vecMatDeclarationRegex2, 'const $2 = $3');
 
         // ------ Array conversion ------ ------ ------ ------ ------ ------ ------
 
         // Extract array variable names
         const arrayVars = [];
-        code.replace(/(let|var|const) (\w+) = (array|\[)/g, (match, p1, varName) => {
+        code.replace(/(let|var|const) (\w+) = (array|\[)/gm, (match, p1, varName) => {
             arrayVars.push(varName);
             return match; // Just to keep the replace function working
         });
 
         if (shaderType !== 'vertex' && shaderType !== 'fragment') {
-            code = code.replace(/(\w+)\[([\w\s+\-*\/]+)\]/g, (match, p1, p2) => {
+            code = code.replace(/(\w+)\[([\w\s+\-*\/]+)\]/gm, (match, p1, p2) => {
                 if (arrayVars.includes(p1)) return match;  // if the variable is an array declaration, return it as is
                 return `${p1}.values[${p2}]`;
             });
         } else {
             // When shaderType is vertex or fragment, exclude specific variable names from the replacement
-            code = code.replace(/(position|vertex|color|normal|uv)|(\w+)\[([\w\s+\-*\/]+)\]/g, (match, p1, p2, p3) => {
+            code = code.replace(/(position|vertex|color|normal|uv)|(\w+)\[([\w\s+\-*\/]+)\]/gm, (match, p1, p2, p3) => {
                 if (p1 || arrayVars.includes(p2)) return match;  // if match is one of the keywords or is an array variable, return it as is
                 return `${p2}.values[${p3}]`;  // otherwise, apply the transformation
             });
         }
         
-        code = code.replace(/(\w+)\.length/g, 'arrayLength(&$1.values)');
+        code = code.replace(/(\w+)\.length/gm, 'arrayLength(&$1.values)');
 
 
         code = code.replace(/(\/\/[^\n]*);/gm, '$1'); //trim off semicolons after comments
@@ -1904,7 +1913,7 @@ fn frag_main(
                 return cleaned?.indexOf(',') < 0 ? cleaned + ',' : cleaned; // append comma for the next value
             }).join('\n');
 
-            const valuesWithoutComments = cleanedValues.replace(/\/\*.*?\*\//g, '').trim(); // remove multi-line comments
+            const valuesWithoutComments = cleanedValues.replace(/\/\*.*?\*\//gm, '').trim(); // remove multi-line comments
             const valuesArray = this.splitIgnoringBrackets(valuesWithoutComments);
             const size = valuesArray.length;
 
@@ -1914,7 +1923,7 @@ fn frag_main(
 
             // Extract the type from the first value (assumes all values in the array are of the same type)
             let arrayValueType = inferredType;
-            const arrayValueTypeMatch = valuesWithoutComments.match(/^(vec\d+f?|mat\d+x\d+)/);
+            const arrayValueTypeMatch = valuesWithoutComments.match(/^(vec\d+f?|mat\d+x\d+)/gm);
             if (arrayValueTypeMatch) {
                 arrayValueType = arrayValueTypeMatch[0];
             }
@@ -1985,7 +1994,7 @@ fn frag_main(
 
         code = transformArrays(code);
 
-        code = code.replace(/(let|var|const) (\w+) = new (Float|Int|UInt)(\d+)Array\((\d+)\);/g, (match, keyword, varName, typePrefix, bitSize, arraySize) => {
+        code = code.replace(/(let|var|const) (\w+) = new (Float|Int|UInt)(\d+)Array\((\d+)\);/gm, (match, keyword, varName, typePrefix, bitSize, arraySize) => {
             let typeChar;
             switch(typePrefix) {
                 case 'Float': 
@@ -2004,7 +2013,7 @@ fn frag_main(
         });
 
         // Convert new Arrays with explicit sizes last
-        code = code.replace(/(let|var|const) (\w+) = new Array\((\d+)\);/g, 'var $2 : array<f32, $2>;');
+        code = code.replace(/(let|var|const) (\w+) = new Array\((\d+)\);/gm, 'var $2 : array<f32, $2>;');
 
         // ------ ------ ------ ------ ------ ------ ------ ------ ------ ------
 
@@ -2012,7 +2021,7 @@ fn frag_main(
         code = replaceJSFunctions(code, replacements);
 
         // Handle vector and matrix creation
-        const vecMatCreationRegex = /(vec(\d+)|mat(\d+))\(([^)]+)\)/g;
+        const vecMatCreationRegex = /(vec(\d+)|mat(\d+))\(([^)]+)\)/gm;
         code = code.replace(vecMatCreationRegex, (match, type, vecSize, matSize, args) => {
             // Split the arguments and check if any of them contain a decimal point
             const argArray = args.split(',').map(arg => arg.trim());
@@ -2024,7 +2033,7 @@ fn frag_main(
             
             if (type.startsWith('mat')) {
                 // Always set internal vecs of mats to f32
-                return `${type}<f32>(${argArray.join(', ').replace(/vec(\d+)/g, 'vec$1<f32>')})`;
+                return `${type}<f32>(${argArray.join(', ').replace(/vec(\d+)/gm, 'vec$1<f32>')})`;
             } else {
                 return `${type}<${inferredType}>(${argArray.join(', ')})`;
             }
@@ -2033,13 +2042,13 @@ fn frag_main(
         
         params.forEach((param) => {
             if(param.isUniform) {
-                const regex = new RegExp(`(?<![a-zA-Z0-9])${param.name}(?![a-zA-Z0-9])`, 'g');
+                const regex = new RegExp(`(?<![a-zA-Z0-9])${param.name}(?![a-zA-Z0-9])`, 'gm');
                 code = code.replace(regex, `uniforms.${param.name}`);
             }
         });
 
         Object.keys(this.builtInUniforms).forEach((param) => {
-            const regex = new RegExp(`(?<![a-zA-Z0-9])${param}(?![a-zA-Z0-9])`, 'g');
+            const regex = new RegExp(`(?<![a-zA-Z0-9])${param}(?![a-zA-Z0-9])`, 'gm');
             code = code.replace(regex, `defaults.${param}`);
         });
 
@@ -2047,11 +2056,14 @@ fn frag_main(
         for (const [placeholder, comment] of Object.entries(commentPlaceholders)) {
             code = code.replace(placeholder, comment);
         }
+        for (const [placeholder, str] of Object.entries(stringPlaceholders)) {
+            code = code.replace(placeholder, str);
+        }
         
         //Vertex and Fragment shader transpiler (with some assumptions we made)
         // Extract variable names from the Vertex struct definition
         if(shaderType === 'fragment' || shaderType === 'vertex') {
-            const vertexVarMatches = shaderHead.match(/@location\(\d+\) (\w+):/g);
+            const vertexVarMatches = shaderHead.match(/@location\(\d+\) (\w+):/gm);
             const vertexVars = vertexVarMatches ? vertexVarMatches.map(match => {
                 const parts = match.split(' ');
                 return parts[1].replace(':', ''); // remove the colon
@@ -2060,7 +2072,7 @@ fn frag_main(
 
             // Replace variables without pixel prefix with pixel prefixed version
             vertexVars.forEach(varName => {
-                const regex = new RegExp(`(?<![a-zA-Z0-9_.])${varName}(?![a-zA-Z0-9_.])`, 'g');
+                const regex = new RegExp(`(?<![a-zA-Z0-9_.])${varName}(?![a-zA-Z0-9_.])`, 'gm');
                 code = code.replace(regex, `pixel.${varName}`);
             });
         }
@@ -2078,7 +2090,7 @@ fn frag_main(
         let consts;
         if(extractConsts) {
             function extrConsts(text) {
-                const pattern = /const\s+[a-zA-Z_][a-zA-Z0-9_]*\s*:\s*[a-zA-Z_][a-zA-Z0-9_<>,\s]*\s*=\s*[a-zA-Z_][a-zA-Z0-9_<>,\s]*(\([\s\S]*?\)|\d+\.?\d*);/g;
+                const pattern = /const\s+[a-zA-Z_][a-zA-Z0-9_]*\s*:\s*[a-zA-Z_][a-zA-Z0-9_<>,\s]*\s*=\s*[a-zA-Z_][a-zA-Z0-9_<>,\s]*(\([\s\S]*?\)|\d+\.?\d*);/gm;
 
                 let match;
                 const extractedConsts = [];
@@ -2087,7 +2099,7 @@ fn frag_main(
                     extractedConsts.push(match[0]);
                 }
 
-                const pattern2 = /const\s+[a-zA-Z_][a-zA-Z0-9_]*\s*=\s*[a-zA-Z_][a-zA-Z0-9_]*\s*\([\s\S]*?\)\s*;/g;
+                const pattern2 = /const\s+[a-zA-Z_][a-zA-Z0-9_]*\s*=\s*[a-zA-Z_][a-zA-Z0-9_]*\s*\([\s\S]*?\)\s*;/gm;
 
                 while ((match = pattern2.exec(text)) !== null) {
                     extractedConsts.push(match[0]);
@@ -2108,7 +2120,7 @@ fn frag_main(
             consts = extracted.consts;
         }
 
-        if(!returns) code = code.replace(/(return [^;]+;)/g, '//$1');
+        if(!returns) code = code.replace(/(return [^;]+;)/gm, '//$1');
         this.mainBody = code;
 
         return {code, consts};
@@ -2167,7 +2179,7 @@ fn frag_main(
         this.functions.push(func);
         for(const key of ['compute','fragment','vertex']) {
             if(shaders[key])
-                Object.assign(shaders[key], this.convertToWebGPU(shaders[key].funcStr, key, shaders[key].workGroupSize ? shaders[key].workGroupSize : undefined)); 
+                Object.assign(shaders[key], this.convertToWebGPU(shaders[key].funcStr, key, shaders[key].bindGroupNumber, shaders[key].nVertexBuffers, shaders[key].workGroupSize ? shaders[key].workGroupSize : undefined)); 
         }
         return this.init(shaders, undefined, shaders.device);
     }

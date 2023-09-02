@@ -32,6 +32,8 @@ function dft(
 
     const b = 3 + outp4;
 
+    `const bb : array<f32, 5> = array(1,2,3,4,5)`; //write-in
+
     var M = mat4x4(
         vec4f(1.0,0.0,0.0,0.0),
         vec4f(0.0,1.0,0.0,0.0),
