@@ -1276,8 +1276,9 @@ fn frag_main(
                     });
                     
                     if(!this.vertexBuffers) this.updateVBO({color:[1,1,1,1]}, 0); //put a default in to force it to run a single pass
+                    
                     if(this.vertexBuffers) 
-                    this.vertexBuffers.forEach((vbo,i) => {renderPass.setVertexBuffer(i, vbo)});
+                        this.vertexBuffers.forEach((vbo,i) => {renderPass.setVertexBuffer(i, vbo)});
                     
                     if(viewport) {
                         renderPass.setViewPort(
@@ -1303,7 +1304,9 @@ fn frag_main(
                         renderPass.setIndexBuffer(this.indexBuffer, this.indexFormat);
                     }
 
+                    
                     if(vertexCount) this.vertexCount = vertexCount;
+                    else if(!this.vertexCount) this.vertexCount = 1;
                     if(this.indexBuffer) renderPass.drawIndexed(this.vertexCount ? this.vertexCount : 1, instanceCount, firstIndex, 0, firstInstance)
                     else renderPass.draw(this.vertexCount ? this.vertexCount : 1, instanceCount, firstVertex, firstInstance);
 

@@ -56,7 +56,7 @@ function dft(
     }
 
     //you should always add semicolons to be in-spec with compute shaders but we will try to add them for you
-    let v = 2
+
     const outputIndex = k * 2 //use strict
     if (outputIndex + 1 < outputData.length) {
         outputData[outputIndex] = sum.x;
