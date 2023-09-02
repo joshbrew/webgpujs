@@ -31,7 +31,8 @@ export class WebGPUjs {
         prevShaderCode, //we can use the previous shader code to combine bindGroupLayouts
         bindGroupLayouts, //inlcude the previous bind group layouts
         renderPipelineSettings,
-        computePipelineSettings
+        computePipelineSettings,
+        workGroupSize
        }={}
     ) => {
         if(!bindGroupLayouts) bindGroupLayouts = [];
@@ -59,7 +60,7 @@ export class WebGPUjs {
             //we are parsing all of the bindings and stuff from the conversion process, so this won't render straight shader code
             if (shaderFunctions.compute) {
                 shaders.compute = processor.convertToWebGPU(
-                    shaderFunctions.compute, 'compute', shaders.compute?.bindGroupNumber ? shaders.compute.bindGroupNumber : bindGroupIncr, nVertexBuffers
+                    shaderFunctions.compute, 'compute', shaders.compute?.bindGroupNumber ? shaders.compute.bindGroupNumber : bindGroupIncr, nVertexBuffers, workGroupSize
                 );
                 if(prepend) {
                     if(typeof prepend === 'string') shaders.compute.code = prepend + '\n' + shaders.compute.code;
@@ -93,26 +94,26 @@ export class WebGPUjs {
                 bindGroupIncr++;
             }
 
-            if(shaderFunctions.compute && shaderFunctions.vertex) {
-                let combined = processor.combineBindings(shaderFunctions.compute.code, shaderFunctions.vertex.code);
-                shaderFunctions.compute.code = combined.code1;
-                shaderFunctions.compute.altBindings = combined.changes1;
-                shaderFunctions.vertex.code = combined.code2; //should have correlated bindings now
-                shaderFunctions.vertex.altBindings = combined.changes2;
+            if(shaders.compute && shaders.vertex) {
+                let combined = processor.combineBindings(shaders.compute.code, shaders.vertex.code);
+                shaders.compute.code = combined.code1;
+                shaders.compute.altBindings = combined.changes1;
+                shaders.vertex.code = combined.code2; //should have correlated bindings now
+                shaders.vertex.altBindings = combined.changes2;
             }
-            if(shaderFunctions.compute && shaderFunctions.fragment) {
-                let combined = processor.combineBindings(shaderFunctions.compute.code, shaderFunctions.fragment.code);
-                shaderFunctions.compute.code = combined.code1;
-                shaderFunctions.compute.altBindings = combined.changes1;
-                shaderFunctions.fragment.code = combined.code2; //should have correlated bindings now
-                shaderFunctions.fragment.altBindings = combined.changes2;
+            if(shaders.compute && shaders.fragment) {
+                let combined = processor.combineBindings(shaders.compute.code, shaders.fragment.code);
+                shaders.compute.code = combined.code1;
+                shaders.compute.altBindings = combined.changes1;
+                shaders.fragment.code = combined.code2; //should have correlated bindings now
+                shaders.fragment.altBindings = combined.changes2;
             }
 
             if(prevShaderCode) {
                 if(typeof prevShaderCode === 'object') {
                     for(const key in prevShaderCode) {
-                        let shaderObj = shaderFuncions[key];
-                        if(shaderObj) {
+                        let shaderContext = shaders[key];
+                        if(shaderContext) {
 
                         }
                     }
@@ -252,10 +253,10 @@ export class WebGPUjs {
 
         for (const shaderType of ['compute','vertex','fragment']) {
             
-            const shaderObj = shaders[shaderType];
-            if(!shaderObj) continue;
+            const shaderContext = shaders[shaderType];
+            if(!shaderContext) continue;
 
-            if(shaderObj && shaderType === 'fragment' && !shaders.vertex) {
+            if(shaderContext && shaderType === 'fragment' && !shaders.vertex) {
                 let vboInputStrings = [];
 
                 let vboStrings = Array.from({length: nVertexBuffers}, (_, i) => {
@@ -263,13 +264,13 @@ export class WebGPUjs {
                 
 `@location(${4*i}) color${i>0 ? i+1 : ''}In: vec4<f32>,
     @location(${4*i+1}) vertex${i>0 ? i+1 : ''}In: vec3<f32>, 
-    @location(${4*i+2}) normals${i>0 ? i+1 : ''}In: vec3<f32>,
+    @location(${4*i+2}) normal${i>0 ? i+1 : ''}In: vec3<f32>,
     @location(${4*i+3}) uv${i>0 ? i+1 : ''}In: vec2<f32>${i===nVertexBuffers-1 ? '' : ','}`
                     );
                 return `
     @location(${4*i}) color${i>0 ? i+1 : ''}: vec4<f32>,
     @location(${4*i+1}) vertex${i>0 ? i+1 : ''}: vec3<f32>, 
-    @location(${4*i+2}) normals${i>0 ? i+1 : ''}: vec3<f32>,
+    @location(${4*i+2}) normal${i>0 ? i+1 : ''}: vec3<f32>,
     @location(${4*i+3}) uv${i>0 ? i+1 : ''}: vec2<f32>${i===nVertexBuffers-1 ? '' : ','}`;
             });
 
@@ -298,7 +299,7 @@ fn vtx_main(
     return pixel;
 }`
                 };
-            } else if (shaderObj && shaderType === 'vertex' && !shaders.fragment) {
+            } else if (shaderContext && shaderType === 'vertex' && !shaders.fragment) {
                 shaders.fragment = {
                     shader:`
 @fragment
@@ -314,7 +315,7 @@ fn frag_main(
                 };
             }
 
-            shaderObj.device = device;
+            shaderContext.device = device;
         }
 
         if(shaders.compute) {
@@ -403,23 +404,23 @@ fn frag_main(
 
         //todo: spaghetti
         for (const shaderType of ['compute','vertex','fragment']) {
-            const shaderObj = shaders[shaderType]; 
-            if(!shaderObj) continue;
+            const shaderContext = shaders[shaderType]; 
+            if(!shaderContext) continue;
             if(shaderType === 'compute') {
-                const process = this.process.bind(shaderObj); // Bind the function to each shader object's scope, vertex and fragment share all params the way we set it up
+                const process = this.process.bind(shaderContext); // Bind the function to each shader object's scope, vertex and fragment share all params the way we set it up
                 shaders.process = (...inputs) => { return process(undefined, shaders, ...inputs); } //compute shaders don't take the draw parameters
                 
-                shaderObj.buffer = this.buffer.bind(shaderObj);
-                shaderObj.setBuffers = ({vbos, textures, samplerSettings, skipOutputDef}={}, ...inputs) => {
-                    shaderObj.buffer({textures, vbos, samplerSettings, skipOutputDef}, shaders, ...inputs);
+                shaderContext.buffer = this.buffer.bind(shaderContext);
+                shaderContext.setBuffers = ({vbos, textures, samplerSettings, skipOutputDef}={}, ...inputs) => {
+                    shaderContext.buffer({textures, vbos, samplerSettings, skipOutputDef}, shaders, ...inputs);
                 } 
-                shaderObj.getOutputData = this.getOutputData.bind(shaderObj);
-                shaderObj.updateUBO = this.updateUBO.bind(shaderObj);
-                const updateVBO = this.updateVBO.bind(shaderObj);
-                shaderObj.updateVBO = updateVBO;
+                shaderContext.getOutputData = this.getOutputData.bind(shaderContext);
+                shaderContext.updateUBO = this.updateUBO.bind(shaderContext);
+                // const updateVBO = this.updateVBO.bind(shaderContext);
+                // shaderContext.updateVBO = updateVBO;
             }
             else if(shaderType === 'fragment') {
-                const render = this.process.bind(shaderObj); // Bind the function to each shader object's scope, vertex and fragment share all params the way we set it up
+                const render = this.process.bind(shaderContext); // Bind the function to each shader object's scope, vertex and fragment share all params the way we set it up
                 shaders.render = ({vertexCount, instanceCount, firstVertex, firstInstance, textures, samplerSettings, vbos, bufferOnly, skipOutputDef,
                     viewport,
                     scissorRect,
@@ -435,49 +436,49 @@ fn frag_main(
                         indexFormat
                     }, shaders, ...inputs);
                 }  
-                const buffer = this.buffer.bind(shaderObj);   
-                shaderObj.setBuffers = ({vertexCount, instanceCount, firstVertex, firstInstance, textures, samplerSettings, vertexData, skipOutputDef}={}, ...inputs) => {
+                const buffer = this.buffer.bind(shaderContext);   
+                shaderContext.setBuffers = ({vertexCount, instanceCount, firstVertex, firstInstance, textures, samplerSettings, vertexData, skipOutputDef}={}, ...inputs) => {
                     buffer({vertexCount, instanceCount, firstVertex, firstInstance, textures, vertexData, samplerSettings, skipOutputDef}, shaders, ...inputs);
                 } 
-                shaderObj.updateGraphicsPipeline = this.updateGraphicsPipeline.bind(shaderObj);
-                shaderObj.buffer = this.buffer.bind(shaderObj);
-                shaderObj.updateUBO = this.updateUBO.bind(shaderObj);
-                const updateVBO = this.updateVBO.bind(shaderObj);
-                shaderObj.updateVBO = updateVBO;
-                shaderObj.getOutputData = this.getOutputData.bind(shaderObj);
+                shaderContext.updateGraphicsPipeline = this.updateGraphicsPipeline.bind(shaderContext);
+                shaderContext.buffer = this.buffer.bind(shaderContext);
+                shaderContext.updateUBO = this.updateUBO.bind(shaderContext);
+                const updateVBO = this.updateVBO.bind(shaderContext);
+                shaderContext.updateVBO = updateVBO;
+                shaderContext.getOutputData = this.getOutputData.bind(shaderContext);
                 if(shaders.vertex) {
                     const s = shaders.vertex;
-                    s.updateUBO = shaderObj.updateUBO;
+                    s.updateUBO = shaderContext.updateUBO;
                     s.updateVBO = updateVBO;
                     s.render = render;
                     s.buffer = buffer;
-                    s.getOutputData = shaderObj.getOutputData;
-                    s.updateGraphicsPipeline = shaderObj.updateGraphicsPipeline;
+                    s.getOutputData = shaderContext.getOutputData;
+                    s.updateGraphicsPipeline = shaderContext.updateGraphicsPipeline;
                 }
             } else if (shaderType === 'vertex') {
             }
-            shaderObj.builtInUniforms = bIUCopy; //make a copy, should reset stuff too  
+            shaderContext.builtInUniforms = bIUCopy; //make a copy, should reset stuff too  
                           
-            shaderObj.setUBOposition = this.setUBOposition;
-            shaderObj.flattenArray = this.flattenArray;
-            shaderObj.createBindGroupFromEntries = (textureSettings, samplerSettings) => {this.createBindGroupFromEntries(shaderObj, shaderType, textureSettings, samplerSettings); };
-            shaderObj.combineVertices = this.combineVertices;
-            shaderObj.cleanup = () => {this.cleanup(shaders);}
-            if(this.canvas) shaderObj.canvas = this.canvas;
-            if(this.context) shaderObj.context = this.context;
+            shaderContext.setUBOposition = this.setUBOposition;
+            shaderContext.flattenArray = this.flattenArray;
+            shaderContext.createBindGroupFromEntries = (textureSettings, samplerSettings) => {this.createBindGroupFromEntries(shaderContext, shaderType, textureSettings, samplerSettings); };
+            shaderContext.combineVertices = this.combineVertices;
+            shaderContext.cleanup = () => {this.cleanup(shaders);}
+            if(this.canvas) shaderContext.canvas = this.canvas;
+            if(this.context) shaderContext.context = this.context;
         }
         
         return shaders;
     }
 
     // Extract all returned variables from the function string
-    createBindGroupFromEntries = (shaderObj, shaderType, textureSettings={}, samplerSettings={}, visibility=GPUShaderStage.COMPUTE | GPUShaderStage.FRAGMENT) => {
-        shaderObj.type = shaderType;
+    createBindGroupFromEntries = (shaderContext, shaderType, textureSettings={}, samplerSettings={}, visibility=GPUShaderStage.COMPUTE | GPUShaderStage.FRAGMENT) => {
+        shaderContext.type = shaderType;
         let bufferIncr = 0;
         let uniformBufferIdx;
 
-        const entries = shaderObj.params.map((node, i) => {
-            let isReturned = (shaderObj.returnedVars === undefined || shaderObj.returnedVars?.includes(node.name));
+        const entries = shaderContext.params.map((node, i) => {
+            let isReturned = (shaderContext.returnedVars === undefined || shaderContext.returnedVars?.includes(node.name));
             if (node.isUniform) {
                 if (typeof uniformBufferIdx === 'undefined') {
                     uniformBufferIdx = i;
@@ -518,7 +519,7 @@ fn frag_main(
             }
         }).filter(v => v);
 
-        if(shaderObj.defaultUniforms) {
+        if(shaderContext.defaultUniforms) {
             entries.push({
                 binding:bufferIncr,
                 visibility,
@@ -528,12 +529,12 @@ fn frag_main(
             })
         }
 
-        shaderObj.bindGroupLayoutEntries = entries;
+        shaderContext.bindGroupLayoutEntries = entries;
         return entries;
     }
 
     
-    updateVBO(shaders, vertices, index, bufferOffset=0, dataOffset=0) { //update
+    updateVBO(vertices, index=0, bufferOffset=0, dataOffset=0) { //update
         
         if(vertices) {
             // 4: Create vertex buffer to contain vertex data]
@@ -543,24 +544,27 @@ fn frag_main(
                     vertices = this.combineVertices(
                         typeof vertices.color?.[0] === 'object' ? this.flattenArray(vertices.color) : vertices.color,
                         typeof vertices.position?.[0] === 'object' ? this.flattenArray(vertices.position) : vertices.position,
-                        typeof vertices.normals?.[0] === 'object' ? this.flattenArray(vertices.normals) : vertices.normals,
+                        typeof vertices.normal?.[0] === 'object' ? this.flattenArray(vertices.normal) : vertices.normal,
                         typeof vertices.uv?.[0] === 'object' ? this.flattenArray(vertices.uv) : vertices.uv
                     );
                 }
                 else vertices = new Float32Array(typeof vertices === 'object' ? this.flattenArray(vertices) : vertices);
             }
-            if(!shaders.vertexBuffers || shaders.vertexBuffers[index]?.size !== vertices.byteLength) {
-                if(!shaders.vertexBuffers) shaders.vertexBuffers = [];
+            if(!this.vertexBuffers || this.vertexBuffers[index]?.size !== vertices.byteLength) {
+                if(!this.vertexBuffers) this.vertexBuffers = [];
                 const vertexBuffer = this.device.createBuffer({
                     size: vertices.byteLength,
                     usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC, //assume read/write
                 });
 
-                shaders.vertexBuffers[index] = vertexBuffer; //todo: generalize e.g. shaders.vertexBuffers[n]
+                this.vertexBuffers[index] = vertexBuffer; //todo: generalize e.g. shaders.vertexBuffers[n]
 
             }
+
+            if(!this.vertexCount) this.vertexCount = vertices.length / 12;
+
             // Copy the vertex data over to the GPUBuffer using the writeBuffer() utility function
-            this.device.queue.writeBuffer(shaders.vertexBuffers[index], bufferOffset, vertices, dataOffset, vertices.length);
+            this.device.queue.writeBuffer(this.vertexBuffers[index], bufferOffset, vertices, dataOffset, vertices.length);
         }
     }
 
@@ -665,13 +669,13 @@ fn frag_main(
     combineVertices(
         colors,    //4d vec array
         positions, //3d vec array
-        normals,   //3d vec array
+        normal,   //3d vec array
         uvs        //2d vec array
     ) {
         let length = 0;
         if(colors) length = colors.length / 4; 
         if (positions?.length > length) length = positions.length / 3;
-        if (normals?.length > length) length = normals.length / 3;
+        if (normal?.length > length) length = normal.length / 3;
         if (uvs?.length > length) length = uvs.length / 2;
         const vertexCount = length; // Assuming each position has 3 components
         const interleavedVertices = new Float32Array(vertexCount * 12); // 12 values per vertex
@@ -690,9 +694,9 @@ fn frag_main(
             interleavedVertices[interleavedOffset + 4] = positions ? positions[posOffset] || 0 : 0;
             interleavedVertices[interleavedOffset + 5] = positions ? positions[posOffset + 1] || 0 : 0;
             interleavedVertices[interleavedOffset + 6] = positions ? positions[posOffset + 2] || 0 : 0;
-            interleavedVertices[interleavedOffset + 7] = normals ? normals[norOffset] || 0 : 0;
-            interleavedVertices[interleavedOffset + 8] = normals ? normals[norOffset + 1] || 0 : 0;
-            interleavedVertices[interleavedOffset + 9] = normals ? normals[norOffset + 2] || 0 : 0;
+            interleavedVertices[interleavedOffset + 7] = normal ? normal[norOffset] || 0 : 0;
+            interleavedVertices[interleavedOffset + 8] = normal ? normal[norOffset + 1] || 0 : 0;
+            interleavedVertices[interleavedOffset + 9] = normal ? normal[norOffset + 2] || 0 : 0;
             interleavedVertices[interleavedOffset + 10] = uvs ? uvs[uvOffset] || 0 : 0;
             interleavedVertices[interleavedOffset + 11] = uvs ? uvs[uvOffset + 1] || 0 : 0;
         }
@@ -706,7 +710,7 @@ fn frag_main(
         // Pre-allocating space
         const colors = new Float32Array(vertexCount * 4);
         const positions = new Float32Array(vertexCount * 3);
-        const normals = new Float32Array(vertexCount * 3);
+        const normal = new Float32Array(vertexCount * 3);
         const uvs = new Float32Array(vertexCount * 2);
 
         for (let i = 0; i < vertexCount; i++) {
@@ -725,9 +729,9 @@ fn frag_main(
             positions[posOffset + 1] = interleavedVertices[offset + 5];
             positions[posOffset + 2] = interleavedVertices[offset + 6];
 
-            normals[norOffset] = interleavedVertices[offset + 7];
-            normals[norOffset + 1] = interleavedVertices[offset + 8];
-            normals[norOffset + 2] = interleavedVertices[offset + 9];
+            normal[norOffset] = interleavedVertices[offset + 7];
+            normal[norOffset + 1] = interleavedVertices[offset + 8];
+            normal[norOffset + 2] = interleavedVertices[offset + 9];
 
             uvs[uvOffset] = interleavedVertices[offset + 10];
             uvs[uvOffset + 1] = interleavedVertices[offset + 11];
@@ -736,7 +740,7 @@ fn frag_main(
         return {
             positions,
             colors,
-            normals,
+            normal,
             uvs
         };
     }
@@ -744,52 +748,53 @@ fn frag_main(
     //some default uniforms we can add by simply referencing these variable names to pull the relevant data on a callback
     //will default to canvas then window for 
     builtInUniforms = {
-        resX:{type:'f32',callback:()=>{return this.canvas ? this.canvas.width : window.innerWidth;}}, resY:{type:'f32',callback:()=>{return this.canvas ? this.canvas.height : window.innerHeight;}}, //canvas resolution
-        mouseX:{type:'f32',callback:()=>{
+        resX:{type:'f32',callback:(shaderContext)=>{return this.canvas ? this.canvas.width : window.innerWidth;}}, 
+        resY:{type:'f32',callback:(shaderContext)=>{return this.canvas ? this.canvas.height : window.innerHeight;}}, //canvas resolution
+        mouseX:{type:'f32',callback:(shaderContext)=>{
             if(!this.MOUSEMOVELISTENER) {
-                let elm = this.canvas ? this.canvas : window;
+                let elm = shaderContext.canvas ? shaderContext.canvas : window;
                 this.MOUSEMOVELISTENER = elm.onmousemove = (evt) => {
-                    this.mouseX = evt.offsetX;
-                    this.mouseY = evt.offsetY;
+                    shaderContext.mouseX = evt.offsetX;
+                    shaderContext.mouseY = evt.offsetY;
                 }
                 this.mouseX = 0;
             }
             return this.mouseX;
-        }}, mouseY:{type:'f32',callback:()=>{
-            if(!this.MOUSEMOVELISTENER) {
-                let elm = this.canvas ? this.canvas : window;
-                this.MOUSEMOVELISTENER = elm.onmousemove = (evt) => { //should set in the same place as mouseX
-                    this.mouseX = evt.offsetX;
-                    this.mouseY = evt.offsetY;
+        }}, mouseY:{type:'f32',callback:(shaderContext)=>{
+            if(!shaderContext.MOUSEMOVELISTENER) {
+                let elm = shaderContext.canvas ? shaderContext.canvas : window;
+                shaderContext.MOUSEMOVELISTENER = elm.onmousemove = (evt) => { //should set in the same place as mouseX
+                    shaderContext.mouseX = evt.offsetX;
+                    shaderContext.mouseY = evt.offsetY;
                 }
-                this.mouseY = 0;
+                shaderContext.mouseY = 0;
             }
-            return this.mouseY;
+            return shaderContext.mouseY;
         }}, //mouse position
         clicked:{ type:'i32', //onmousedown
-            callback:() => {
-                if(!this.MOUSEDOWNLISTENER) {
-                    let elm = this.canvas ? this.canvas : window;
-                    this.MOUSEDOWNLISTENER = elm.onmousedown = (evt) => { //should set in the same place as mouseX
-                        this.clicked = true;
+            callback:(shaderContext) => {
+                if(!shaderContext.MOUSEDOWNLISTENER) {
+                    let elm = shaderContext.canvas ? shaderContext.canvas : window;
+                    shaderContext.MOUSEDOWNLISTENER = elm.onmousedown = (evt) => { //should set in the same place as mouseX
+                        shaderContext.clicked = true;
                     }
-                    this.MOUSEUPLISTENER = elm.onmouseup = (evt) => {
-                        this.clicked = false;
+                    shaderContext.MOUSEUPLISTENER = elm.onmouseup = (evt) => {
+                        shaderContext.clicked = false;
                     }
                     //should do mobile device
-                    this.clicked = false;
+                    shaderContext.clicked = false;
                 }
-                return this.clicked;
+                return shaderContext.clicked;
             }
         },
         //keyinputs
-        frame:{type:'f32',callback:function(){
-            if(!this.frame) this.frame = 0;
-            let result = this.frame;
-            this.frame++;
+        frame:{type:'f32',callback:function(shaderContext){
+            if(!shaderContext.frame) shaderContext.frame = 0;
+            let result = shaderContext.frame;
+            shaderContext.frame++;
             return result;
         }}, //frame counter
-        utcTime:{type:'f32',callback:()=>{return Date.now();}} //utc time                 
+        utcTime:{type:'f32',callback:(shaderContext)=>{return Date.now();}} //utc time                 
     } //etc.. more we can add from shaderToy
 
     setUBOposition(dataView, inputTypes, typeInfo, offset, input, inpIdx) { //utility function, should clean up later (i.e. provide the values instead of objects to reference)
@@ -884,7 +889,7 @@ fn frag_main(
             let offset = 0; // Initialize the offset
 
             this.defaultUniforms.forEach((u,i) => { 
-                let value = this.builtInUniforms[u]?.callback();
+                let value = this.builtInUniforms[u]?.callback(this);
                 const typeInfo = wgslTypeSizes[this.builtInUniforms[this.defaultUniforms[i]].type];
                 offset = this.setUBOposition(dataView,inputTypes,typeInfo,offset,value,i);
             });
@@ -904,7 +909,9 @@ fn frag_main(
         ...inputs
     ) {
         if(vbos) { //todo: we should make a robust way to set multiple inputs on bindings
-            vbos.forEach((vertices,i) => {this.updateVBO(shaders, vertices, i)});
+            vbos.forEach((vertices,i) => {
+                this.updateVBO(vertices, i)
+            });
         }
         
         if(!this.inputTypes) this.inputTypes = this.params.map((p) => {
@@ -1216,7 +1223,8 @@ fn frag_main(
         blendConstant,
         indexBuffer,
         indexFormat, //uint16 or uint32
-        useRenderBundle
+        useRenderBundle,
+        workgroupsX,workgroupsY,workgroupsZ
     }={}, shaders, 
     ...inputs
 ) {
@@ -1229,6 +1237,7 @@ fn frag_main(
                 samplerSettings
             }, shaders, ...inputs
         );
+
         if(!bufferOnly) { //todo: combine more shaders
             const commandEncoder = this.device.createCommandEncoder();
             if (this.computePipeline) { // If compute pipeline is defined
@@ -1239,7 +1248,9 @@ fn frag_main(
                     computePass.setBindGroup(i,group);
                 });
 
-                computePass.dispatchWorkgroups(Math.ceil(inputs[0].length / 64)); // Assuming all inputs are of the same size
+                let wX = workgroupsX ? workgroupsX : 
+                this.inputBuffers?.[0] ? (this.inputBuffers[0].size/4) / this.workGroupSize : 1;
+                computePass.dispatchWorkgroups(wX, workgroupsY, workgroupsZ); 
                 computePass.end();
 
             } 
@@ -1264,8 +1275,9 @@ fn frag_main(
                         renderPass.setBindGroup(i,group);
                     });
                     
-                    if(shaders.vertexBuffers) 
-                        shaders.vertexBuffers.forEach((vbo,i) => {renderPass.setVertexBuffer(i, vbo)});
+                    if(!this.vertexBuffers) this.updateVBO({color:[1,1,1,1]}, 0); //put a default in to force it to run a single pass
+                    if(this.vertexBuffers) 
+                    this.vertexBuffers.forEach((vbo,i) => {renderPass.setVertexBuffer(i, vbo)});
                     
                     if(viewport) {
                         renderPass.setViewPort(
@@ -1291,8 +1303,9 @@ fn frag_main(
                         renderPass.setIndexBuffer(this.indexBuffer, this.indexFormat);
                     }
 
-                    if(this.indexBuffer) renderPass.drawIndexed(vertexCount ? vertexCount : 1, instanceCount, firstIndex, 0, firstInstance)
-                    else renderPass.draw(vertexCount ? vertexCount : 1, instanceCount, firstVertex, firstInstance);
+                    if(vertexCount) this.vertexCount = vertexCount;
+                    if(this.indexBuffer) renderPass.drawIndexed(this.vertexCount ? this.vertexCount : 1, instanceCount, firstIndex, 0, firstInstance)
+                    else renderPass.draw(this.vertexCount ? this.vertexCount : 1, instanceCount, firstVertex, firstInstance);
 
                     if(useRenderBundle && this.firstPass) this.renderBundle = renderPass.finish(); //replace the encoder with the recording
                 } else {
@@ -1482,7 +1495,7 @@ fn frag_main(
         return ast;
     }
 
-    inferTypeFromValue(value, funcStr, ast) {
+    inferTypeFromValue(value, funcStr, ast, defaultValue='f32') {
         value=value.trim()
         if(value === 'true' || value === 'false') return 'bool';
         else if(value.startsWith('"') || value.startsWith("'") || value.startsWith('`')) return value.substring(1,value.length-1); //should extract string types
@@ -1563,7 +1576,7 @@ fn frag_main(
             }
         }
         
-        return 'f32';  // For other types
+        return defaultValue;  // For other types
     }
 
     flattenStrings(arr) {
@@ -1698,10 +1711,21 @@ fn frag_main(
         while ((match = functionRegex.exec(body)) !== null) {
 
             const functionHead = match[0];
-
+            const funcName = match[1];
+            const funcBody = match[3];
             let paramString = functionHead.substring(functionHead.indexOf('(') + 1, functionHead.lastIndexOf(')'));
 
             let outputParam;
+
+            const regex = /return\s+([\s\S]*?);/;
+            const retmatch = body.match(regex);
+            if(retmatch) {
+                let inferredType = this.inferTypeFromValue(retmatch[1], body, ast, false);
+                if(inferredType) {
+                    outputParam = inferredType;
+                }
+            }
+
             let params = this.splitIgnoringBrackets(paramString).map((p) => { 
                 let split = p.split('=');
                 let vname = split[0];
@@ -1709,9 +1733,6 @@ fn frag_main(
                 if(!outputParam) outputParam = inferredType;
                 return vname+': '+inferredType;
             });
-
-            const funcName = match[1];
-            const funcBody = match[3];
 
             // Transpose the function body
             const transposedBody = this.transposeBody(funcBody, funcBody, params, shaderType, true, undefined, false).code; // Assuming AST is not used in your current implementation
@@ -1751,13 +1772,13 @@ fn frag_main(
                     
 `@location(${4*i}) color${i>0 ? i+1 : ''}In: vec4<f32>,
     @location(${4*i+1}) vertex${i>0 ? i+1 : ''}In: vec3<f32>, 
-    @location(${4*i+2}) normals${i>0 ? i+1 : ''}In: vec3<f32>,
+    @location(${4*i+2}) normal${i>0 ? i+1 : ''}In: vec3<f32>,
     @location(${4*i+3}) uv${i>0 ? i+1 : ''}In: vec2<f32>${i===nVertexBuffers-1 ? '' : ','}`
                 );
                 return `
     @location(${4*i}) color${i>0 ? i+1 : ''}: vec4<f32>,
     @location(${4*i+1}) vertex${i>0 ? i+1 : ''}: vec3<f32>, 
-    @location(${4*i+2}) normals${i>0 ? i+1 : ''}: vec3<f32>,
+    @location(${4*i+2}) normal${i>0 ? i+1 : ''}: vec3<f32>,
     @location(${4*i+3}) uv${i>0 ? i+1 : ''}: vec2<f32>${i===nVertexBuffers-1 ? '' : ','}`;
             });
 
@@ -1834,6 +1855,8 @@ fn frag_main(
         // Replace common patterns
         
         code = body.replace(/for \((let|var) (\w+) = ([^;]+); ([^;]+); ([^\)]+)\)/g, 'for (var $2 = $3; $4; $5)');
+
+        code = code.replace(/('|"|`)/g,''); //replace quotes with nothing. E.g. write in a shader code string
 
         //code = code.replace(/const/g, 'let');
         code = code.replace(/const (\w+) = (?!(vec\d+|mat\d+|\[.*|array))/g, 'let $1 = ')
@@ -2279,7 +2302,7 @@ fn frag_main(
         let webGPUCode = this.generateDataStructures(funcStr, ast, bindGroupNumber); //simply share bindGroups 0 and 1 between compute and render
         const bindings = webGPUCode.code;
         webGPUCode.code += '\n' + this.generateMainFunctionWorkGroup(funcStr, ast, webGPUCode.params, shaderType, nVertexBuffers, workGroupSize); // Pass funcStr as the first argument
-        return {code:this.indentCode(webGPUCode.code), bindings, ast, params:webGPUCode.params, funcStr, defaultUniforms:webGPUCode.defaultUniforms};
+        return {code:this.indentCode(webGPUCode.code), bindings, ast, params:webGPUCode.params, funcStr, defaultUniforms:webGPUCode.defaultUniforms, workGroupSize};
     }
 
 }
