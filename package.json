@@ -22,8 +22,6 @@
   ],
   "author": "",
   "license": "AGPL-3.0-or-later",
-  "dependencies": {},
-  "devDependencies": {},
   "nodemonConfig": {
     "env": {
       "NODEMON": true
@@ -32,5 +30,8 @@
       "dist/",
       ".temp/"
     ]
+  },
+  "devDependencies": {
+    "@webgpu/types": "^0.1.34"
   }
 }

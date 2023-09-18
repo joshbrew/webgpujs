@@ -13,6 +13,17 @@ export class WebGPUjs {
     // - whatever else seems important in the wgsl spec. e.g. https://developer.mozilla.org/en-US/docs/Web/API/GPURenderBundle
     // - we could generalze the shader object keys more so it's not just compute/fragment/vertex names
     
+    //specifics to be customized: (make a shader class)
+    // - shader code obv
+    // - render pass descriptor
+    // - bind group entries
+    // - textureSettings, 
+    // - samplerSettings, 
+    // - nVertexBuffers, 
+    // - contextSettings, 
+    // - renderPipelineSettings,
+    // - computePipelineSettings
+
 
     static createPipeline = async (
         shaderFunctions,  
@@ -1265,7 +1276,12 @@ fn frag_main(
                         //depthStencilFormat: "depth24plus" //etc...
                     });
                     this.firstPass = true;
-                } else renderPass = commandEncoder.beginRenderPass(this.renderPassDescriptor);
+                } else {
+                    this.renderPassDescriptor.colorAttachments[0].view = this.context
+                        .getCurrentTexture()
+                        .createView();
+                    renderPass = commandEncoder.beginRenderPass(this.renderPassDescriptor);
+                }
                 
                 
                 if(!useRenderBundle || !this.renderBundle) { //drawIndirect?
@@ -1911,7 +1927,7 @@ fn frag_main(
             const vals = [];
             const cleanedValues = valuesLines.map(line => {
                 let cleaned = line.substring(0,line.indexOf('//') > 0 ? line.indexOf('//') : undefined); // remove inline comments
-                cleaned = cleaned.substring(0,line.indexOf('__COMM') > 0 ? line.indexOf('__COMM') : undefined); // remove COMMENT_PLACEHOLDER
+                cleaned = cleaned.substring(0,line.indexOf('__CO') > 0 ? line.indexOf('__COMM') : undefined); // remove COMMENT_PLACEHOLDER
                 vals.push(line);
                 return cleaned?.indexOf(',') < 0 ? cleaned + ',' : cleaned; // append comma for the next value
             }).join('\n');
@@ -2304,8 +2320,6 @@ fn frag_main(
          * 
          */
     }
-
-
 
     //this pipeline is set to only use javascript functions so it can generate asts and infer all of the necessary buffering orders and types
     convertToWebGPU(func, shaderType='compute', bindGroupNumber=0, nVertexBuffers=1, workGroupSize=256) {

@@ -132,7 +132,7 @@ console.time('createComputePipeline');
             const inputData2 = new Float32Array(len).fill(2.0); // Example data, same length so outputData can be the same
 
             console.time('run DFT only updating inputData buffer values');
-            pipeline.process(inputData2, outputData, undefined, 4).then((r2) => {
+            pipeline.process(inputData2, undefined, undefined, 4).then((r2) => {
                 console.timeEnd('run DFT only updating inputData buffer values');
                 console.log('Result2:',r2); // Log the output
 
@@ -141,7 +141,7 @@ console.time('createComputePipeline');
                 const outputData3 = new Float32Array(len2*2).fill(0); //only need to upload once if len is the same, dfts return real and imag for single vectors (unless we convert gpu-side)
 
                 console.time('run DFT dynamically resizing inputData and outputData');
-                pipeline.process(inputData3,outputData3, undefined, 4).then((r3) => {
+                pipeline.process(inputData3, outputData3, undefined, 4).then((r3) => {
                     console.timeEnd('run DFT dynamically resizing inputData and outputData');
                     console.log('Results can be dynamically resized:', r3); // Log the output
                     console.time('addFunction and recompile shader pipeline');
