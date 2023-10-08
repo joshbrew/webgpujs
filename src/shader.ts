@@ -66,7 +66,7 @@ export class ShaderHelper {
             
             WGSLTranspiler.combineShaderParams(this.fragment, this.vertex);
             this.fragment = new ShaderContext(shaders.fragment);
-            this.vertex = Object.assign({},shaders.vertex,this.fragment);
+            this.vertex = Object.assign(new ShaderContext({}),this.fragment,shaders.vertex);
         }
         
         if(this.compute) {
@@ -220,7 +220,13 @@ fn frag_main(
 
 
     // Extract all returned variables from the function string
-    createBindGroupFromEntries = (shaderContext, shaderType, textureSettings={}, samplerSettings={}, visibility=GPUShaderStage.COMPUTE | GPUShaderStage.FRAGMENT) => {
+    createBindGroupFromEntries = (
+        shaderContext, 
+        shaderType, 
+        textureSettings={}, 
+        samplerSettings={}, 
+        visibility=GPUShaderStage.COMPUTE | GPUShaderStage.FRAGMENT
+    ) => {
         shaderContext.type = shaderType;
         let bufferIncr = 0;
         let uniformBufferIdx;
@@ -241,19 +247,21 @@ fn frag_main(
                 }
                 return undefined;
             } else if(node.isTexture) {
-                return {
+                const buffer = {
                     binding: bufferIncr,
                     visibility,
                     texture: textureSettings[node.name] ? textureSettings[node.name] : {}
                 };
                 bufferIncr++;
+                return buffer;
             } else if(node.isSampler) {
-                return {
+                const buffer = {
                     binding: bufferIncr,
                     visibility,
-                    sampler: textureSettings[node.name] ? textureSettings[node.name] : {}
+                    sampler: samplerSettings[node.name] ? samplerSettings[node.name] : {}
                 };
                 bufferIncr++;
+                return buffer;
             } else {
                 const buffer = {
                     binding: bufferIncr,
@@ -541,7 +549,7 @@ export class ShaderContext {
     bufferGroups:any;
     bindGroups:GPUBindGroup[];
 
-    constructor(props) {
+    constructor(props?) {
         Object.assign(this,props);
 
         const bIUCopy = {};
