@@ -139,10 +139,7 @@ export class ShaderHelper {
 
 
         } 
-        const bIUCopy = {};
-        for(const key in WGSLTranspiler.builtInUniforms) {
-            bIUCopy[key] = Object.assign({},WGSLTranspiler.builtInUniforms[key]); 
-        }
+
 
         //eof
     }
@@ -531,6 +528,15 @@ export class ShaderContext {
 
     constructor(props) {
         Object.assign(this,props);
+
+        
+        const bIUCopy = {};
+        for(const key in WGSLTranspiler.builtInUniforms) {
+            bIUCopy[key] = Object.assign({},WGSLTranspiler.builtInUniforms[key]); 
+        }
+
+        this.builtInUniforms = bIUCopy;
+
     }
 
     updateVBO = (vertices, index=0, bufferOffset=0, dataOffset=0) => { //update
