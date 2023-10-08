@@ -1,4 +1,4 @@
-import { WebGPUjs } from "./webgpujs.js";
+import { WebGPUjs } from "../src/webgpujs.js";
 
 
 function dft(

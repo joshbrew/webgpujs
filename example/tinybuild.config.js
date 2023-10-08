@@ -1,7 +1,7 @@
 const config = {
     bundler: { //esbuild settings, set false to skip build step or add bundle:true to config object to only bundle (alt methods)
         entryPoints: [ //entry point file(s). These can include .js, .mjs, .ts, .jsx, .tsx, or other javascript files. Make sure your entry point is a ts file if you want to generate types
-            "examplets.js",
+            "example.js",
         ],
         outfile: "dist/example", //exit point file, will append .js as well as indicators like .esm.js, .node.js for other build flags
         //outdir:'dist'         //exit point folder, define for multiple entryPoints
