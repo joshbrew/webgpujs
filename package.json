@@ -1,9 +1,10 @@
 {
   "name": "webgpujs",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "description": "Barebones esbuild and test node server implementation. For building",
   "main": "./webgpujs.js",
   "module": "./dist/webgpujs.esm.js",
+  "types": "./dist/index.d.ts",
   "type": "module",
   "scripts": {
     "start": "tinybuild",

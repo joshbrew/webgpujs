@@ -71,10 +71,10 @@ export class WebGPUjs {
                 fragment:string|Function,
                 transpileString?:boolean
             },
-        options:ShaderOptions & ComputeOptions & RenderOptions
-    ) => {
+        options:ShaderOptions & ComputeOptions & RenderOptions = {}
+    ):Promise<ShaderHelper> => {
 
-        let device = options.device;
+        let device = options.device; //device is required!
         if (!device) {
             const gpu = navigator.gpu;
             const adapter = await gpu.requestAdapter();
@@ -84,7 +84,8 @@ export class WebGPUjs {
         }
 
         if(options.canvas) {
-            if(!options.context) options.context = options.canvas.getContext('webgpu') as any;
+            if(!options.context) 
+                options.context = options.canvas.getContext('webgpu') as any;
         }
 
         if(typeof shaders === 'function') {

@@ -37,8 +37,7 @@ export class ShaderHelper {
         },
         options:ShaderOptions & ComputeOptions & RenderOptions
     ) {
-
-        this.init(shaders,options);
+        if(shaders) this.init(shaders,options);
     }
 
     init = (
@@ -51,6 +50,16 @@ export class ShaderHelper {
     ) => {
 
         Object.assign(this, options);
+
+        if(!this.device) throw new Error(`
+            No GPUDevice! Please retrieve e.g. via: 
+            
+            const gpu = navigator.gpu;
+            const adapter = await gpu.requestAdapter();
+            if(!adapter) throw new Error('No GPU Adapter found!');
+            device = await adapter.requestDevice();
+            shaderhelper.init(shaders,{device});
+        `)
 
         if((shaders.fragment && !shaders.vertex) || (shaders.vertex && !shaders.fragment))
             shaders = this.generateShaderBoilerplate(shaders,options);
@@ -83,11 +92,15 @@ export class ShaderHelper {
 
         if(shaders.compute) {
             this.compute = new ShaderContext(shaders.compute);
+            this.compute.helper = this;
+            Object.assign(this.compute, options);
         }
         if(shaders.fragment) {
             
-            WGSLTranspiler.combineShaderParams(this.fragment, this.vertex);
+            WGSLTranspiler.combineShaderParams(shaders.fragment, shaders.vertex);
             this.fragment = new ShaderContext(shaders.fragment);
+            this.fragment.helper = this;
+            Object.assign(this.fragment, options);
             this.vertex = Object.assign(new ShaderContext({}),this.fragment,shaders.vertex);
         }
         
@@ -740,10 +753,12 @@ export class ShaderContext {
             vbos,  //[{vertices:[]}]
             textures, //[{data:Uint8Array([]), width:800, height:600, format:'rgba8unorm' (default), bytesPerRow: width*4 (default rgba) }], //all required
             samplerSettings,
-            skipOutputDef
+            skipOutputDef,
+            bindGroupNumber
         }={} as any, 
         ...inputs
     ) => {
+        if(!bindGroupNumber) bindGroupNumber = this.bindGroupNumber;
         if(vbos) { //todo: we should make a robust way to set multiple inputs on bindings
             vbos.forEach((vertices,i) => {
                 this.updateVBO(vertices, i)
@@ -790,8 +805,14 @@ export class ShaderContext {
 
             this.bufferGroup = bufferGroup; //more tidy reference
 
-            if(!this.helper.bufferGroups) this.helper.bufferGroups = new Array(2);
-            this.helper.bufferGroups[this.computePipeline ? 0 : 1] = bufferGroup;
+            if(!this.bufferGroups) {
+                if(this.helper) {
+                    if(!this.helper.bufferGroups) this.helper.bufferGroups = [];
+                    this.bufferGroups = this.helper.bufferGroups;
+                }
+                else this.bufferGroups = [] as any;
+            }
+            this.bufferGroups[bindGroupNumber] = bufferGroup;
         }
 
         let uBufferPushed = false;
@@ -806,7 +827,7 @@ export class ShaderContext {
 
         if(this.params) for(let i = 0; i < this.params.length; i++ ) {
             const node = this.params[i];
-            if(typeof inputs[inpBuf_i] !== 'undefined' && this.altBindings?.[node.name] && this.altBindings?.[node.name].group !== this.bindGroupNumber) {
+            if(typeof inputs[inpBuf_i] !== 'undefined' && this.altBindings?.[node.name] && this.altBindings?.[node.name].group !== bindGroupNumber) {
                 if(!bindGroupAlts[this.altBindings?.[node.name].group]) {
                     if(bindGroupAlts[this.altBindings?.[node.name].group].length < this.altBindings?.[node.name].group) bindGroupAlts[this.altBindings?.[node.name].group].length = this.altBindings?.[node.name].group+1; 
                     bindGroupAlts[this.altBindings?.[node.name].group] = [] as any[];
@@ -818,7 +839,7 @@ export class ShaderContext {
                 let texture = textures?.[textureIncr] ? textures?.[textureIncr] : textures?.[node.name];
                 if(texture) {
                     this.textures[node.name] = this.device.createTexture({
-                        label:texture.label ? texture.label :`texture_g${this.bindGroupNumber}_b${i}`,
+                        label:texture.label ? texture.label :`texture_g${bindGroupNumber}_b${i}`,
                         format:texture.format ? texture.format : 'rgba8unorm',
                         size: [texture.width, texture.height],
                         usage: texture.usage ? texture.usage : (GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUBufferUsage.COPY_SRC) //assume read/write (e.g. transforming a texture and returning it)
@@ -936,14 +957,8 @@ export class ShaderContext {
 
         //run the buffer() call now for each group tied to each shader based on load order
         bindGroupAlts.forEach((inp,i) => {
-            if(typeof inp !== 'undefined') {
-                Object.entries(this.helper).find((obj:any) => {
-                    if(obj.bindGroupNumber === i) {
-                        obj.buffer({vbos,textures,samplerSettings},...inp);
-                        return true;
-                    }
-                });
-            }  
+            if(inp && i !== bindGroupNumber)
+                this.buffer({bindGroupNumber:i}, ...inp);
         })
                                     
         if(this.defaultUniforms) {  //make new buffer each input
@@ -992,8 +1007,14 @@ export class ShaderContext {
                 entries: bindGroupEntries
             });
 
-            if(!this.helper.bindGroups) this.helper.bindGroups = [] as any[];
-            this.helper.bindGroups[this.bindGroupNumber] = this.bindGroup;
+                if(!this.bindGroups) {
+                    if(this.helper) {
+                        if(!this.helper.bindGroups) this.helper.bindGroups = [] as any[];
+                        this.bindGroups = this.helper.bindGroups;
+                    }
+                    else this.bindGroups = [] as any[];
+                }
+                this.bindGroups[bindGroupNumber] = this.bindGroup;
         }
 
         return newInputBuffer;
@@ -1050,6 +1071,7 @@ export class ShaderContext {
         textures, //({data:Uint8Array([]), width:800, height:600, format:'rgba8unorm' (default), bytesPerRow: width*4 (default rgba) })[], //all required
         bufferOnly,
         skipOutputDef,
+        bindGroupNumber,
         samplerSettings,
         viewport,
         scissorRect,
@@ -1068,6 +1090,7 @@ export class ShaderContext {
                 vbos,  //[{vertices:[]}]
                 textures, //[{data:Uint8Array([]), width:800, height:600, format:'rgba8unorm' (default), bytesPerRow: width*4 (default rgba) }], //all required
                 skipOutputDef,
+                bindGroupNumber,
                 samplerSettings
             }, 
             ...inputs
@@ -1079,9 +1102,11 @@ export class ShaderContext {
                 const computePass = commandEncoder.beginComputePass();
                 computePass.setPipeline(this.computePipeline);
 
-                this.helper.bindGroups.forEach((group,i) => {
+                const withBindGroup = (group,i) => {
                     computePass.setBindGroup(i,group);
-                });
+                }
+                
+                this.bindGroups.forEach(withBindGroup);
 
                 let wX = workgroupsX ? workgroupsX : 
                 this.inputBuffers?.[0] ? (this.inputBuffers[0].size/4) / this.workGroupSize : 1;
@@ -1111,9 +1136,12 @@ export class ShaderContext {
                 if(!useRenderBundle || !this.renderBundle) { //drawIndirect?
                     renderPass.setPipeline(this.graphicsPipeline);
                     
-                    this.helper.bindGroups.forEach((group,i) => {
+
+                    const withBindGroup = (group,i) => {
                         renderPass.setBindGroup(i,group);
-                    });
+                    }
+
+                    this.bindGroups.forEach(withBindGroup);
                     
                     if(!this.vertexBuffers) this.updateVBO({color:[1,1,1,1]}, 0); //put a default in to force it to run a single pass
                     

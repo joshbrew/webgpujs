@@ -26,7 +26,8 @@ export type ComputeOptions = {
 
 export type ShaderPassSettings = {
     bufferOnly?:boolean,
-    skipOutputDef?:boolean
+    skipOutputDef?:boolean,
+    bindGroupNumber?:number //can buffer specific bindGroupNumbers
 };
 
 export type RenderPassSettings = {

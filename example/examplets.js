@@ -1,4 +1,5 @@
-import { WebGPUjs } from "../src/pipeline.js";
+import { WebGPUjs } from "../src/pipeline";
+import { WGSLTranspiler } from "../src/transpiler";
 
 
 function dft(
@@ -72,8 +73,7 @@ function dft(
 //explicit return statements will define only that variable as an output (i.e. a mutable read_write buffer)
 
 function setupWebGPUConverterUI(fn, target=document.body, shaderType) {
-    const parser = new WebGPUjs();
-    let webGPUCode = parser.convertToWebGPU(dft, shaderType);
+    let webGPUCode = WGSLTranspiler.convertToWebGPU(dft, shaderType);
     const uniqueID = Date.now();
 
     const beforeTextAreaID = `t2_${uniqueID}`;
@@ -97,7 +97,7 @@ function setupWebGPUConverterUI(fn, target=document.body, shaderType) {
 
     function parseFunction() {
         const fstr = document.getElementById(beforeTextAreaID).value;
-        webGPUCode = parser.convertToWebGPU(fstr, shaderType);
+        webGPUCode = WGSLTranspiler.convertToWebGPU(fstr, shaderType);
         document.getElementById(afterTextAreaID).value = webGPUCode.code;
     }
 
@@ -145,12 +145,11 @@ console.time('createComputePipeline');
                     console.timeEnd('run DFT dynamically resizing inputData and outputData');
                     console.log('Results can be dynamically resized:', r3); // Log the output
                     console.time('addFunction and recompile shader pipeline');
-                    pipeline.addFunction(function mul(a=vec2f(2,0),b=vec2f(2,0)) { return a * b; }).then((p) => {
-                        console.timeEnd('addFunction and recompile shader pipeline');
-                        console.log(p);
-                        document.getElementById('t1_'+ex1Id).value = p.compute.code;
-            
-                    });
+                    pipeline.addFunction(function mul(a=vec2f(2,0),b=vec2f(2,0)) { return a * b; })
+                    console.timeEnd('addFunction and recompile shader pipeline');
+                    console.log(pipeline);
+                    document.getElementById('t1_'+ex1Id).value = pipeline.compute.code;
+                
                 });
             });
         });
@@ -258,7 +257,7 @@ WebGPUjs.createPipeline({
     fragment:fragmentExample
 },{
     canvas,
-    renderOptions:{
+    renderPass:{
         vertexCount:3,
         vbos:[ //we can upload vbos, though not necessary in current example (think)
             {
