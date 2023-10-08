@@ -10,7 +10,7 @@ export class ShaderHelper {
     fragment?:ShaderContext;
 
     process = (...inputs:any[]) => { return this.compute?.run(this.compute.computePass, ...inputs)};
-    render = (renderPass:RenderPassSettings, ...inputs:any[]) => { return this.fragment?.run(renderPass, ...inputs);};
+    render = (renderPass?:RenderPassSettings, ...inputs:any[]) => { return this.fragment?.run(renderPass ? renderPass : this.fragment.renderPass ? this.fragment.renderPass : {vertexCount:1}, ...inputs);};
 
     bindGroupLayouts:GPUBindGroupLayout[]=[];
 
@@ -1015,7 +1015,7 @@ export class ShaderContext {
         firstIndex,
         indexFormat, //uint16 or uint32
         useRenderBundle,
-        workgroupsX,workgroupsY, workgroupsZ
+        workgroupsX, workgroupsY, workgroupsZ
     }={} as RenderPassSettings & ComputePassSettings, 
     ...inputs
 ) => {
