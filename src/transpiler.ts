@@ -1,3 +1,5 @@
+import { TranspiledShader } from "./types";
+
 //transpile js(ish) functions to webgpu and generate/combine bindings
 export class WGSLTranspiler {
 
@@ -91,7 +93,7 @@ export class WGSLTranspiler {
         return result;
     }
 
-    static tokenize(funcStr, shaderType='compute') {
+    static tokenize(funcStr) {
         // Capture function parameters
         let head = this.getFunctionHead(funcStr);
         let paramString = head.substring(head.indexOf('(') + 1, head.lastIndexOf(')'));
@@ -906,7 +908,7 @@ fn frag_main(
         shaders.functions.push(func);
         for(const key of ['compute','fragment','vertex']) {
             if(shaders[key])
-                Object.assign(shaders[key], this.convertToWebGPU(shaders[key].funcStr, key, shaders[key].bindGroupNumber, shaders[key].nVertexBuffers, shaders[key].workGroupSize ? shaders[key].workGroupSize : undefined, shaders.functions)); 
+                Object.assign(shaders[key], this.convertToWebGPU(shaders[key].funcStr, key as any, shaders[key].bindGroupNumber, shaders[key].nVertexBuffers, shaders[key].workGroupSize ? shaders[key].workGroupSize : undefined, shaders.functions)); 
         }
         return shaders;
     }
@@ -992,9 +994,9 @@ fn frag_main(
 
         return {
             code1: result1.trim(),
-            changes1: changesOriginal,
+            changes1: changesOriginal as any,
             code2: result2.trim(),
-            changes2: changesReplacement
+            changes2: changesReplacement as any
         };
 
         /*
@@ -1032,16 +1034,25 @@ fn frag_main(
 
 
     //this pipeline is set to only use javascript functions so it can generate asts and infer all of the necessary buffering orders and types
-    static convertToWebGPU(func, shaderType='compute', bindGroupNumber=0, nVertexBuffers=1, workGroupSize=256, gpuFuncs) {
+    static convertToWebGPU(func:Function|string, shaderType:'compute'|'vertex'|'fragment'='compute', bindGroupNumber=0, nVertexBuffers=1, workGroupSize=256, gpuFuncs) { //use compute shaders for geometry shaders
         let funcStr = typeof func === 'string' ? func : func.toString();
         funcStr = funcStr.replace(/(?<!\w)this\./g, '');
-        const tokens = this.tokenize(funcStr, shaderType);
+        const tokens = this.tokenize(funcStr);
         const ast = this.parse(funcStr, tokens, shaderType);
         //console.log(ast);
         let webGPUCode = this.generateDataStructures(funcStr, ast, bindGroupNumber); //simply share bindGroups 0 and 1 between compute and render
         const bindings = webGPUCode.code;
         webGPUCode.code += '\n' + this.generateMainFunctionWorkGroup(funcStr, ast, webGPUCode.params, shaderType, nVertexBuffers, workGroupSize, gpuFuncs); // Pass funcStr as the first argument
-        return {code:this.indentCode(webGPUCode.code), bindings, ast, params:webGPUCode.params, funcStr, defaultUniforms:webGPUCode.defaultUniforms, workGroupSize};
+        return {
+            code:this.indentCode(webGPUCode.code), 
+            bindings, 
+            ast, 
+            params:webGPUCode.params, 
+            funcStr, 
+            defaultUniforms:webGPUCode.defaultUniforms, 
+            type:shaderType,
+            workGroupSize:shaderType === 'compute' ? workGroupSize : undefined
+        } as TranspiledShader;
     }
 
 
