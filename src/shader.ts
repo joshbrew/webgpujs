@@ -59,9 +59,12 @@ export class ShaderHelper {
         }
         
 
-        for(const key in shaders) {
-            this[key] = new ShaderContext(shaders[key]);
-            this[key].helper = this;
+        if(shaders.compute) {
+            this.compute = new ShaderContext(shaders.compute);
+        }
+        if(shaders.fragment) {
+            this.fragment = new ShaderContext(shaders.fragment);
+            this.vertex = Object.assign({},shaders.vertex,this.fragment);
         }
         
         if(this.compute) {
@@ -529,7 +532,6 @@ export class ShaderContext {
     constructor(props) {
         Object.assign(this,props);
 
-        
         const bIUCopy = {};
         for(const key in WGSLTranspiler.builtInUniforms) {
             bIUCopy[key] = Object.assign({},WGSLTranspiler.builtInUniforms[key]); 
