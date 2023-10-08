@@ -1,6 +1,6 @@
 import { WGSLTranspiler } from "./transpiler";
 import {ShaderHelper} from './shader'
-import {ShaderOptions, RenderOptions, ComputeOptions, RenderPassSettings, ComputePassSettings} from './types'
+import {ShaderOptions, RenderOptions, ComputeOptions, RenderPassSettings, ComputePassSettings, TranspiledShader} from './types'
 
 // pipeline, transpiler, shader.
 
@@ -59,7 +59,7 @@ import {ShaderOptions, RenderOptions, ComputeOptions, RenderPassSettings, Comput
  */
 
 
-export class Pipeline {
+export class WebGPUjs {
 
     static createPipeline = async (
         shaders: Function | {
@@ -225,7 +225,11 @@ export class Pipeline {
     }
 
     static init = (
-        shaders:any={}, 
+        shaders:{
+            compute?:TranspiledShader,
+            fragment?:TranspiledShader,
+            vertex?:TranspiledShader
+        },
         options:ShaderOptions & ComputeOptions & RenderOptions
     ) => {
         return new ShaderHelper(shaders,options);
@@ -237,4 +241,6 @@ export class Pipeline {
     }
 
 }
+
+export default WebGPUjs;
 

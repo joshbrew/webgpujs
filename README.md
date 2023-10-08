@@ -4,12 +4,13 @@ Write full featured WGSL pipelines in plain javascript.
 
 **Work in Progress**
 
-![cap](./compute.PNG)
-![code](./workflow.PNG)
-![render](./render.PNG)
+![cap](./example/compute.PNG)
+![code](./example/workflow.PNG)
+![render](./example/render.PNG)
 
 What's left todo:
 
+- Types for built in variables i.e. we'll import something that declares default variables/functions (position, color, etc) so TS doesn't complain.
 - Test chaining compute/render pipeline bindings and testing shared data context
 - Test multiple shaders chained
 - Test uniform alignment

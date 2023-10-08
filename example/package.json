@@ -7,7 +7,6 @@
   "type": "module",
   "scripts": {
     "start": "tinybuild",
-    "example": "cd example && tinybuild",
     "build": "tinybuild build",
     "serve": "tinybuild serve",
     "init": "node tinybuild/init.js",

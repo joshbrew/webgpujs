@@ -3,25 +3,25 @@ export type ShaderOptions = {
     prependCode?:string,
     bindGroupNumber?:number,
     getPrevShaderBindGroups?:string,
-    functions:Function[],
+    functions?:Function[],
     inputs?:any[],
     bindGroupLayouts?:GPUBindGroupLayoutEntry[],
     skipCombinedBindings?:boolean
 }
 
 export type RenderOptions = {
-    canvas:HTMLCanvasElement|OffscreenCanvas,
+    canvas?:HTMLCanvasElement|OffscreenCanvas,
     context?:GPUCanvasContext,
     contextSettings?:GPUCanvasConfiguration,
     renderPipelineSettings?:any,
     nVertexBuffers?:number,
-    renderPass:RenderPassSettings
+    renderPass?:RenderPassSettings
 };
 
 export type ComputeOptions = {
     workGroupSize?:number,
-    computePass:ComputePassSettings,
-    computePipelineSettings?:GPUComputePipelineDescriptor
+    computePipelineSettings?:GPUComputePipelineDescriptor,
+    computePass?:ComputePassSettings
 };
 
 export type ShaderPassSettings = {

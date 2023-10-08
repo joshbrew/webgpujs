@@ -5,6 +5,12 @@ import {ShaderOptions, RenderOptions, ComputeOptions, RenderPassSettings, Comput
 //Self contained shader execution boilerplate
 export class ShaderHelper {
 
+    prototypes:{
+        compute?:TranspiledShader,
+        fragment?:TranspiledShader,
+        vertex?:TranspiledShader
+    }={};
+
     compute?:ShaderContext;
     vertex?:ShaderContext;
     fragment?:ShaderContext;
@@ -20,6 +26,8 @@ export class ShaderHelper {
 
     bufferGroups:any;
     bindGroups:any;
+
+    functions:(Function|string)[] = [];
     
     constructor(
         shaders:{
@@ -30,9 +38,22 @@ export class ShaderHelper {
         options:ShaderOptions & ComputeOptions & RenderOptions
     ) {
 
+        this.init(shaders,options);
+    }
+
+    init = (
+        shaders:{
+            compute?:TranspiledShader,
+            fragment?:TranspiledShader,
+            vertex?:TranspiledShader
+        },
+        options:ShaderOptions & ComputeOptions & RenderOptions
+    ) => {
+
         Object.assign(this, options);
 
-        shaders = this.generateShaderBoilerplate(shaders,options);
+        if((shaders.fragment && !shaders.vertex) || (shaders.vertex && !shaders.fragment))
+            shaders = this.generateShaderBoilerplate(shaders,options);
 
         if(!options.skipCombinedBindings) {
             if(shaders.compute && shaders.vertex) {
@@ -58,6 +79,7 @@ export class ShaderHelper {
             }
         }
         
+        Object.assign(this.prototypes,shaders);
 
         if(shaders.compute) {
             this.compute = new ShaderContext(shaders.compute);
@@ -144,6 +166,23 @@ export class ShaderHelper {
         } 
 
         //eof
+    }
+
+    addFunction = (func:Function|string) => {
+        this.functions.push(func);
+        for(const key of ['compute','fragment','vertex']) {
+            if(this.prototypes[key])
+                Object.assign(this.prototypes[key], 
+                    WGSLTranspiler.convertToWebGPU(
+                        this.prototypes[key].funcStr, 
+                        key as any, 
+                        this.prototypes[key].bindGroupNumber, 
+                        this.prototypes[key].nVertexBuffers, 
+                        this.prototypes[key].workGroupSize ? this.prototypes[key].workGroupSize : undefined,
+                        this.functions)
+                    ); 
+        }
+        this.init(this.prototypes, {skipCombinedBindings:true});
     }
 
     generateShaderBoilerplate = (shaders, options) => {
@@ -765,8 +804,6 @@ export class ShaderContext {
         let bindGroupAlts = [] as any[];
         let uniformValues = [] as any[];
 
-        let hasTextureBuffers = false;
-
         if(this.params) for(let i = 0; i < this.params.length; i++ ) {
             const node = this.params[i];
             if(typeof inputs[inpBuf_i] !== 'undefined' && this.altBindings?.[node.name] && this.altBindings?.[node.name].group !== this.bindGroupNumber) {
@@ -778,7 +815,7 @@ export class ShaderContext {
                 bindGroupAlts[this.altBindings?.[node.name].group][this.altBindings?.[node.name].group] = inputs[i];
             }
             else if(node.isTexture) {
-                const texture = textures?.[textureIncr] ? textures?.[textureIncr] : textures?.[node.name];
+                let texture = textures?.[textureIncr] ? textures?.[textureIncr] : textures?.[node.name];
                 if(texture) {
                     this.textures[node.name] = this.device.createTexture({
                         label:texture.label ? texture.label :`texture_g${this.bindGroupNumber}_b${i}`,
@@ -793,8 +830,6 @@ export class ShaderContext {
                         { bytesPerRow: texture[textureIncr].bytesPerRow ? texture[textureIncr].bytesPerRow : texture[textureIncr].width * 4 },
                         { width: texture[textureIncr].width, height: texture[textureIncr].height },
                     );
-                    
-                    hasTextureBuffers = true; //we need to update the bindGroupLayout and pipelines accordingly
                 }
                 textureIncr++;
             } else if (node.isSampler) {
