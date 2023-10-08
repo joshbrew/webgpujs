@@ -1031,7 +1031,72 @@ fn frag_main(
          */
     }
 
+    static combineShaderParams (shader1Obj:TranspiledShader, shader2Obj:TranspiledShader) {
+        let combinedAst = shader2Obj.ast ? [...shader2Obj.ast] : [] as any[]; // using spread syntax to clone
+        let combinedParams = shader2Obj.params ? [...shader2Obj.params] : [] as any[];
+        let combinedReturnedVars = [] as any[];
 
+        const returnMatches = shader2Obj.funcStr.match(/^(?![ \t]*\/\/).*\breturn .*;/gm);
+        if (returnMatches) {
+            const returnedVars = returnMatches.map(match => match.replace(/^[ \t]*return /, '').replace(';', ''));
+            combinedReturnedVars.push(...WGSLTranspiler.flattenStrings(returnedVars));
+        }
+
+        const returnMatches2 = shader1Obj.funcStr.match(/^(?![ \t]*\/\/).*\breturn .*;/gm);
+        if (returnMatches2) {
+            const returnedVars2 = returnMatches2.map(match => match.replace(/^[ \t]*return /, '').replace(';', ''));
+            combinedReturnedVars.push(...WGSLTranspiler.flattenStrings(returnedVars2));
+        }
+
+        //we are combining vertex and frag shader inputs into one long array, and updating bindings to match sequential instantiation between the vertex and frag so the binding layouts match
+        if (shader1Obj.ast) combinedAst.push(...shader1Obj.ast);
+        if (shader1Obj.params) combinedParams.push(...shader1Obj.params);
+
+        // Filter out duplicate bindings and re-index the remaining ones
+        const uniqueBindings = new Set();
+        const updatedParams = [] as any[];
+        const bindingMap2 = new Map();  // Only for fragment shader
+
+        // Shared bindings: Make fragment shader match vertex shader
+        shader1Obj.params.forEach((entry,i) => {
+            if (shader2Obj.params.some(param => param.name === entry.name) && !uniqueBindings.has(entry.name)) {
+                uniqueBindings.add(entry.name);
+                const newBinding = i; // Keep vertex shader binding
+                updatedParams.push(entry);
+                bindingMap2.set(entry.binding, newBinding);  // Map fragment shader's old binding to new
+            }
+        });
+
+        let maxSharedBinding = uniqueBindings.size - 1;
+
+        // Exclusive fragment shader bindings
+        shader2Obj.params.forEach((entry,i) => {
+            if (!shader1Obj.params.some(param => param.name === entry.name) && !uniqueBindings.has(entry.name)) {
+                uniqueBindings.add(i);
+                maxSharedBinding++;
+                updatedParams.push(entry);
+                bindingMap2.set(entry.binding, maxSharedBinding);
+            }
+        });
+
+        combinedParams = updatedParams;
+
+        // Only update binding numbers in the shader code for fragment shader using bindingMap2
+        let shaderCode2 = shader2Obj.code;
+        for (let [oldBinding, newBinding] of bindingMap2.entries()) {
+            const regex = new RegExp(`@binding\\(${oldBinding}\\)`, 'g');
+            shaderCode2 = shaderCode2.replace(regex, `@binding(${newBinding})`);
+        }
+        shader2Obj.code = shaderCode2;
+
+        shader1Obj.ast = combinedAst;
+        (shader1Obj as any).returnedVars = combinedReturnedVars;
+        shader1Obj.params = combinedParams;
+
+        shader2Obj.ast = combinedAst;
+        (shader2Obj as any).returnedVars = combinedReturnedVars;
+        shader2Obj.params = combinedParams;
+    }
 
     //this pipeline is set to only use javascript functions so it can generate asts and infer all of the necessary buffering orders and types
     static convertToWebGPU(func:Function|string, shaderType:'compute'|'vertex'|'fragment'='compute', bindGroupNumber=0, nVertexBuffers=1, workGroupSize=256, gpuFuncs) { //use compute shaders for geometry shaders

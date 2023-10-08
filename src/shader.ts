@@ -12,7 +12,7 @@ export class ShaderHelper {
     process = (...inputs:any[]) => { return this.compute?.run(this.compute.computePass, ...inputs)};
     render = (renderPass:RenderPassSettings, ...inputs:any[]) => { return this.fragment?.run(renderPass, ...inputs);};
 
-    bindGroupLayouts=[];
+    bindGroupLayouts:GPUBindGroupLayout[]=[];
 
     canvas:HTMLCanvasElement | OffscreenCanvas; 
     context:GPUCanvasContext | OffscreenRenderingContext; 
@@ -81,7 +81,7 @@ export class ShaderHelper {
         
         if(this.vertex && this.fragment) {
             
-            this.combineShaderParams(this.fragment, this.vertex);
+            WGSLTranspiler.combineShaderParams(this.fragment, this.vertex);
 
             this.fragment.bindGroupLayout = this.device.createBindGroupLayout({
                 entries:this.createBindGroupFromEntries(this.fragment, 'fragment', options?.renderPass?.textureSettings, options?.renderPass?.samplerSettings)
@@ -113,7 +113,7 @@ export class ShaderHelper {
 
             this.vertex.pipelineLayout = this.fragment.pipelineLayout;
 
-            this.updateGraphicsPipeline(this, options?.nVertexBuffers,  options?.contextSettings,  options?.renderPipelineSettings);
+            this.updateGraphicsPipeline(options?.nVertexBuffers,  options?.contextSettings,  options?.renderPipelineSettings);
         } 
         if (this.compute) { // If it's a compute shader
             
@@ -219,72 +219,6 @@ fn frag_main(
         if(this.context) (this.context as GPUCanvasContext)?.unconfigure();
     }
 
-    combineShaderParams = (shader1Obj, shader2Obj) => {
-        let combinedAst = shader2Obj.ast ? [...shader2Obj.ast] : [] as any[]; // using spread syntax to clone
-        let combinedParams = shader2Obj.params ? [...shader2Obj.params] : [] as any[];
-        let combinedReturnedVars = [] as any[];
-
-        const returnMatches = shader2Obj.funcStr.match(/^(?![ \t]*\/\/).*\breturn .*;/gm);
-        if (returnMatches) {
-            const returnedVars = returnMatches.map(match => match.replace(/^[ \t]*return /, '').replace(';', ''));
-            combinedReturnedVars.push(...WGSLTranspiler.flattenStrings(returnedVars));
-        }
-
-        const returnMatches2 = shader1Obj.funcStr.match(/^(?![ \t]*\/\/).*\breturn .*;/gm);
-        if (returnMatches2) {
-            const returnedVars2 = returnMatches2.map(match => match.replace(/^[ \t]*return /, '').replace(';', ''));
-            combinedReturnedVars.push(...WGSLTranspiler.flattenStrings(returnedVars2));
-        }
-
-        //we are combining vertex and frag shader inputs into one long array, and updating bindings to match sequential instantiation between the vertex and frag so the binding layouts match
-        if (shader1Obj.ast) combinedAst.push(...shader1Obj.ast);
-        if (shader1Obj.params) combinedParams.push(...shader1Obj.params);
-
-        // Filter out duplicate bindings and re-index the remaining ones
-        const uniqueBindings = new Set();
-        const updatedParams = [] as any[];
-        const bindingMap2 = new Map();  // Only for fragment shader
-
-        // Shared bindings: Make fragment shader match vertex shader
-        shader1Obj.params.forEach((entry,i) => {
-            if (shader2Obj.params.some(param => param.name === entry.name) && !uniqueBindings.has(entry.name)) {
-                uniqueBindings.add(entry.name);
-                const newBinding = i; // Keep vertex shader binding
-                updatedParams.push(entry);
-                bindingMap2.set(entry.binding, newBinding);  // Map fragment shader's old binding to new
-            }
-        });
-
-        let maxSharedBinding = uniqueBindings.size - 1;
-
-        // Exclusive fragment shader bindings
-        shader2Obj.params.forEach((entry,i) => {
-            if (!shader1Obj.params.some(param => param.name === entry.name) && !uniqueBindings.has(entry.name)) {
-                uniqueBindings.add(i);
-                maxSharedBinding++;
-                updatedParams.push(entry);
-                bindingMap2.set(entry.binding, maxSharedBinding);
-            }
-        });
-
-        combinedParams = updatedParams;
-
-        // Only update binding numbers in the shader code for fragment shader using bindingMap2
-        let shaderCode2 = shader2Obj.code;
-        for (let [oldBinding, newBinding] of bindingMap2.entries()) {
-            const regex = new RegExp(`@binding\\(${oldBinding}\\)`, 'g');
-            shaderCode2 = shaderCode2.replace(regex, `@binding(${newBinding})`);
-        }
-        shader2Obj.code = shaderCode2;
-
-        shader1Obj.ast = combinedAst;
-        shader1Obj.returnedVars = combinedReturnedVars;
-        shader1Obj.params = combinedParams;
-
-        shader2Obj.ast = combinedAst;
-        shader2Obj.returnedVars = combinedReturnedVars;
-        shader2Obj.params = combinedParams;
-    }
 
     // Extract all returned variables from the function string
     createBindGroupFromEntries = (shaderContext, shaderType, textureSettings={}, samplerSettings={}, visibility=GPUShaderStage.COMPUTE | GPUShaderStage.FRAGMENT) => {
@@ -439,8 +373,8 @@ fn frag_main(
         };
     }
 
+    //todo: break this down more
     updateGraphicsPipeline(
-        shaders, 
         nVertexBuffers, 
         contextSettings, 
         renderPipelineSettings
@@ -449,8 +383,8 @@ fn frag_main(
         // Setup render outputs
         const swapChainFormat = navigator.gpu.getPreferredCanvasFormat();
 
-        shaders.context?.configure(contextSettings ? contextSettings : {
-            device: shaders.device, 
+        (this.context as GPUCanvasContext)?.configure(contextSettings ? contextSettings : {
+            device: this.device, 
             format: swapChainFormat, 
             //usage: GPUTextureUsage.RENDER_ATTACHMENT,
             alphaMode: 'premultiplied'
@@ -458,8 +392,8 @@ fn frag_main(
 
         //allows 3D rendering
         const depthFormat = "depth24plus";
-        const depthTexture = shaders.device.createTexture({
-            size: {width: shaders.canvas.width, height: shaders.canvas.height},
+        const depthTexture = this.device.createTexture({
+            size: {width: this.canvas.width, height: this.canvas.height},
             format: depthFormat,
             usage: GPUTextureUsage.RENDER_ATTACHMENT
         });
@@ -506,7 +440,7 @@ fn frag_main(
         //     usage: GPUTextureUsage.RENDER_ATTACHMENT,
         // });
 
-        const view = shaders.context.getCurrentTexture().createView();
+        const view = (this.context as GPUCanvasContext)?.getCurrentTexture().createView();
 
         const renderPassDescriptor = { //some assumptions
             colorAttachments: [{
@@ -528,8 +462,6 @@ fn frag_main(
 
         this.vertex.renderPassDescriptor = renderPassDescriptor;
         this.fragment.renderPassDescriptor = renderPassDescriptor;
-
-        return shaders;
     }
 
 }
@@ -562,40 +494,40 @@ export class ShaderContext {
     renderPass?:RenderPassSettings;
     nVertexBuffers?:number;
     
-    computePipeline;
-    
-    graphicsPipeline;
-    firstPass;
-    renderPassDescriptor;
-    renderBundle;
-    vertexBuffers;
-    indexBuffer;
-    indexFormat;
-    vertexCount;
-    contextSettings;
-    renderPipelineSettings;
+    computePipeline?:GPUComputePipeline;
+    graphicsPipeline?:GPURenderPipeline;
 
-    inputTypes;
+    firstPass=true;
+    renderPassDescriptor:GPURenderPassDescriptor;
+    renderBundle:GPURenderBundle;
+    vertexBuffers:any;
+    indexBuffer:GPUBuffer;
+    indexFormat:string;
+    vertexCount:number;
+    contextSettings:any;
+    renderPipelineSettings:GPURenderPipelineDescriptor;
 
-    uniformBuffer;
-    uniformBufferInputs;
-    totalUniformBufferSize;
-    altBindings;
+    inputTypes:any;
 
-    builtInUniforms;
-    defaultUniformBinding;
-    defaultUniformBuffer;
-    totalDefaultUniformBufferSize;
+    uniformBuffer:GPUBuffer;
+    uniformBufferInputs:any;
+    totalUniformBufferSize:number;
+    altBindings:any;
 
-    bindGroup;
-    bindGroupLayout;
-    bindGroupNumber;
+    builtInUniforms:any;
+    defaultUniformBinding:number;
+    defaultUniformBuffer:GPUBuffer;
+    totalDefaultUniformBufferSize:number;
 
-    inputBuffers;
-    outputBuffers;
-    bufferGroup;
-    bufferGroups;
-    bindGroups;
+    bindGroup:GPUBindGroup;
+    bindGroupLayout:GPUBindGroupLayout;
+    bindGroupNumber:number;
+
+    inputBuffers:GPUBuffer[];
+    outputBuffers:GPUBuffer[];
+    bufferGroup:any;
+    bufferGroups:any;
+    bindGroups:GPUBindGroup[];
 
     constructor(props) {
         Object.assign(this,props);
@@ -764,7 +696,7 @@ export class ShaderContext {
         if(this.inputBuffers) {
             inputs.forEach((inp,index) => {
                 if(inp && inp?.length) {
-                    if(this.inputBuffers[index].byteLength !== inp.length * inputTypes[index].byteSize) {
+                    if(this.inputBuffers[index].size !== inp.length * inputTypes[index].byteSize) {
                         newInputBuffer = true;
                     }
                 }

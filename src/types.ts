@@ -1,6 +1,3 @@
-import { ShaderHelper } from "./shader";
-
-
 export type ShaderOptions = {
     device?:GPUDevice
     prependCode?:string,
@@ -80,4 +77,5 @@ export type TranspiledShader = {
     type: "compute" | "vertex" | "fragment";
     workGroupSize?: number;
     altBindings?: any;
+    returnedVars?: any;
 }
