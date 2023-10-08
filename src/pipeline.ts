@@ -61,9 +61,7 @@ import {ShaderOptions, RenderOptions, ComputeOptions, RenderPassSettings, Comput
 
 export class Pipeline {
 
-    device?:GPUDevice
-
-    createPipeline = async (
+    static createPipeline = async (
         shaders: Function | {
                 code:Function|string, 
                 transpileString?:boolean //functions are auto-transpiled
@@ -76,14 +74,13 @@ export class Pipeline {
         options:ShaderOptions & ComputeOptions & RenderOptions
     ) => {
 
-        if (!options.device) {
-            if(!this.device) {
-                const gpu = navigator.gpu;
-                const adapter = await gpu.requestAdapter();
-                if(!adapter) throw new Error('No GPU Adapter found!');
-                this.device = await adapter.requestDevice();
-            }
-            options.device = this.device;
+        let device = options.device;
+        if (!device) {
+            const gpu = navigator.gpu;
+            const adapter = await gpu.requestAdapter();
+            if(!adapter) throw new Error('No GPU Adapter found!');
+            device = await adapter.requestDevice();
+            options.device = device;
         }
 
         if(options.canvas) {
@@ -108,9 +105,9 @@ export class Pipeline {
 
             let shaderPipeline;
             if(shader.type === 'compute') {
-                shaderPipeline = this.init({compute:shader}, options);
+                shaderPipeline = new ShaderHelper({compute:shader}, options);
             } else {
-                shaderPipeline = this.init({fragment:shader}, options);
+                shaderPipeline = new ShaderHelper({fragment:shader}, options);
             }
 
             if(options.inputs || options.renderPass) {
@@ -207,7 +204,7 @@ export class Pipeline {
                 }
 
           
-                const shaderPipeline = this.init(block, options);
+                const shaderPipeline = new ShaderHelper(block,options);
 
                 if(options.inputs || options.renderPass) {
                     if(shaderPipeline['compute']) {
@@ -227,14 +224,14 @@ export class Pipeline {
         
     }
 
-    init = (
+    static init = (
         shaders:any={}, 
         options:ShaderOptions & ComputeOptions & RenderOptions
     ) => {
         return new ShaderHelper(shaders,options);
     }
 
-    cleanup = (shaderPipeline) => {
+    static cleanup = (shaderPipeline) => {
         if(shaderPipeline.device) shaderPipeline.device.destroy(); //destroys all info associated with pipelines on this device
         if(shaderPipeline.context) shaderPipeline.context.unconfigure();
     }

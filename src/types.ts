@@ -49,10 +49,12 @@ export type RenderPassSettings = {
     })[]
     textures?:{
         [key:string]:{
-            label?:string, 
-            format?:string, 
+            data:Uint8Array,
             width:number, 
             height:number, 
+            bytesPerRow?:number,
+            label?:string, 
+            format?:string, //default: 'rgba8unorm' 
             usage?:any
         }
     }
