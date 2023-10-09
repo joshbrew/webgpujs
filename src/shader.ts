@@ -1182,10 +1182,11 @@ export class ShaderContext {
                     if(useRenderBundle && bufferGroup.firstPass) {
                         bufferGroup.renderBundle = (renderPass as GPURenderBundleEncoder).finish(); //replace the encoder with the recording
                         bufferGroup.firstPass = false;
-                    } else (renderPass as GPURenderPassEncoder).end();
+                    }
                 } else {
                     (renderPass as GPURenderPassEncoder).executeBundles([bufferGroup.renderBundle]);
                 }
+                (renderPass as GPURenderPassEncoder).end();
             }
 
             if(!skipOutputDef && bufferGroup.outputBuffers?.length > 0) {
