@@ -337,7 +337,7 @@ fn frag_main(
                 }
             })
         }
-        
+
         shaderContext.bindGroupLayoutEntries = entries;
         return entries;
     }
@@ -619,7 +619,7 @@ export class ShaderContext {
                 }
                 else vertices = new Float32Array(typeof vertices === 'object' ? ShaderHelper.flattenArray(vertices) : vertices);
             }
-            if(!bufferGroup.vertexBuffers || bufferGroup.vertexBuffers[index]?.size !== vertices.byteLength) {
+            if(bufferGroup.vertexBuffers?.[index]?.size !== vertices.byteLength) {
                 if(!bufferGroup.vertexBuffers) bufferGroup.vertexBuffers = [] as any[];
                 
                 const vertexBuffer = this.device.createBuffer({
@@ -1136,7 +1136,7 @@ export class ShaderContext {
                         this.updateVBO({color:[1,1,1,1]}, 0, 0, 0, bindGroupNumber); //put a default in to force it to run a single pass
                     
                     if(bufferGroup.vertexBuffers) 
-                        bufferGroup.vertexBuffers.forEach((vbo,i) => {renderPass.setVertexBuffer(i, vbo);});
+                        bufferGroup.vertexBuffers.forEach((vbo,i) => {renderPass.setVertexBuffer(i, vbo); });
                     
                     if(!useRenderBundle) {
 
