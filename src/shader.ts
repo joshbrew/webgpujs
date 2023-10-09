@@ -104,6 +104,7 @@ export class ShaderHelper {
             this.vertex = Object.assign(new ShaderContext({}),this.fragment,shaders.vertex);
         }
         
+        //create bind group layouts
         if(this.compute) {
 
             this.compute.bindGroupLayout = this.device.createBindGroupLayout({
@@ -116,7 +117,6 @@ export class ShaderHelper {
             this.compute.bufferGroups = this.bufferGroups;
             
         }
-        
         if(this.vertex && this.fragment) {
 
             this.fragment.bindGroupLayout = this.device.createBindGroupLayout({
@@ -135,7 +135,8 @@ export class ShaderHelper {
             this.bindGroupLayouts[this.fragment.bindGroupNumber] = this.fragment.bindGroupLayout;
         }
 
-        if (shaders.vertex && shaders.fragment) { // If both vertex and fragment shaders are provided
+        //create shader modules
+        if (this.vertex && this.fragment) { // If both vertex and fragment shaders are provided
             
             this.vertex.shaderModule = this.device.createShaderModule({
                 code: shaders.vertex.code
@@ -776,10 +777,6 @@ export class ShaderContext {
             bufferGroup.samplers = {};
             bufferGroup.uniformBuffer = undefined;
 
-            if(this.helper) {
-                this.bufferGroups = this.helper.bufferGroups;
-            }
-            
             this.bufferGroups[bindGroupNumber] = bufferGroup; //we aren't doing anything with these yet
         }
 
