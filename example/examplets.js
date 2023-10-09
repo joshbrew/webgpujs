@@ -272,6 +272,7 @@ setTimeout(() => {
         }
     }).then(pipeline => {
         console.timeEnd('createRenderPipeline and render triangle');
+        console.log(pipeline);
         //should have rendered
     });
     

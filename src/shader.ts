@@ -95,7 +95,7 @@ export class ShaderHelper {
             this.compute.helper = this;
             Object.assign(this.compute, options);
         }
-        if(shaders.fragment) {
+        if(shaders.fragment && shaders.vertex) {
             
             WGSLTranspiler.combineShaderParams(shaders.fragment, shaders.vertex);
             this.fragment = new ShaderContext(shaders.fragment);
@@ -160,7 +160,6 @@ export class ShaderHelper {
 
         } 
         if (this.vertex && this.fragment) { // If both vertex and fragment shaders are provided
-            
             this.vertex.shaderModule = this.device.createShaderModule({
                 code: shaders.vertex.code
             });
@@ -345,7 +344,7 @@ fn frag_main(
 
     createRenderPipelineDescriptors = (nVertexBuffers=1, swapChainFormat = navigator.gpu.getPreferredCanvasFormat()) => {
         if(!this.fragment || !this.vertex) throw new Error("No Fragment and Vertex ShaderContext defined");
-        
+
         //allows 3D rendering
         const depthFormat = "depth24plus";
         const depthTexture = this.device.createTexture({
@@ -434,8 +433,8 @@ fn frag_main(
         if(renderPipelineDescriptor) pipeline = renderPipelineDescriptor; 
         if(renderPassDescriptor) this.fragment.renderPassDescriptor = renderPassDescriptor;
 
-        this.vertex.graphicsPipeline = this.device.createRenderPipeline(pipeline);
-        this.fragment.graphicsPipeline = this.vertex.graphicsPipeline;
+        this.fragment.graphicsPipeline = this.device.createRenderPipeline(pipeline);
+        this.vertex.graphicsPipeline = this.fragment.graphicsPipeline; //vertex just keeps a copy since they both run the same pipeline
         
         // const canvasView = this.device.createTexture({
         //     size: [this.canvas.width, this.canvas.height],
@@ -707,7 +706,8 @@ export class ShaderContext {
                     let input;
                     if(Array.isArray(inputs)) input = inputs[inpIdx];
                     else input = inputs?.[node.name];
-                    if(typeof input === 'undefined' && typeof bufferGroup.uniformBufferInputs?.[inpIdx] !== 'undefined') input = bufferGroup.uniformBufferInputs[inpIdx]; //save data
+                    if(typeof input === 'undefined' && typeof bufferGroup.uniformBufferInputs?.[inpIdx] !== 'undefined') 
+                        input = bufferGroup.uniformBufferInputs[inpIdx]; //save data
                      
                     const typeInfo = WGSLTypeSizes[inputTypes[inpIdx].type];
 
@@ -730,14 +730,14 @@ export class ShaderContext {
             bufferGroup.uniformBuffer.unmap();
         }
 
-        if(this.defaultUniforms && bindGroupNumber === this.bindGroupNumber) { //update built-in uniforms (you can add whatever you want to the builtInUniforms list)
+        if(bufferGroup.defaultUniforms) { //update built-in uniforms (you can add whatever you want to the builtInUniforms list)
             // Use a DataView to set values at specific byte offsets
             const dataView = new DataView(bufferGroup.defaultUniformBuffer.getMappedRange()); //little endian
             let offset = 0; // Initialize the offset
 
-            this.defaultUniforms.forEach((u,i) => { 
+            bufferGroup.defaultUniforms.forEach((u,i) => { 
                 let value = this.builtInUniforms[u]?.callback(this);
-                const typeInfo = WGSLTypeSizes[this.builtInUniforms[this.defaultUniforms[i]].type];
+                const typeInfo = WGSLTypeSizes[this.builtInUniforms[bufferGroup.defaultUniforms[i]].type];
                 offset = this.setUBOposition(dataView,inputTypes,typeInfo,offset,value,i);
             });
 
@@ -772,6 +772,7 @@ export class ShaderContext {
             bufferGroup = {} as any;
 
             bufferGroup.params = this.params; //can get params from other shaders we transpiled
+            bufferGroup.defaultUniforms = this.defaultUniforms;
             bufferGroup.inputBuffers = [] as any[];
             bufferGroup.outputBuffers = [] as any[];
             bufferGroup.textures = {};
@@ -781,13 +782,14 @@ export class ShaderContext {
             this.bufferGroups[bindGroupNumber] = bufferGroup; //we aren't doing anything with these yet
         }
 
-        if(!bufferGroup.inputTypes && bufferGroup.params) bufferGroup.inputTypes = bufferGroup.params.map((p) => {
-            let type = p.type;
-            if(type.startsWith('array')) {
-                type = type.substring(6,type.length-1) //cut off array<  >
-            }
-            return WGSLTypeSizes[type];
-        });
+        if(!bufferGroup.inputTypes && bufferGroup.params) 
+            bufferGroup.inputTypes = bufferGroup.params.map((p) => {
+                let type = p.type;
+                if(type.startsWith('array')) {
+                    type = type.substring(6,type.length-1) //cut off array<  >
+                }
+                return WGSLTypeSizes[type];
+            });
 
 
         const inputBuffers = bufferGroup.inputBuffers;
@@ -798,16 +800,16 @@ export class ShaderContext {
         const params = bufferGroup.params;
 
         const inputTypes = bufferGroup.inputTypes;
-        let newInputBuffer = false;
+        let newBindGroupBuffer = false;
         if(inputBuffers?.length > 0) {
             inputs.forEach((inp,index) => {
                 if(inp && inp?.length) {
                     if(inputBuffers.size !== inp.length * inputTypes[index].byteSize) {
-                        newInputBuffer = true;
+                        newBindGroupBuffer = true;
                     }
                 }
             });
-        } else newInputBuffer = true; //will trigger bindGroups to be set
+        } else newBindGroupBuffer = true; //will trigger bindGroups to be set
 
 
         let uBufferPushed = false;
@@ -953,11 +955,11 @@ export class ShaderContext {
                 this.buffer({bindGroupNumber:i}, ...inp);
         })
                                     
-        if(this.defaultUniforms && bindGroupNumber === this.bindGroupNumber) {  //make new buffer each input
+        if(bufferGroup.defaultUniforms) {  //make new buffer each input. todo: we could set this to be generalized
             
             if(!bufferGroup.totalDefaultUniformBufferSize) {
                 let totalUniformBufferSize = 0;
-                this.defaultUniforms.forEach((u) => {
+                bufferGroup.defaultUniforms.forEach((u) => {
                     totalUniformBufferSize += WGSLTypeSizes[this.builtInUniforms[u].type].size; //assume 4 bytes per float/int (32 bit)
                 });
 
@@ -983,13 +985,13 @@ export class ShaderContext {
         
         this.updateUBO(uniformValues, inputTypes, bindGroupNumber);
 
-        if(newInputBuffer) {
+        if(inputBuffers && newBindGroupBuffer) {
             // Update bind group creation to include both input and output buffers
 
-            let bindGroupEntries = inputBuffers ? inputBuffers.map((buffer, index) => ({
+            let bindGroupEntries = inputBuffers.map((buffer, index) => ({
                 binding: index,
                 resource: { buffer }
-            })) : []; 
+            })); 
             
             if(bufferGroup.defaultUniformBuffer) bindGroupEntries.push({
                 binding: bufferGroup.defaultUniformBinding, 
@@ -1004,7 +1006,7 @@ export class ShaderContext {
             this.bindGroups[bindGroupNumber] = bindGroup;
         }
 
-        return newInputBuffer;
+        return newBindGroupBuffer;
         
     }
 
@@ -1122,7 +1124,7 @@ export class ShaderContext {
                         .createView();
                     renderPass = commandEncoder.beginRenderPass(this.renderPassDescriptor);
                 }
-                
+
                 if(!useRenderBundle || !bufferGroup.renderBundle) { //drawIndirect?
                     renderPass.setPipeline(this.graphicsPipeline);
                     
@@ -1133,10 +1135,12 @@ export class ShaderContext {
                     this.bindGroups.forEach(withBindGroup);
                     
                     if(!bufferGroup.vertexBuffers) 
-                        this.updateVBO({color:[1,1,1,1]}, 0, 0, 0, bindGroupNumber); //put a default in to force it to run a single pass
+                        this.updateVBO({color:[0,0,0,0]}, 0, 0, 0, bindGroupNumber); //put a default in to force it to run a single pass
                     
                     if(bufferGroup.vertexBuffers) 
-                        bufferGroup.vertexBuffers.forEach((vbo,i) => {renderPass.setVertexBuffer(i, vbo); });
+                        bufferGroup.vertexBuffers.forEach((vbo,i) => {
+                            renderPass.setVertexBuffer(i, vbo); 
+                        });
                     
                     if(!useRenderBundle) {
 
@@ -1167,14 +1171,23 @@ export class ShaderContext {
 
                     if(vertexCount) bufferGroup.vertexCount = vertexCount;
                     else if(!bufferGroup.vertexCount) bufferGroup.vertexCount = 1;
-
-                    if(bufferGroup.indexBuffer) renderPass.drawIndexed(bufferGroup.vertexCount, instanceCount, firstIndex, 0, firstInstance)
-                    else renderPass.draw(
-                        bufferGroup.vertexCount, 
-                        instanceCount, 
-                        firstVertex, 
-                        firstInstance
-                    );
+                    
+                    if(bufferGroup.indexBuffer) {
+                        renderPass.drawIndexed(
+                            bufferGroup.vertexCount, 
+                            instanceCount, 
+                            firstIndex, 
+                            0, 
+                            firstInstance
+                        );
+                    } else {
+                        renderPass.draw(
+                            bufferGroup.vertexCount, 
+                            instanceCount, 
+                            firstVertex, 
+                            firstInstance
+                        );
+                    }
 
                     if(useRenderBundle && bufferGroup.firstPass) {
                         bufferGroup.renderBundle = (renderPass as GPURenderBundleEncoder).finish(); //replace the encoder with the recording

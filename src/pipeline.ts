@@ -208,12 +208,12 @@ export class WebGPUjs {
                 const shaderPipeline = new ShaderHelper(block,options);
 
                 if(options.inputs || options.renderPass) {
-                    if(shaderPipeline['compute']) {
-                        shaderPipeline.process(...options.inputs as any[]);
+                    let inps = options.inputs? [...options.inputs] : [];
+                    if(options.inputs && shaderPipeline['compute']) {
+                        shaderPipeline.process(...inps as any[]);
                     }
                     if(shaderPipeline['fragment']) {
-                        let inps = options.inputs? [...options.inputs] : [];
-                        shaderPipeline.render({...options.renderPass}, ...inps);
+                        shaderPipeline.render(options.renderPass, ...inps);
                     }
                 }
         
