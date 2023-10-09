@@ -174,7 +174,7 @@ export class WebGPUjs {
                         block.vertex = WGSLTranspiler.convertToWebGPU(
                             block.vertex, 
                             'vertex', 
-                            options.bindGroupNumber, 
+                            block.compute ? block.compute.bindGroupNumber + 1 : options.bindGroupNumber, 
                             options.nVertexBuffers, 
                             options.workGroupSize, 
                             options.functions
@@ -186,7 +186,7 @@ export class WebGPUjs {
                         block.fragment = WGSLTranspiler.convertToWebGPU(
                             block.fragment, 
                             'fragment', 
-                            options.bindGroupNumber, 
+                            block.compute ? block.compute.bindGroupNumber + 1 : options.bindGroupNumber, 
                             options.nVertexBuffers, 
                             options.workGroupSize, 
                             options.functions
@@ -231,9 +231,38 @@ export class WebGPUjs {
             fragment?:TranspiledShader,
             vertex?:TranspiledShader
         },
-        options:ShaderOptions & ComputeOptions & RenderOptions
+        options?:ShaderOptions & ComputeOptions & RenderOptions
     ) => {
-        return new ShaderHelper(shaders,options);
+        return new ShaderHelper(shaders, options);
+    }
+
+    static combineShaders = (
+        shaders: Function | {
+            code:Function|string, 
+            transpileString?:boolean //functions are auto-transpiled
+        } | {
+            compute:string|Function,
+            vertex:string|Function,
+            fragment:string|Function,
+            transpileString?:boolean
+        },
+        options:ShaderOptions & ComputeOptions & RenderOptions = {},
+        previousPipeline:ShaderHelper
+    ):Promise<ShaderHelper> => {
+
+        let bindGroupNumber = previousPipeline.bindGroupLayouts.length;
+        if(options.bindGroupLayouts) options.bindGroupLayouts; previousPipeline.bindGroupLayouts.push(...options.bindGroupLayouts);
+        options.bindGroupNumber = bindGroupNumber;
+        options.bindGroupLayouts = previousPipeline.bindGroupLayouts;
+        options.bindGroups = previousPipeline.bindGroups;
+        options.bufferGroups = previousPipeline.bufferGroups;
+        if(previousPipeline.fragment) {
+            options.getPrevShaderBindGroups = previousPipeline.fragment.code;
+        } else if(previousPipeline.compute) {
+            options.getPrevShaderBindGroups = previousPipeline.compute.code;
+        }
+
+        return WebGPUjs.createPipeline(shaders,options); //generate a new helper for the new shaders that combines previous information like layouts and buffers. Variable names can reference the same bindings now inputted in whatever order.
     }
 
     static cleanup = (shaderPipeline) => {

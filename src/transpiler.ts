@@ -563,7 +563,7 @@ fn frag_main(
     @builtin(front_facing) is_front: bool,   //true when current fragment is on front-facing primitive
     @builtin(sample_index) sampleIndex: u32, //sample index for the current fragment
     @builtin(sample_mask) sampleMask: u32   //contains a bitmask indicating which samples in this fragment are covered by the primitive being rendered
-) -> @location(0) vec4<f32> {`;
+) -> @location(0) vec4<f32> {\n`;
         }
         let shaderHead = code;
         // Transpose the main body
@@ -1143,7 +1143,8 @@ fn frag_main(
             funcStr, 
             defaultUniforms:webGPUCode.defaultUniforms, 
             type:shaderType,
-            workGroupSize:shaderType === 'compute' ? workGroupSize : undefined
+            workGroupSize:shaderType === 'compute' ? workGroupSize : undefined,
+            bindGroupNumber
         } as TranspiledShader;
     }
 

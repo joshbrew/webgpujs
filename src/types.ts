@@ -5,7 +5,9 @@ export type ShaderOptions = {
     getPrevShaderBindGroups?:string,
     functions?:Function[],
     inputs?:any[],
-    bindGroupLayouts?:GPUBindGroupLayoutEntry[],
+    bindGroupLayouts?:GPUBindGroupLayout[],
+    bindGroups?:GPUBindGroup[],
+    bufferGroups?:any,
     skipCombinedBindings?:boolean
 }
 
@@ -73,6 +75,7 @@ export type ComputePassSettings = {
 export type TranspiledShader = {
     code: string;
     bindings: string;
+    bindGroupNumber:number;
     ast: any[];
     params: any[];
     funcStr: string;

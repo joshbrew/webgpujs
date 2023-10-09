@@ -250,25 +250,29 @@ document.getElementById('ex2').appendChild(canvas);
 
 let ex12Id1 = setupWebGPUConverterUI(vertexExample, document.getElementById('ex2'), 'vertex');
 let ex12Id2 = setupWebGPUConverterUI(fragmentExample, document.getElementById('ex2'), 'fragment');
-console.time('createRenderPipeline and render triangle');
 
-WebGPUjs.createPipeline({
-    vertex:vertexExample,
-    fragment:fragmentExample
-},{
-    canvas,
-    renderPass:{
-        vertexCount:3,
-        vbos:[ //we can upload vbos, though not necessary in current example (think)
-            {
-                //position
-                color:new Array(3*4).fill(0)
-                //
-            }
-        ],
-        //textures:{}
-    }
-}).then(pipeline => {
-    console.timeEnd('createRenderPipeline and render triangle');
-    //should have rendered
-});
+setTimeout(() => {
+    console.time('createRenderPipeline and render triangle');
+
+    WebGPUjs.createPipeline({
+        vertex:vertexExample,
+        fragment:fragmentExample
+    },{
+        canvas,
+        renderPass:{
+            vertexCount:3,
+            vbos:[ //we can upload vbos, though not necessary in current example (think)
+                {
+                    //position
+                    color:new Array(3*4).fill(0)
+                    //
+                }
+            ],
+            //textures:{}
+        }
+    }).then(pipeline => {
+        console.timeEnd('createRenderPipeline and render triangle');
+        //should have rendered
+    });
+    
+},500)
