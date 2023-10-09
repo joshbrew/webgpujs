@@ -4,6 +4,9 @@ Write full featured WGSL pipelines in plain javascript.
 
 **Work in Progress**
 
+To run the example: `npm i -g tinybuild` then `npm run example`
+
+
 ![cap](./example/compute.PNG)
 ![code](./example/workflow.PNG)
 ![render](./example/render.PNG)

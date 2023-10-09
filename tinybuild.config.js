@@ -20,7 +20,7 @@ const config = {
         //blobWorkers:true, //package workers as blobs or files? blobs are faster but inflate the main package size
         //workerBundler:{minifyWhitespace:true} //bundler settings specific to the worker. e.g. apply platform:'node' when bundling node workers, 
         //globalThis:null //'mymodule'
-        //globals:{'webgpujs.js':['WebGPUjs']}
+        globals:{'index.ts':['WebGPUjs']}
         //init:{'index.js':function(bundle) { console.log('prepackaged bundle script!', bundle); }.toString(); }      
         //  outputs:{ //overwrites main config settings for specific use cases
         //     node:{ //e.g. for bundleNode
