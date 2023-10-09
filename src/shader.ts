@@ -1128,7 +1128,6 @@ export class ShaderContext {
                 if(!useRenderBundle || !bufferGroup.renderBundle) { //drawIndirect?
                     renderPass.setPipeline(this.graphicsPipeline);
                     
-
                     const withBindGroup = (group,i) => {
                         renderPass.setBindGroup(i,group);
                     }
@@ -1139,7 +1138,7 @@ export class ShaderContext {
                         this.updateVBO({color:[1,1,1,1]}, 0, 0, 0, bindGroupNumber); //put a default in to force it to run a single pass
                     
                     if(bufferGroup.vertexBuffers) 
-                        bufferGroup.vertexBuffers.forEach((vbo,i) => {renderPass.setVertexBuffer(i, vbo)});
+                        bufferGroup.vertexBuffers.forEach((vbo,i) => {renderPass.setVertexBuffer(i, vbo);});
                     
                     if(!useRenderBundle) {
 

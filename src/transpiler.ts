@@ -553,7 +553,7 @@ fn vtx_main(
     @builtin(vertex_index) vertexIndex : u32,   //current vertex
     @builtin(instance_index) instanceIndex: u32, //current instance
     ${vboInputStrings.join('\n')}`
-            code += '\n) -> Vertex {\n var pixel: Vertex;\n'; //pixel is predeclared, can we can reference color, position, etc in our js-side shaders
+            code += '\n) -> Vertex {\n    var pixel: Vertex;\n'; //pixel is predeclared, can we can reference color, position, etc in our js-side shaders
 
         } else if (shaderType === 'fragment') {
             code += `
@@ -572,7 +572,7 @@ fn frag_main(
         if(transposed.consts?.length > 0) 
             code = transposed.consts.join('\n') + '\n\n' + code;
 
-        if (shaderType === 'vertex') code += `\n  return pixel; \n`; //
+        if (shaderType === 'vertex') code += `\n    return pixel; \n`; //
         code += '\n}\n';
         return code;
     }
