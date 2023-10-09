@@ -176,6 +176,7 @@ export class ShaderHelper {
             this.vertex.pipelineLayout = this.fragment.pipelineLayout;
 
             this.updateGraphicsPipeline(options?.nVertexBuffers,  options?.contextSettings,  options?.renderPipelineSettings);
+
         } 
 
         //eof
@@ -429,7 +430,7 @@ fn frag_main(
         });
 
         let pipeline = this.createRenderPipelineDescriptors(nVertexBuffers, swapChainFormat);
-        console.log(pipeline);
+
         if(renderPipelineDescriptor) pipeline = renderPipelineDescriptor; 
         if(renderPassDescriptor) this.fragment.renderPassDescriptor = renderPassDescriptor;
 
@@ -1183,6 +1184,7 @@ export class ShaderContext {
                     (renderPass as GPURenderPassEncoder).executeBundles([bufferGroup.renderBundle]);
                 }
                 (renderPass as GPURenderPassEncoder).end();
+                console.log(this);
             }
 
             if(!skipOutputDef && bufferGroup.outputBuffers?.length > 0) {
