@@ -337,7 +337,7 @@ fn frag_main(
                 }
             })
         }
-
+        
         shaderContext.bindGroupLayoutEntries = entries;
         return entries;
     }
@@ -1184,7 +1184,6 @@ export class ShaderContext {
                     (renderPass as GPURenderPassEncoder).executeBundles([bufferGroup.renderBundle]);
                 }
                 (renderPass as GPURenderPassEncoder).end();
-                console.log(this);
             }
 
             if(!skipOutputDef && bufferGroup.outputBuffers?.length > 0) {
