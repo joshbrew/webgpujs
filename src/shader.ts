@@ -136,24 +136,6 @@ export class ShaderHelper {
         }
 
         //create shader modules
-        if (this.vertex && this.fragment) { // If both vertex and fragment shaders are provided
-            
-            this.vertex.shaderModule = this.device.createShaderModule({
-                code: shaders.vertex.code
-            });
-
-            this.fragment.shaderModule = this.device.createShaderModule({
-                code: shaders.fragment.code
-            });
-
-            this.fragment.pipelineLayout = this.device.createPipelineLayout({
-                bindGroupLayouts:this.bindGroupLayouts //this should have the combined compute and vertex/fragment (and accumulated) layouts
-            });
-
-            this.vertex.pipelineLayout = this.fragment.pipelineLayout;
-
-            this.updateGraphicsPipeline(options?.nVertexBuffers,  options?.contextSettings,  options?.renderPipelineSettings);
-        } 
         if (this.compute) { // If it's a compute shader
             
             this.compute.shaderModule = this.device.createShaderModule({
@@ -176,6 +158,24 @@ export class ShaderHelper {
 
             this.compute.computePipeline = this.device.createComputePipeline(pipeline);
 
+        } 
+        if (this.vertex && this.fragment) { // If both vertex and fragment shaders are provided
+            
+            this.vertex.shaderModule = this.device.createShaderModule({
+                code: shaders.vertex.code
+            });
+
+            this.fragment.shaderModule = this.device.createShaderModule({
+                code: shaders.fragment.code
+            });
+
+            this.fragment.pipelineLayout = this.device.createPipelineLayout({
+                bindGroupLayouts:this.bindGroupLayouts //this should have the combined compute and vertex/fragment (and accumulated) layouts
+            });
+
+            this.vertex.pipelineLayout = this.fragment.pipelineLayout;
+
+            this.updateGraphicsPipeline(options?.nVertexBuffers,  options?.contextSettings,  options?.renderPipelineSettings);
         } 
 
         //eof
@@ -429,7 +429,7 @@ fn frag_main(
         });
 
         let pipeline = this.createRenderPipelineDescriptors(nVertexBuffers, swapChainFormat);
-
+        console.log(pipeline);
         if(renderPipelineDescriptor) pipeline = renderPipelineDescriptor; 
         if(renderPassDescriptor) this.fragment.renderPassDescriptor = renderPassDescriptor;
 
