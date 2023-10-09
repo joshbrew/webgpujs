@@ -1184,7 +1184,7 @@ export class ShaderContext {
                         bufferGroup.firstPass = false;
                     } else (renderPass as GPURenderPassEncoder).end();
                 } else {
-                    (renderPass as GPURenderPassEncoder).executeBundles([this.renderBundle]);
+                    (renderPass as GPURenderPassEncoder).executeBundles([bufferGroup.renderBundle]);
                 }
             }
 
