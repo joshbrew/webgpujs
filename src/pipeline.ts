@@ -1,5 +1,5 @@
 import { WGSLTranspiler } from "./transpiler";
-import {ShaderHelper} from './shader'
+import {ShaderHelper} from './shader' //'./shaderworks'
 import {ShaderOptions, RenderOptions, ComputeOptions, RenderPassSettings, ComputePassSettings, TranspiledShader} from './types'
 
 // pipeline, transpiler, shader.

@@ -49,7 +49,8 @@ export type RenderPassSettings = {
         position?:number[]|(number[][]),
         normal?:number[]|(number[][]),
         uv?:number[]|(number[][])
-    })[]
+    })[],
+    outputVBOs?:boolean,
     textures?:{
         [key:string]:{
             data:Uint8Array,
@@ -58,11 +59,11 @@ export type RenderPassSettings = {
             bytesPerRow?:number,
             label?:string, 
             format?:string, //default: 'rgba8unorm' 
-            usage?:any
-        }
-    }
-    textureSettings?:any,
-    samplerSettings?:any
+            usage?:any,
+            samplerSettings?:any
+        }|ImageBitmap
+    },
+    outputTextures?:boolean
 } & ShaderPassSettings;
 
 export type ComputePassSettings = {

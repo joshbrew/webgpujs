@@ -322,7 +322,7 @@ export class WGSLTranspiler {
         }, [] as any[]);
     }
 
-    static generateDataStructures(funcStr, ast, bindGroup=0) {
+    static generateDataStructures(funcStr, ast, bindGroup=0, shaderType:'compute'|'fragment'|'vertex',storageTextureType='rgba8unorm') {
         let code = '//Bindings (data passed to/from CPU) \n';
         // Extract all returned variables from the function string
         // const returnMatches = funcStr.match(/^(?![ \t]*\/\/).*\breturn .*;/gm);
@@ -363,16 +363,27 @@ export class WGSLTranspiler {
                 return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');  // $& means the whole matched string
             }
 
-            if (new RegExp(`texture.*\\(${escapeRegExp(node.name)},`).test(funcStr)) {
-                node.isTexture = true;
-            } else if (new RegExp(`textureSampl.*\\(.*,${escapeRegExp(node.name)},`).test(funcStr)) {
+            //todo: texture types - texture_1d, texture_2d, texture_2d_array, texture_3d
+            let prevTextureBinding;
+            if (new RegExp(`textureSampl.*\\(.*,${escapeRegExp(node.name)},`).test(funcStr)) { 
                 node.isSampler = true;
-            }
+            } else if(new RegExp(`textureStore\\(${escapeRegExp(node.name)},`).test(funcStr)) {
+                node.isStorageTexture = true;
+            } else if (new RegExp(`texture.*\\(${escapeRegExp(node.name)},`).test(funcStr)) { //todo: we could infer texture dimensions from the second input type
+                node.isTexture = true;
+                prevTextureBinding = bindingIncr; //the output texture should share the binding (this is rudimentary, we can't really anticipate better than this)
+            } 
+
 
             if (node.isTexture) {
                 params.push(node);
                 code += `@group(${bindGroup}) @binding(${bindingIncr}) var ${node.name}: texture_2d<f32>;\n\n`;
+                //else  code += `@group(${bindGroup}) @binding(${bindingIncr}) var ${node.name}: texture_storage_2d<${storageTextureType}, write>;\n\n`; //todo: rgba8unorm type should be customizable
                 bindingIncr++;
+            } else if (node.isStorageTexture) { 
+                params.push(node);
+                code += `@group(${bindGroup}) @binding(${typeof prevTextureBinding !== 'undefined' ? prevTextureBinding : bindingIncr}) var ${node.name}: texture_storage_2d<rgba8unorm,write>;\n\n`;
+                if(typeof prevTextureBinding === 'undefined') bindingIncr++; //assume not tied to previous texture binding
             } else if (node.isSampler) {
                 params.push(node);
                 code += `@group(${bindGroup}) @binding(${bindingIncr}) var ${node.name}: sampler;\n\n`;
@@ -1123,7 +1134,7 @@ fn frag_main(
         const tokens = this.tokenize(funcStr);
         const ast = this.parse(funcStr, tokens, shaderType);
         //console.log(ast);
-        let webGPUCode = this.generateDataStructures(funcStr, ast, bindGroupNumber); //simply share bindGroups 0 and 1 between compute and render
+        let webGPUCode = this.generateDataStructures(funcStr, ast, bindGroupNumber, shaderType); //simply share bindGroups 0 and 1 between compute and render
         const bindings = webGPUCode.code;
         webGPUCode.code += '\n' + this.generateMainFunctionWorkGroup(
             funcStr, 
