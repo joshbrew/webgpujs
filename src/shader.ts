@@ -107,11 +107,14 @@ export class ShaderHelper {
         //create bind group layouts
         if(this.compute) {
 
-            this.compute.bindGroupLayout = this.device.createBindGroupLayout({
-                entries:this.createBindGroupFromEntries(this.compute, 'compute', options?.renderPass?.textureSettings, options?.renderPass?.samplerSettings)
-            });
-
-            this.bindGroupLayouts[this.compute.bindGroupNumber] = (this.compute.bindGroupLayout);
+            const entries = this.createBindGroupEntries(this.compute, 'compute', options?.renderPass?.textureSettings, options?.renderPass?.samplerSettings);
+            
+            if(entries.length > 0) {
+                this.compute.bindGroupLayout = this.device.createBindGroupLayout({
+                    entries
+                });
+                this.bindGroupLayouts[this.compute.bindGroupNumber] = (this.compute.bindGroupLayout);
+            }
             this.compute.bindGroupLayouts = this.bindGroupLayouts;
             this.compute.bindGroups = this.bindGroups;
             this.compute.bufferGroups = this.bufferGroups;
@@ -119,11 +122,15 @@ export class ShaderHelper {
         }
         if(this.vertex && this.fragment) {
 
-            this.fragment.bindGroupLayout = this.device.createBindGroupLayout({
-                entries:this.createBindGroupFromEntries(this.fragment, 'fragment', options?.renderPass?.textureSettings, options?.renderPass?.samplerSettings)
-            });
-            this.vertex.bindGroupLayout = this.fragment.bindGroupLayout;
+            const entries = this.createBindGroupEntries(this.fragment, 'fragment', options?.renderPass?.textureSettings, options?.renderPass?.samplerSettings);
             
+            if(entries.length > 0) {
+                this.fragment.bindGroupLayout = this.device.createBindGroupLayout({
+                    entries
+                });
+                this.vertex.bindGroupLayout = this.fragment.bindGroupLayout;
+                this.bindGroupLayouts[this.fragment.bindGroupNumber] = this.fragment.bindGroupLayout;
+            }
             this.fragment.bindGroups = this.bindGroups;
             this.fragment.bindGroupLayouts = this.bindGroupLayouts;
             this.fragment.bufferGroups = this.bufferGroups;
@@ -132,7 +139,6 @@ export class ShaderHelper {
             this.vertex.bindGroupLayouts = this.bindGroupLayouts;
             this.vertex.bufferGroups = this.bufferGroups;
             
-            this.bindGroupLayouts[this.fragment.bindGroupNumber] = this.fragment.bindGroupLayout;
         }
 
         //create shader modules
@@ -272,7 +278,7 @@ fn frag_main(
 
 
     // Extract all returned variables from the function string
-    createBindGroupFromEntries = (
+    createBindGroupEntries = (
         shaderContext, 
         shaderType, 
         textureSettings={}, 
@@ -757,11 +763,7 @@ export class ShaderContext {
     ) => {
 
         if(!bindGroupNumber) bindGroupNumber = this.bindGroupNumber;
-        if(vbos) { //todo: we should make a robust way to set multiple inputs on bindings
-            vbos.forEach((vertices,i) => {
-                this.updateVBO(vertices, i, undefined, undefined, bindGroupNumber);
-            });
-        }
+
         
         // Create or recreate input buffers      // Extract all returned variables from the function string
         // Separate input and output AST nodes
@@ -780,6 +782,12 @@ export class ShaderContext {
             bufferGroup.uniformBuffer = undefined;
 
             this.bufferGroups[bindGroupNumber] = bufferGroup; //we aren't doing anything with these yet
+        }
+
+        if(vbos) { //todo: we should make a robust way to set multiple inputs on bindings
+            vbos.forEach((vertices,i) => {
+                this.updateVBO(vertices, i, undefined, undefined, bindGroupNumber);
+            });
         }
 
         if(!bufferGroup.inputTypes && bufferGroup.params) 
@@ -985,13 +993,14 @@ export class ShaderContext {
         
         this.updateUBO(uniformValues, inputTypes, bindGroupNumber);
 
-        if(inputBuffers && newBindGroupBuffer) {
+        if(this.bindGroupLayouts[bindGroupNumber] && newBindGroupBuffer) {
             // Update bind group creation to include both input and output buffers
+            let bindGroupEntries = [];
 
-            let bindGroupEntries = inputBuffers.map((buffer, index) => ({
+            if(inputBuffers) bindGroupEntries.push(...inputBuffers.map((buffer, index) => ({
                 binding: index,
                 resource: { buffer }
-            })); 
+            }))); 
             
             if(bufferGroup.defaultUniformBuffer) bindGroupEntries.push({
                 binding: bufferGroup.defaultUniformBinding, 
