@@ -547,7 +547,7 @@ export class ShaderContext {
             this.updateTexture(textures[key], key, textures[key].samplerSettings, bindGroupNumber); //generate texture buffers and samplers
         }
 
-        const entries = bufferGroup.params.map((node, i) => {
+        const entries = bufferGroup.params ? bufferGroup.params.map((node, i) => {
             let isReturned = (bufferGroup.returnedVars === undefined || bufferGroup.returnedVars?.includes(node.name));
             if (node.isUniform) {
                 if (typeof uniformBufferIdx === 'undefined') {
@@ -566,7 +566,7 @@ export class ShaderContext {
                 const buffer = {
                     binding: bufferIncr,
                     visibility,
-                    resource: textures[node.name] ? textures[node.name].createView() : {}
+                    resource: textures[node.name] ? textures[node.name].createView() : {} //todo: texture dimensions/format/etc customizable
                 };
                 bufferIncr++;
                 return buffer;
@@ -589,7 +589,7 @@ export class ShaderContext {
                 bufferIncr++;
                 return buffer;
             }
-        }).filter(v => v);
+        }).filter(v => v) : [];
 
         if(bufferGroup.defaultUniforms) {
             entries.push({
@@ -1010,7 +1010,7 @@ export class ShaderContext {
         }
         if(bufferGroup.textures && outputTextures) {
             for(const key in bufferGroup.textures) {
-                outputBuffers.push()
+                outputBuffers.push(bufferGroup.textures[key])
             }
         }
 
@@ -1082,7 +1082,7 @@ export class ShaderContext {
         
     }
 
-    getOutputData = (commandEncoder, outputBuffers?) => {
+    getOutputData = (commandEncoder:GPUCommandEncoder, outputBuffers?) => {
         //Return one or multiple results
         if(!outputBuffers) outputBuffers = this.bufferGroups[this.bindGroupNumber].outputBuffers;
         // Create staging buffers for all output buffers
@@ -1095,21 +1095,28 @@ export class ShaderContext {
 
         // Copy data from each output buffer to its corresponding staging buffer
         outputBuffers.forEach((outputBuffer, index) => {
-            commandEncoder.copyBufferToBuffer(
+            if(outputBuffer.width) {
+                commandEncoder.copyTextureToBuffer( //easier to copy the texture to an array and reuse it that way
+                    outputBuffer,
+                    stagingBuffers[index],
+                    [outputBuffer.width,outputBuffer.height,outputBuffer.depthOrArrayLayers]
+                );
+            } else commandEncoder.copyBufferToBuffer(
                 outputBuffer, 0,
                 stagingBuffers[index], 0,
                 outputBuffer.size
             );
+
         });
 
         this.device.queue.submit([commandEncoder.finish()]);
 
-        const promises = stagingBuffers.map(buffer => {
+        const promises = stagingBuffers.map((buffer,i) => {
             return new Promise((resolve) => {
                 buffer.mapAsync(GPUMapMode.READ).then(() => {
                     const mappedRange = buffer.getMappedRange();
-                    const rawResults = new Float32Array(mappedRange); 
-                    const copiedResults = new Float32Array(rawResults.length);
+                    const rawResults = outputBuffers[i].format?.includes('8') ? new Uint8Array(mappedRange) : new Float32Array(mappedRange); 
+                    const copiedResults = outputBuffers[i].format?.includes('8') ? new Uint8Array(rawResults.length) : new Float32Array(rawResults.length);
                     
                     copiedResults.set(rawResults); // Fast copy
                     buffer.unmap();
@@ -1277,7 +1284,10 @@ export class ShaderContext {
 
             if(!skipOutputDef && bufferGroup.outputBuffers?.length > 0) {
                 return this.getOutputData(commandEncoder, bufferGroup.outputBuffers);
-            } else return new Promise((r) => r(true));
+            } else {
+                commandEncoder.finish();
+                return new Promise((r) => r(true));
+            }
             
         }
         
