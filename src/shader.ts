@@ -547,6 +547,7 @@ export class ShaderContext {
             this.updateTexture(textures[key], key, textures[key].samplerSettings, bindGroupNumber); //generate texture buffers and samplers
         }
 
+        let lastTextureBinding;
         const entries = bufferGroup.params ? bufferGroup.params.map((node, i) => {
             let isReturned = (bufferGroup.returnedVars === undefined || bufferGroup.returnedVars?.includes(node.name));
             if (node.isUniform) {
@@ -562,12 +563,13 @@ export class ShaderContext {
                     };
                 }
                 return undefined;
-            } else if(node.isTexture) {
+            } else if(node.isTexture || (node.isStorageTexture && typeof lastTextureBinding !== 'undefined')) { //rudimentary storage texture checks since typically they'll share bindings
                 const buffer = {
                     binding: bufferIncr,
                     visibility,
                     resource: textures[node.name] ? textures[node.name].createView() : {} //todo: texture dimensions/format/etc customizable
                 };
+                lastTextureBinding = bufferIncr;
                 bufferIncr++;
                 return buffer;
             } else if(node.isSampler) {
