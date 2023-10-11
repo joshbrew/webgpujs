@@ -563,7 +563,7 @@ export class ShaderContext {
                     };
                 }
                 return undefined;
-            } else if(node.isTexture || (node.isStorageTexture && typeof lastTextureBinding !== 'undefined')) { //rudimentary storage texture checks since typically they'll share bindings
+            } else if(node.isTexture || (node.isStorageTexture && typeof lastTextureBinding === 'undefined')) { //rudimentary storage texture checks since typically they'll share bindings
                 const buffer = {
                     binding: bufferIncr,
                     visibility,
