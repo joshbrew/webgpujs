@@ -514,7 +514,6 @@ export class ShaderContext {
     bindGroupNumber:number;
     bindGroupLayout:GPUBindGroupLayout;
     bindGroupLayoutEntries:any;
-    bufferGroup?:any;
 
     constructor(props?) {
         Object.assign(this, props);
@@ -663,7 +662,16 @@ export class ShaderContext {
         }
     }
 
-    updateTexture = (texture, name:string, samplerSettings?, bindGroupNumber=this.bindGroupNumber) => {
+    updateTexture = (texture:{
+        data:Uint8Array,
+        width:number, 
+        height:number, 
+        bytesPerRow?:number,
+        label?:string, 
+        format?:string, //default: 'rgba8unorm' 
+        usage?:any,
+        samplerSettings?:any
+    }|any, name:string, samplerSettings?, bindGroupNumber=this.bindGroupNumber) => {
         if(!texture) return;
 
         let bufferGroup = this.bufferGroups[bindGroupNumber];
@@ -682,6 +690,7 @@ export class ShaderContext {
         if(texture.data) texInfo.texture = texture.data;
         else texInfo.source = texture;
 
+        //todo: more texture settings and stuff
         if(texInfo.texture)
             this.device.queue.writeTexture(
                 texInfo,
