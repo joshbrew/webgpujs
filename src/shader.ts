@@ -723,7 +723,7 @@ export class ShaderContext {
 
         bufferGroup.samplers[name] = sampler;
 
-        //we need to pass the sampler and texture view to the bindGroupLayout
+        //todo: we need to pass the sampler and texture view to the bindGroupLayout
         return true; //textures/samplers updated
     }
 
@@ -881,13 +881,6 @@ export class ShaderContext {
             });
         }
 
-        let newTextures = false;
-        if(textures) {
-            for(const key in textures) {
-                newTextures = this.updateTexture(textures[key], key, textures[key].samplerSettings, bindGroupNumber);
-            }
-        }
-
         if(!bufferGroup.inputTypes && bufferGroup.params) 
             bufferGroup.inputTypes = bufferGroup.params.map((p) => {
                 let type = p.type;
@@ -914,6 +907,13 @@ export class ShaderContext {
                 }
             });
         } else newBindGroupBuffer = true; //will trigger bindGroups to be set
+
+
+        if(textures) {
+            const entries = this.createBindGroupEntries(textures,bindGroupNumber);
+            this.setBindGroupLayout(entries, bindGroupNumber); //we need to reset the sampler and texture data on the bindGroup
+            newBindGroupBuffer = true; // make sure a new bindGroup is made with updated buffers
+        }
 
 
         let uBufferPushed = false;
@@ -1062,12 +1062,7 @@ export class ShaderContext {
         }
         
         this.updateUBO(uniformValues, inputTypes, bindGroupNumber);
-
-        if(newTextures) {
-            const entries = this.createBindGroupEntries(undefined,undefined,bindGroupNumber);
-            this.setBindGroupLayout(entries, bindGroupNumber); //we need to reset the sampler and texture data on the bindGroup
-            newBindGroupBuffer = true; // make sure a new bindGroup is made with updated buffers
-        }
+        
         if(this.bindGroupLayouts[bindGroupNumber] && newBindGroupBuffer) {
             // Update bind group creation to include both input and output buffers
             let bindGroupEntries = [];
@@ -1089,6 +1084,7 @@ export class ShaderContext {
 
             bufferGroup.bindGroup = bindGroup;
             this.bindGroups[bindGroupNumber] = bindGroup;
+
         }
 
         return newBindGroupBuffer;
