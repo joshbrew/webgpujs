@@ -1,5 +1,5 @@
 import { WGSLTranspiler } from "./transpiler";
-import {ShaderHelper} from './shader' //'./shaderworks'
+import {ShaderHelper} from './shader'
 import {ShaderOptions, RenderOptions, ComputeOptions, RenderPassSettings, ComputePassSettings, TranspiledShader} from './types'
 
 // pipeline, transpiler, shader.
@@ -58,9 +58,8 @@ import {ShaderOptions, RenderOptions, ComputeOptions, RenderPassSettings, Comput
  * 
  */
 
-
 export class WebGPUjs {
-
+    static device:GPUDevice;
     static createPipeline = async (
         shaders: Function | {
                 code:Function|string, 
@@ -74,12 +73,17 @@ export class WebGPUjs {
         options:ShaderOptions & ComputeOptions & RenderOptions = {}
     ):Promise<ShaderHelper> => {
 
+
         let device = options.device; //device is required!
         if (!device) {
-            const gpu = navigator.gpu;
-            const adapter = await gpu.requestAdapter();
-            if(!adapter) throw new Error('No GPU Adapter found!');
-            device = await adapter.requestDevice();
+            device = this.device;
+            if(!device) {
+                const gpu = navigator.gpu;
+                const adapter = await gpu.requestAdapter();
+                if(!adapter) throw new Error('No GPU Adapter found!');
+                device = await adapter.requestDevice();
+                this.device = device;
+            }
             options.device = device;
         }
 

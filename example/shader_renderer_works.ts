@@ -1,5 +1,5 @@
-import { WGSLTranspiler, WGSLTypeSizes } from "./transpiler";
-import {ShaderOptions, RenderOptions, ComputeOptions, RenderPassSettings, ComputePassSettings, TranspiledShader} from './types'
+import { WGSLTranspiler, WGSLTypeSizes } from "../src/transpiler";
+import {ShaderOptions, RenderOptions, ComputeOptions, RenderPassSettings, ComputePassSettings, TranspiledShader} from '../src/types'
 
 
 //Self contained shader execution boilerplate
@@ -64,7 +64,6 @@ export class ShaderHelper {
         if((shaders.fragment && !shaders.vertex) || (shaders.vertex && !shaders.fragment))
             shaders = this.generateShaderBoilerplate(shaders,options);
 
-        //combine bindings based on shared input variable names
         if(!options.skipCombinedBindings) {
             if(shaders.compute && shaders.vertex) {
                 let combined = WGSLTranspiler.combineBindings(shaders.compute.code, shaders.vertex.code);
@@ -91,7 +90,6 @@ export class ShaderHelper {
         
         Object.assign(this.prototypes,shaders);
 
-        //create contexts
         if(shaders.compute) {
             this.compute = new ShaderContext(shaders.compute);
             this.compute.helper = this;
@@ -106,11 +104,10 @@ export class ShaderHelper {
             this.vertex = Object.assign(new ShaderContext({}),this.fragment,shaders.vertex);
         }
         
-        //bind group layouts
         if(this.compute) {
 
             this.compute.bindGroupLayout = this.device.createBindGroupLayout({
-                entries:this.createBindGroupFromEntries(this.compute, 'compute', options?.renderPass?.textures, options?.renderPass?.samplers)
+                entries:this.createBindGroupFromEntries(this.compute, 'compute', options?.renderPass?.textureSettings, options?.renderPass?.samplerSettings)
             });
 
             if(this.compute.bindGroupLayout) {
@@ -121,10 +118,11 @@ export class ShaderHelper {
             }
 
         }
+        
         if(this.vertex && this.fragment) {
 
             this.fragment.bindGroupLayout = this.device.createBindGroupLayout({
-                entries:this.createBindGroupFromEntries(this.fragment, 'fragment', options?.renderPass?.textures, options?.renderPass?.samplers)
+                entries:this.createBindGroupFromEntries(this.fragment, 'fragment', options?.renderPass?.textureSettings, options?.renderPass?.samplerSettings)
             });
             this.vertex.bindGroupLayout = this.fragment.bindGroupLayout;
             
@@ -137,7 +135,7 @@ export class ShaderHelper {
             }
         }
 
-        if (this.vertex && this.fragment) { // If both vertex and fragment shaders are provided
+        if (shaders.vertex && shaders.fragment) { // If both vertex and fragment shaders are provided
             
             this.vertex.shaderModule = this.device.createShaderModule({
                 code: shaders.vertex.code
@@ -367,7 +365,7 @@ fn frag_main(
                 ]
             }
         });
-
+        
         const renderPipelineDescriptor = { //https://developer.mozilla.org/en-US/docs/Web/API/GPUDevice/createRenderPipeline
             layout: this.fragment.pipelineLayout,
             vertex: {
@@ -392,13 +390,13 @@ fn frag_main(
                 view: view,
                 loadValue: { r: 0.0, g: 0.0, b: 0.0, a: 1.0 },
                 loadOp: "clear",
-                storeOp: "discard"
+                storeOp: "store"
             }],
             depthStencilAttachment: {
                 view: depthTexture.createView(),
                 depthLoadOp: "clear",
                 depthClearValue: 1.0,
-                depthStoreOp: "discard",
+                depthStoreOp: "store",
                 //stencilLoadOp: "clear",
                 //stencilClearValue: 0,
                 //stencilStoreOp: "store"
@@ -1074,7 +1072,7 @@ export class ShaderContext {
         bufferOnly,
         skipOutputDef,
         bindGroupNumber,
-        samplers: samplerSettings,
+        samplerSettings,
         viewport,
         scissorRect,
         blendConstant,

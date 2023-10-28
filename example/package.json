@@ -21,7 +21,7 @@
     "esbuild"
   ],
   "author": "",
-  "license": "AGPL-3.0-or-later",
+  "license": "LGPL-3.0-or-later",
   "nodemonConfig": {
     "env": {
       "NODEMON": true
