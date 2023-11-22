@@ -47,3 +47,5 @@ Combined shaders will have implicit access to each other's input buffers based o
 ### Contribute!
 
 Please help us generalize these systems better, WebGPU has a lot more nuance we haven't tapped yet and more test cases we can build transpilation abilities for. The point is to make it fun, but there don't seem to be any performance issues either so it could be of real use.
+
+Thanks Timofii Chernyshov for the help finding bugs.
