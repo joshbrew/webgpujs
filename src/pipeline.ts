@@ -1,5 +1,5 @@
 import { WGSLTranspiler } from "./transpiler";
-import {ShaderHelper} from './shader'
+import {ShaderHelper} from './shader'//'../example/shader_renderer_works'// //'../example/shader_renderer_works'
 import {ShaderOptions, RenderOptions, ComputeOptions, RenderPassSettings, ComputePassSettings, TranspiledShader} from './types'
 
 // pipeline, transpiler, shader.
@@ -199,7 +199,6 @@ export class WebGPUjs {
                 }
 
                 //combine shader bindings where variable names are shared.
-
                 if(options.getPrevShaderBindGroups) {
                     for(const key in block) {
                         let combined = WGSLTranspiler.combineBindings(block[key].code, options.getPrevShaderBindGroups);
@@ -208,7 +207,6 @@ export class WebGPUjs {
                     }
                 }
 
-          
                 const shaderPipeline = new ShaderHelper(block,options);
 
                 if(options.inputs || options.renderPass) {

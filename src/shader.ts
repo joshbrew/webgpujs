@@ -110,17 +110,15 @@ export class ShaderHelper {
             this.compute.bindGroupLayouts = this.bindGroupLayouts;
             this.compute.bindGroups = this.bindGroups;
             this.compute.bufferGroups = this.bufferGroups;
-
             const entries = this.compute.createBindGroupEntries(options?.renderPass?.textures);
             this.compute.setBindGroupLayout(entries);
         }
         if(this.fragment) {
-
-            this.fragment.bindGroups = this.bindGroups;
-            this.fragment.bindGroupLayouts = this.bindGroupLayouts;
             this.fragment.bufferGroups = this.bufferGroups;
-
             const entries = this.fragment.createBindGroupEntries(options?.renderPass?.textures);
+            this.fragment.bindGroupLayout = this.device.createBindGroupLayout({
+                entries: entries
+            });
             this.fragment.setBindGroupLayout(entries);
         }
 
@@ -149,6 +147,7 @@ export class ShaderHelper {
 
             this.compute.computePipeline = this.device.createComputePipeline(pipeline);
 
+
         } 
         if (this.vertex && this.fragment) { // If both vertex and fragment shaders are provided
             
@@ -174,7 +173,6 @@ export class ShaderHelper {
             );
 
         } 
-
         //eof
     }
 
@@ -268,10 +266,78 @@ fn frag_main(
     }
 
 
-    createRenderPipelineDescriptor = (
-        nVertexBuffers=1, 
-        swapChainFormat = navigator.gpu.getPreferredCanvasFormat()
+    // Extract all returned variables from the function string
+    createBindGroupFromEntries = (
+        shaderContext, 
+        shaderType, 
+        textureSettings={}, 
+        samplerSettings={}, 
+        visibility=GPUShaderStage.COMPUTE | GPUShaderStage.FRAGMENT
     ) => {
+        shaderContext.type = shaderType;
+        let bufferIncr = 0;
+        let uniformBufferIdx;
+
+        const entries = shaderContext.params.map((node, i) => {
+            let isReturned = (shaderContext.returnedVars === undefined || shaderContext.returnedVars?.includes(node.name));
+            if (node.isUniform) {
+                if (typeof uniformBufferIdx === 'undefined') {
+                    uniformBufferIdx = i;
+                    bufferIncr++;
+                    return {
+                        binding: uniformBufferIdx,
+                        visibility,
+                        buffer: {
+                            type: 'uniform'
+                        }
+                    };
+                }
+                return undefined;
+            } else if(node.isTexture) {
+                const buffer = {
+                    binding: bufferIncr,
+                    visibility,
+                    texture: textureSettings[node.name] ? textureSettings[node.name] : {}
+                };
+                bufferIncr++;
+                return buffer;
+            } else if(node.isSampler) {
+                const buffer = {
+                    binding: bufferIncr,
+                    visibility,
+                    sampler: samplerSettings[node.name] ? samplerSettings[node.name] : {}
+                };
+                bufferIncr++;
+                return buffer;
+            } else {
+                const buffer = {
+                    binding: bufferIncr,
+                    visibility,
+                    buffer: {
+                        type: (isReturned || node.isModified) ? 'storage' : 'read-only-storage'
+                    }
+                };
+                bufferIncr++;
+                return buffer;
+            }
+        }).filter(v => v);
+
+        if(shaderContext.defaultUniforms) {
+            entries.push({
+                binding:bufferIncr,
+                visibility,
+                buffer: {
+                    type: 'uniform'
+                }
+            })
+        }
+
+        shaderContext.bindGroupLayoutEntries = entries;
+        return entries;
+    }
+
+
+    createRenderPipelineDescriptor = (nVertexBuffers=1, swapChainFormat = navigator.gpu.getPreferredCanvasFormat()) => {
         if(!this.fragment || !this.vertex) throw new Error("No Fragment and Vertex ShaderContext defined");
 
         // 5: Create a GPUVertexBufferLayout and GPURenderPipelineDescriptor to provide a definition of our render pipline
@@ -327,13 +393,13 @@ fn frag_main(
                 view: view,
                 loadValue: { r: 0.0, g: 0.0, b: 0.0, a: 1.0 },
                 loadOp: "clear",
-                storeOp: "discard" //"store"
+                storeOp: "store"
             }],
             depthStencilAttachment: {
                 view: depthTexture.createView(),
                 depthLoadOp: "clear",
                 depthClearValue: 1.0,
-                depthStoreOp: "discard", //"store"
+                depthStoreOp: "store",
                 //stencilLoadOp: "clear",
                 //stencilClearValue: 0,
                 //stencilStoreOp: "store"
@@ -511,7 +577,7 @@ export class ShaderContext {
 
     builtInUniforms:any;
 
-    bufferGroups:any = {};
+    bufferGroups:any[] = [];
     bindGroups:GPUBindGroup[]=[];
     bindGroupLayouts:GPUBindGroupLayout[]=[];
     
@@ -626,7 +692,6 @@ export class ShaderContext {
         if(!bufferGroup) {
             bufferGroup = this.makeBufferGroup(bindGroupNumber)
         }
-
         if(vertices) {
             if(!isTypedArray(vertices)) {
                 if(!Array.isArray(vertices)) {
@@ -635,34 +700,23 @@ export class ShaderContext {
                         typeof vertices.position?.[0] === 'object' ? ShaderHelper.flattenArray(vertices.position) : vertices.position,
                         typeof vertices.normal?.[0] === 'object' ? ShaderHelper.flattenArray(vertices.normal) : vertices.normal,
                         typeof vertices.uv?.[0] === 'object' ? ShaderHelper.flattenArray(vertices.uv) : vertices.uv
-                    );
+                        );
+                    }
+                    else vertices = new Float32Array(typeof vertices === 'object' ? ShaderHelper.flattenArray(vertices) : vertices);
                 }
-                else vertices = new Float32Array(typeof vertices === 'object' ? ShaderHelper.flattenArray(vertices) : vertices);
-            }
-            
+
             if(bufferGroup.vertexBuffers?.[index]?.size !== vertices.byteLength) {
                 if(!bufferGroup.vertexBuffers) bufferGroup.vertexBuffers = [] as any[];
-                
                 const vertexBuffer = this.device.createBuffer({
                     size: vertices.byteLength,
                     usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC, 
                     //assume read/write
                 });
-
-                bufferGroup.vertexBuffers[index] = vertexBuffer; 
-
+                bufferGroup.vertexBuffers[index] = vertexBuffer;
             }
 
-            if(!bufferGroup.vertexCount) bufferGroup.vertexCount = vertices.length / 12;
-
             // Copy the vertex data over to the GPUBuffer using the writeBuffer() utility function
-            this.device.queue.writeBuffer(
-                bufferGroup.vertexBuffers[index], 
-                bufferOffset, 
-                vertices, 
-                dataOffset, 
-                vertices.length
-            );
+            this.device.queue.writeBuffer(bufferGroup.vertexBuffers[index], bufferOffset, vertices, dataOffset, vertices.length);
         }
     }
 
@@ -734,7 +788,6 @@ export class ShaderContext {
             if (inputTypes[inpIdx].type.startsWith('vec')) {
                 const vecSize = typeInfo.size / 4;
                 for (let j = 0; j < vecSize; j++) {
-                    //console.log(dataView,offset + j * 4)
                     if(inputTypes[inpIdx].type.includes('f')) dataView.setFloat32(offset + j * 4, input[j], true);
                     else dataView.setInt32(offset + j * 4, input[j], true);
                 }
@@ -862,7 +915,6 @@ export class ShaderContext {
         }={} as any, 
         ...inputs
     ) => {
-
         if(!bindGroupNumber) bindGroupNumber = this.bindGroupNumber;
 
         
@@ -889,8 +941,6 @@ export class ShaderContext {
                 }
                 return WGSLTypeSizes[type];
             });
-
-
         const inputBuffers = bufferGroup.inputBuffers;
         let uniformBuffer = bufferGroup.uniformBuffer;
         const outputBuffers = bufferGroup.outputBuffers;
@@ -914,7 +964,6 @@ export class ShaderContext {
             this.setBindGroupLayout(entries, bindGroupNumber); //we need to reset the sampler and texture data on the bindGroup
             newBindGroupBuffer = true; // make sure a new bindGroup is made with updated buffers
         }
-
 
         let uBufferPushed = false;
         let inpBuf_i = 0; let inpIdx = 0;
@@ -1115,7 +1164,6 @@ export class ShaderContext {
                 stagingBuffers[index], 0,
                 outputBuffer.size
             );
-
         });
 
         this.device.queue.submit([commandEncoder.finish()]);
@@ -1224,16 +1272,10 @@ export class ShaderContext {
 
                     this.bindGroups.forEach(withBindGroup);
                     
-                    if(!bufferGroup.vertexBuffers) {
-                        this.updateVBO({color:[0,0,0,0]}, 0, 0, 0, bindGroupNumber); //put a default in to force it to run a single pass
-                    }
-
-                    if(bufferGroup.vertexBuffers) {
-                        bufferGroup.vertexBuffers.forEach((vbo,i) => {
-                            renderPass.setVertexBuffer(i, vbo); 
-                        });
-                        
-                    }
+                    if(!bufferGroup.vertexBuffers) this.updateVBO({color:[1,1,1,1]}, 0); //put a default in to force it to run a single pass
+                    
+                    if(bufferGroup.vertexBuffers) 
+                        bufferGroup.vertexBuffers.forEach((vbo,i) => {renderPass.setVertexBuffer(i, vbo)});
                     
                     if(!useRenderBundle) {
 
@@ -1293,7 +1335,7 @@ export class ShaderContext {
             if(!skipOutputDef && bufferGroup.outputBuffers?.length > 0) {
                 return this.getOutputData(commandEncoder, bufferGroup.outputBuffers);
             } else {
-                commandEncoder.finish();
+                this.device.queue.submit([commandEncoder.finish()]);
                 return new Promise((r) => r(true));
             }
             
