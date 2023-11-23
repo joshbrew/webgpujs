@@ -447,11 +447,11 @@ export class WGSLTranspiler {
                 bindingIncr++;
             } else if (node.isStorageTexture) { 
 
-                let typ;
-                if(node.is3dStorageTexture) typ = 'texture_storage_3d<rgba8unorm,read_write>';
-                else if(node.is1dStorageTexture) typ = 'texture_storage_3d<rgba8unorm,read_write>';
-                else if (node.is2dStorageTextureArray) typ = 'texture_storage_2d_array<rgba8unorm,read_write>';
-                else typ = 'texture_storage_2d<rgba8unorm,read_write>';
+                let typ; let format = node.name.includes('8') ? 'rgba8unorm' : 'rgba16float'; //assume float16 (little faster than float32, less precise ofc)
+                if(node.is3dStorageTexture) typ = 'texture_storage_3d<'+format+',read_write>';
+                else if(node.is1dStorageTexture) typ = 'texture_storage_3d<'+format+',read_write>';
+                else if (node.is2dStorageTextureArray) typ = 'texture_storage_2d_array<'+format+',read_write>';
+                else typ = 'texture_storage_2d<'+format+',read_write>';
 
                 params.push(node);
                 code += `@group(${bindGroup}) @binding(${bindingIncr}) var ${node.name}: ${typ};\n\n`; //todo rgba8unorm is not only type
