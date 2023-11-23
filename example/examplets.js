@@ -261,14 +261,13 @@ setTimeout(() => {
         canvas,
         renderPass:{
             vertexCount:3,
-            vbos:[ //we can upload vbos, though not necessary in current example (think)
-                {
-                    //position
-                    color:new Array(3*4).fill(0)
-                    //
-                }
-            ],
-            //textures:{}
+            // vbos:[ //upload vbos, we'll also just fill a dummy vbo for you if none are provided
+            //     {
+            //         //position
+            //         color:new Array(3*4).fill(0)
+            //         //
+            //     }
+            // ],
         }
     }).then(pipeline => {
         console.timeEnd('createRenderPipeline and render triangle');
@@ -281,8 +280,8 @@ setTimeout(() => {
 
 
 
-//texture
-function cubeExampleVert(
+//texture https://webgpu.github.io/webgpu-samples/samples/texturedCube
+function cubeExampleVert( 
     modelViewProjectionMatrix='mat4x4<f32>'
 ) {
     position = modelViewProjectionMatrix * position;
@@ -291,7 +290,7 @@ function cubeExampleVert(
 }
 
 function cubeExampleFrag() {
-    return textureSample(exampleTexture, sampler, uv) * vertex;
+    return textureSample(image, sampler, uv) * vertex; 
 }
 
 const createImageExample = async () => {
@@ -300,8 +299,27 @@ const createImageExample = async () => {
     const textureData = {
         source:imageBitmap
     }
-}
 
+    WebGPUjs.createPipeline({
+        vertex:vertexExample,
+        fragment:fragmentExample
+    },{
+        canvas,
+        renderPass:{
+            vertexCount:3,
+            vbos:[ //we can upload vbos
+                cubeVertices
+            ],
+            textures:{
+                image:textureData //corresponds to the variable
+            }
+        }
+    }).then(pipeline => {
+        console.timeEnd('createRenderPipeline and render triangle');
+        console.log(pipeline);
+        //should have rendered
+    });
+}
 
 let ex3Id1 = setupWebGPUConverterUI(cubeExampleVert, document.getElementById('ex3'), 'vertex');
 let ex3Id2 = setupWebGPUConverterUI(cubeExampleFrag, document.getElementById('ex3'), 'fragment');

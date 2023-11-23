@@ -664,6 +664,7 @@ export class ShaderContext {
     updateTexture = (data:{
         source?:ImageBitmap|any,
         texture?:GPUTextureDescriptor,
+        
         width:number, 
         height:number, 
         bytesPerRow?:number,
@@ -1192,6 +1193,9 @@ export class ShaderContext {
                     renderPass = commandEncoder.beginRenderPass(this.renderPassDescriptor);
                 }
 
+                if(vertexCount) bufferGroup.vertexCount = vertexCount;
+                else if(!bufferGroup.vertexCount) bufferGroup.vertexCount = 1;
+
                 if(!useRenderBundle || !bufferGroup.renderBundle) { //drawIndirect?
                     renderPass.setPipeline(this.graphicsPipeline);
                     
@@ -1201,7 +1205,7 @@ export class ShaderContext {
 
                     this.bindGroups.forEach(withBindGroup);
                     
-                    if(!bufferGroup.vertexBuffers) this.updateVBO({color:[1,1,1,1]}, 0); //put a default in to force it to run a single pass
+                    if(!bufferGroup.vertexBuffers) this.updateVBO({color:new Array(bufferGroup.vertexCount*4).fill(0)}, 0); //put a default in to force it to run a single pass
                     
                     if(bufferGroup.vertexBuffers) 
                         bufferGroup.vertexBuffers.forEach((vbo,i) => {renderPass.setVertexBuffer(i, vbo)});
@@ -1227,9 +1231,6 @@ export class ShaderContext {
                         }
                     }
 
-
-                    if(vertexCount) bufferGroup.vertexCount = vertexCount;
-                    else if(!bufferGroup.vertexCount) bufferGroup.vertexCount = 1;
 
                     if(indexBuffer || bufferGroup.indexBuffer) {
                         if(indexBuffer) bufferGroup.indexBuffer = indexBuffer;

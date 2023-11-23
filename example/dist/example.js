@@ -2204,6 +2204,10 @@ fn frag_main(
             this.renderPassDescriptor.colorAttachments[0].view = view;
             renderPass = commandEncoder.beginRenderPass(this.renderPassDescriptor);
           }
+          if (vertexCount)
+            bufferGroup.vertexCount = vertexCount;
+          else if (!bufferGroup.vertexCount)
+            bufferGroup.vertexCount = 1;
           if (!useRenderBundle || !bufferGroup.renderBundle) {
             renderPass.setPipeline(this.graphicsPipeline);
             const withBindGroup = (group, i) => {
@@ -2211,7 +2215,7 @@ fn frag_main(
             };
             this.bindGroups.forEach(withBindGroup);
             if (!bufferGroup.vertexBuffers)
-              this.updateVBO({ color: [1, 1, 1, 1] }, 0);
+              this.updateVBO({ color: new Array(bufferGroup.vertexCount * 4).fill(0) }, 0);
             if (bufferGroup.vertexBuffers)
               bufferGroup.vertexBuffers.forEach((vbo, i) => {
                 renderPass.setVertexBuffer(i, vbo);
@@ -2241,10 +2245,6 @@ fn frag_main(
                 );
               }
             }
-            if (vertexCount)
-              bufferGroup.vertexCount = vertexCount;
-            else if (!bufferGroup.vertexCount)
-              bufferGroup.vertexCount = 1;
             if (indexBuffer || bufferGroup.indexBuffer) {
               if (indexBuffer)
                 bufferGroup.indexBuffer = indexBuffer;
@@ -3070,16 +3070,14 @@ fn frag_main(
     }, {
       canvas,
       renderPass: {
-        vertexCount: 3,
-        vbos: [
-          //we can upload vbos, though not necessary in current example (think)
-          {
-            //position
-            color: new Array(3 * 4).fill(0)
-            //
-          }
-        ]
-        //textures:{}
+        vertexCount: 3
+        // vbos:[ //upload vbos, we'll also just fill a dummy vbo for you if none are provided
+        //     {
+        //         //position
+        //         color:new Array(3*4).fill(0)
+        //         //
+        //     }
+        // ],
       }
     }).then((pipeline) => {
       console.timeEnd("createRenderPipeline and render triangle");
@@ -3092,7 +3090,7 @@ fn frag_main(
     vertex = 0.5 * (position + vec4f(1, 1, 1, 1));
   }
   function cubeExampleFrag() {
-    return textureSample(exampleTexture, sampler, uv) * vertex;
+    return textureSample(image, sampler, uv) * vertex;
   }
   var ex3Id1 = setupWebGPUConverterUI(cubeExampleVert, document.getElementById("ex3"), "vertex");
   var ex3Id2 = setupWebGPUConverterUI(cubeExampleFrag, document.getElementById("ex3"), "fragment");
