@@ -115,13 +115,27 @@
         isInput: false
         // or true, based on your requirements
       }));
+      let functionBody = funcStr.substring(funcStr.indexOf("{") + 1, funcStr.lastIndexOf("}"));
+      const textureCallTokens = (functionBody.match(/texture.*\w+\(([^)]+)\)/g) || []).flatMap((call) => {
+        let args = call.substring(call.indexOf("(") + 1, call.lastIndexOf(")"));
+        return this.splitIgnoringBrackets(args).map((arg) => {
+          arg = arg.trim();
+          if (!isNaN(arg) || /^.*(vec|mat).*\(/.test(arg)) {
+            return null;
+          }
+          return { token: arg, isInput: false };
+        }).filter((arg) => arg !== null);
+      });
+      params = params.concat(assignmentTokens);
       params = params.concat(builtInUniformsTokens);
-      return params.concat(assignmentTokens);
+      params = params.concat(textureCallTokens);
+      return params;
     }
     static excludedNames = {
       "color": true,
       "position": true,
       "uv": true,
+      "vertex": true,
       "normal": true,
       "pixel": true
     };
@@ -131,7 +145,11 @@
       let returnedVars = returnMatches ? returnMatches.map((match) => match.replace(/^[ \t]*return /, "").replace(";", "")) : void 0;
       returnedVars = this.flattenStrings(returnedVars);
       const functionBody = fstr.substring(fstr.indexOf("{"));
+      let checked = {};
       tokens.forEach(({ token, isInput }, i) => {
+        if (checked[token])
+          return;
+        checked[token] = true;
         let isReturned = returnedVars?.find((v) => {
           if (token.includes(v)) {
             if (shaderType !== "compute" && Object.keys(this.excludedNames).find((t) => token.includes(t)) || Object.keys(this.builtInUniforms).find((t) => token.includes(t))) {
@@ -193,7 +211,6 @@
             type: "variable",
             name: token,
             value: "unknown",
-            isUniform: true,
             isInput,
             isReturned,
             isModified
@@ -309,7 +326,7 @@
       returnedVars = this.flattenStrings(returnedVars);
       let uniformsStruct = "";
       let defaultsStruct = "";
-      let hasUniforms = 0;
+      let hasUniforms = false;
       let defaultUniforms;
       const params = [];
       let bindingIncr = 0;
@@ -337,10 +354,10 @@
             node.isDepthMSAATexture = true;
           node.isTexture = true;
           node.isDepthTexture = true;
-        } else if (new RegExp(`textureSampleCompare\\(.*,${escapeRegExp(node.name)}`).test(funcStr)) {
+        } else if (new RegExp(`textureSampleCompare\\(\\w+\\s*,\\s*${escapeRegExp(node.name)}`).test(funcStr)) {
           node.isComparisonSampler = true;
           node.isSampler = true;
-        } else if (new RegExp(`textureSample.*\\(.*,${escapeRegExp(node.name)},`).test(funcStr)) {
+        } else if (new RegExp(`textureSample\\(\\w+\\s*,\\s*${escapeRegExp(node.name)}`).test(funcStr)) {
           node.isSampler = true;
         } else if (new RegExp(`textureStore\\(${escapeRegExp(node.name)},`).test(funcStr)) {
           let nm = node.name.toLowerCase();
@@ -388,10 +405,16 @@
             code += variableTypes[node.name].binding;
           }
           bindingIncr++;
+          params.push(node);
           return;
         }
         if (node.isTexture) {
           params.push(node);
+          let format;
+          if (node.name.includes("_"))
+            format = node.name.split("_").pop();
+          else
+            format = "f32";
           let typ;
           if (node.isDepthTextureArray)
             typ = "texture_depth_2d_array";
@@ -404,17 +427,17 @@
           else if (node.isDepthTexture2d)
             typ = "texture_depth_2d";
           else if (node.isCubeArrayTexture)
-            typ = "texture_cube_array<f32>";
+            typ = "texture_cube_array<" + format + ">";
           else if (node.isCubeTexture)
-            typ = "texture_cube<f32>";
+            typ = "texture_cube<" + format + ">";
           else if (node.is3dTexture)
-            typ = "texture_3d<f32>";
+            typ = "texture_3d<" + format + ">";
           else if (node.is2dTextureArray)
-            typ = "texture_2d_array<f32>";
+            typ = "texture_2d_array<" + format + ">";
           else if (node.is1dTexture)
-            typ = "texture_1d<f32>";
+            typ = "texture_1d<" + format + ">";
           else if (node.is2dMSAATexture)
-            typ = "texture_multisampled_2d<f32>";
+            typ = "texture_multisampled_2d<" + format + ">";
           else
             typ = `texture_2d<f32>`;
           code += `@group(${bindGroup}) @binding(${bindingIncr}) var ${node.name}: ${typ};
@@ -422,15 +445,20 @@
 `;
           bindingIncr++;
         } else if (node.isStorageTexture) {
+          let format;
+          if (node.name.includes("_"))
+            format = node.name.split("_").pop();
+          else
+            format = "rgba16float";
           let typ;
           if (node.is3dStorageTexture)
-            typ = "texture_storage_3d<rgba8unorm,read_write>";
+            typ = "texture_storage_3d<" + format + ",write>";
           else if (node.is1dStorageTexture)
-            typ = "texture_storage_3d<rgba8unorm,read_write>";
+            typ = "texture_storage_3d<" + format + ",write>";
           else if (node.is2dStorageTextureArray)
-            typ = "texture_storage_2d_array<rgba8unorm,read_write>";
+            typ = "texture_storage_2d_array<" + format + ",write>";
           else
-            typ = "texture_storage_2d<rgba8unorm,read_write>";
+            typ = "texture_storage_2d<" + format + ",write>";
           params.push(node);
           code += `@group(${bindGroup}) @binding(${bindingIncr}) var ${node.name}: ${typ};
 
@@ -470,6 +498,8 @@
             }
             bindingIncr++;
           } else if (node.isUniform) {
+            if (shaderType === "vertex")
+              console.log(node);
             if (!hasUniforms) {
               uniformsStruct = `struct UniformsStruct {
 `;
@@ -502,7 +532,7 @@
 `;
         bindingIncr++;
       }
-      if (hasUniforms) {
+      if (hasUniforms !== false) {
         uniformsStruct += "};\n\n";
         code += uniformsStruct;
         code += `@group(${bindGroup}) @binding(${hasUniforms}) var<uniform> uniforms: UniformsStruct;
@@ -563,16 +593,16 @@
         let vboStrings = Array.from({ length: nVertexBuffers }, (_, i) => {
           if (shaderType === "vertex")
             vboInputStrings.push(
-              `@location(${4 * i}) color${i > 0 ? i + 1 : ""}In: vec4<f32>,
-    @location(${4 * i + 1}) vertex${i > 0 ? i + 1 : ""}In: vec3<f32>, 
-    @location(${4 * i + 2}) normal${i > 0 ? i + 1 : ""}In: vec3<f32>,
-    @location(${4 * i + 3}) uv${i > 0 ? i + 1 : ""}In: vec2<f32>${i === nVertexBuffers - 1 ? "" : ","}`
+              `@location(${4 * i}) vertex${i > 0 ? i + 1 : ""}In: vec4<f32>, 
+    @location(${4 * i + 1}) color${i > 0 ? i + 1 : ""}In: vec4<f32>,
+    @location(${4 * i + 2}) uv${i > 0 ? i + 1 : ""}In: vec2<f32>,
+    @location(${4 * i + 3}) normal${i > 0 ? i + 1 : ""}In: vec3<f32>${i === nVertexBuffers - 1 ? "" : ","}`
             );
           return `
-    @location(${4 * i}) color${i > 0 ? i + 1 : ""}: vec4<f32>,
-    @location(${4 * i + 1}) vertex${i > 0 ? i + 1 : ""}: vec3<f32>, 
-    @location(${4 * i + 2}) normal${i > 0 ? i + 1 : ""}: vec3<f32>,
-    @location(${4 * i + 3}) uv${i > 0 ? i + 1 : ""}: vec2<f32>${i === nVertexBuffers - 1 ? "" : ","}`;
+    @location(${4 * i}) vertex${i > 0 ? i + 1 : ""}: vec4<f32>,
+    @location(${4 * i + 1}) color${i > 0 ? i + 1 : ""}: vec4<f32>, 
+    @location(${4 * i + 2}) uv${i > 0 ? i + 1 : ""}: vec2<f32>,
+    @location(${4 * i + 3}) normal${i > 0 ? i + 1 : ""}: vec3<f32>${i === nVertexBuffers - 1 ? "" : ","}`;
         });
         vtxInps = `
     @builtin(position) position: vec4<f32>, //pixel location
@@ -1336,16 +1366,17 @@ for (var i: i32 = 0; i < ${size}; i = i + 1) {
           let vboInputStrings = [];
           let vboStrings = Array.from({ length: options.nVertexBuffers }, (_, i) => {
             vboInputStrings.push(
-              `@location(${4 * i}) color${i > 0 ? i + 1 : ""}In: vec4<f32>,
-    @location(${4 * i + 1}) vertex${i > 0 ? i + 1 : ""}In: vec3<f32>, 
-    @location(${4 * i + 2}) normal${i > 0 ? i + 1 : ""}In: vec3<f32>,
-    @location(${4 * i + 3}) uv${i > 0 ? i + 1 : ""}In: vec2<f32>${i === options.nVertexBuffers - 1 ? "" : ","}`
+              `@location(${4 * i}) vertex${i > 0 ? i + 1 : ""}In: vec4<f32>,
+    @location(${4 * i + 1}) color${i > 0 ? i + 1 : ""}In: vec4<f32>, 
+    @location(${4 * i + 3}) uv${i > 0 ? i + 1 : ""}In: vec2<f32>,
+    @location(${4 * i + 2}) normal${i > 0 ? i + 1 : ""}In: vec3<f32>${i === options.nVertexBuffers - 1 ? "" : ","}`
             );
             return `
-    @location(${4 * i}) color${i > 0 ? i + 1 : ""}: vec4<f32>,
-    @location(${4 * i + 1}) vertex${i > 0 ? i + 1 : ""}: vec3<f32>, 
-    @location(${4 * i + 2}) normal${i > 0 ? i + 1 : ""}: vec3<f32>,
-    @location(${4 * i + 3}) uv${i > 0 ? i + 1 : ""}: vec2<f32>${i === options.nVertexBuffers - 1 ? "" : ","}`;
+    
+    @location(${4 * i}) vertex${i > 0 ? i + 1 : ""}: vec4<f32>, 
+    @location(${4 * i + 1}) color${i > 0 ? i + 1 : ""}: vec4<f32>,
+    @location(${4 * i + 2}) uv${i > 0 ? i + 1 : ""}: vec2<f32>,
+    @location(${4 * i + 3}) normal${i > 0 ? i + 1 : ""}: vec3<f32>${i === options.nVertexBuffers - 1 ? "" : ","}`;
           });
           this.vertex = {
             code: `
@@ -1397,16 +1428,16 @@ fn frag_main(
         throw new Error("No Fragment and Vertex ShaderContext defined");
       const vertexBuffers = Array.from({ length: nVertexBuffers }, (_, i) => {
         return {
-          arrayStride: 48,
+          arrayStride: 52,
           attributes: [
             { format: "float32x4", offset: 0, shaderLocation: 4 * i },
-            //color
-            { format: "float32x3", offset: 16, shaderLocation: 4 * i + 1 },
-            //position
-            { format: "float32x3", offset: 28, shaderLocation: 4 * i + 2 },
-            //normal
-            { format: "float32x2", offset: 40, shaderLocation: 4 * i + 3 }
-            //uv
+            //vertex vec4
+            { format: "float32x4", offset: 16, shaderLocation: 4 * i + 1 },
+            //color vec4
+            { format: "float32x2", offset: 32, shaderLocation: 4 * i + 2 },
+            //uv vec2
+            { format: "float32x3", offset: 40, shaderLocation: 4 * i + 3 }
+            //normal vec3
           ]
         };
       });
@@ -1492,66 +1523,68 @@ fn frag_main(
       return result;
     }
     //we're just assuming that for the default frag/vertex we may want colors, positions, normals, or uvs. If you define your entire own shader pipeline then this can be ignored
-    static combineVertices(colors, positions, normals, uvs) {
+    static combineVertices(vertices, colors, uvs, normals) {
       let length = 0;
       if (colors)
         length = colors.length / 4;
-      if (positions?.length > length)
-        length = positions.length / 3;
-      if (normals?.length > length)
+      if (vertices?.length / 4 > length)
+        length = vertices.length / 4;
+      if (normals?.length / 3 > length)
         length = normals.length / 3;
-      if (uvs?.length > length)
+      if (uvs?.length / 2 > length)
         length = uvs.length / 2;
       const vertexCount = length;
-      const interleavedVertices = new Float32Array(vertexCount * 12);
+      const interleavedVertices = new Float32Array(vertexCount * 13);
       for (let i = 0; i < vertexCount; i++) {
-        const posOffset = i * 3;
+        const posOffset = i * 4;
         const colOffset = i * 4;
         const norOffset = i * 3;
         const uvOffset = i * 2;
-        const interleavedOffset = i * 12;
-        interleavedVertices[interleavedOffset] = colors ? colors[colOffset] || 0 : 0;
-        interleavedVertices[interleavedOffset + 1] = colors ? colors[colOffset + 1] || 0 : 0;
-        interleavedVertices[interleavedOffset + 2] = colors ? colors[colOffset + 2] || 0 : 0;
-        interleavedVertices[interleavedOffset + 3] = colors ? colors[colOffset + 3] || 0 : 0;
-        interleavedVertices[interleavedOffset + 4] = positions ? positions[posOffset] || 0 : 0;
-        interleavedVertices[interleavedOffset + 5] = positions ? positions[posOffset + 1] || 0 : 0;
-        interleavedVertices[interleavedOffset + 6] = positions ? positions[posOffset + 2] || 0 : 0;
-        interleavedVertices[interleavedOffset + 7] = normals ? normals[norOffset] || 0 : 0;
-        interleavedVertices[interleavedOffset + 8] = normals ? normals[norOffset + 1] || 0 : 0;
-        interleavedVertices[interleavedOffset + 9] = normals ? normals[norOffset + 2] || 0 : 0;
-        interleavedVertices[interleavedOffset + 10] = uvs ? uvs[uvOffset] || 0 : 0;
-        interleavedVertices[interleavedOffset + 11] = uvs ? uvs[uvOffset + 1] || 0 : 0;
+        const interleavedOffset = i * 13;
+        interleavedVertices[interleavedOffset] = vertices ? vertices[posOffset] || 0 : 0;
+        interleavedVertices[interleavedOffset + 1] = vertices ? vertices[posOffset + 1] || 0 : 0;
+        interleavedVertices[interleavedOffset + 2] = vertices ? vertices[posOffset + 2] || 0 : 0;
+        interleavedVertices[interleavedOffset + 3] = vertices ? vertices[posOffset + 3] || 0 : 0;
+        interleavedVertices[interleavedOffset + 4] = colors ? colors[colOffset] || 0 : 0;
+        interleavedVertices[interleavedOffset + 5] = colors ? colors[colOffset + 1] || 0 : 0;
+        interleavedVertices[interleavedOffset + 6] = colors ? colors[colOffset + 2] || 0 : 0;
+        interleavedVertices[interleavedOffset + 7] = colors ? colors[colOffset + 3] || 0 : 0;
+        interleavedVertices[interleavedOffset + 8] = uvs ? uvs[uvOffset] || 0 : 0;
+        interleavedVertices[interleavedOffset + 9] = uvs ? uvs[uvOffset + 1] || 0 : 0;
+        interleavedVertices[interleavedOffset + 10] = normals ? normals[norOffset] || 0 : 0;
+        interleavedVertices[interleavedOffset + 11] = normals ? normals[norOffset + 1] || 0 : 0;
+        interleavedVertices[interleavedOffset + 12] = normals ? normals[norOffset + 2] || 0 : 0;
       }
       return interleavedVertices;
     }
     static splitVertices(interleavedVertices) {
-      const vertexCount = interleavedVertices.length / 12;
+      const vertexCount = interleavedVertices.length / 13;
       const colors = new Float32Array(vertexCount * 4);
-      const positions = new Float32Array(vertexCount * 3);
+      const vertices = new Float32Array(vertexCount * 4);
       const normal = new Float32Array(vertexCount * 3);
       const uvs = new Float32Array(vertexCount * 2);
       for (let i = 0; i < vertexCount; i++) {
-        const offset = i * 12;
-        const posOffset = i * 3;
+        const posOffset = i * 4;
         const colOffset = i * 4;
         const norOffset = i * 3;
         const uvOffset = i * 2;
-        colors[colOffset] = interleavedVertices[offset];
-        colors[colOffset + 1] = interleavedVertices[offset + 1];
-        colors[colOffset + 2] = interleavedVertices[offset + 2];
-        colors[colOffset + 3] = interleavedVertices[offset + 3];
-        positions[posOffset] = interleavedVertices[offset + 4];
-        positions[posOffset + 1] = interleavedVertices[offset + 5];
-        positions[posOffset + 2] = interleavedVertices[offset + 6];
-        normal[norOffset] = interleavedVertices[offset + 7];
-        normal[norOffset + 1] = interleavedVertices[offset + 8];
-        normal[norOffset + 2] = interleavedVertices[offset + 9];
-        uvs[uvOffset] = interleavedVertices[offset + 10];
-        uvs[uvOffset + 1] = interleavedVertices[offset + 11];
+        const offset = i * 13;
+        vertices[posOffset] = interleavedVertices[offset];
+        vertices[posOffset + 1] = interleavedVertices[offset + 1];
+        vertices[posOffset + 2] = interleavedVertices[offset + 2];
+        vertices[posOffset + 3] = interleavedVertices[offset + 3];
+        colors[colOffset] = interleavedVertices[offset + 4];
+        colors[colOffset + 1] = interleavedVertices[offset + 5];
+        colors[colOffset + 2] = interleavedVertices[offset + 7];
+        colors[colOffset + 3] = interleavedVertices[offset + 8];
+        uvs[uvOffset] = interleavedVertices[offset + 8];
+        uvs[uvOffset + 1] = interleavedVertices[offset + 9];
+        normal[norOffset] = interleavedVertices[offset + 10];
+        normal[norOffset + 1] = interleavedVertices[offset + 11];
+        normal[norOffset + 2] = interleavedVertices[offset + 12];
       }
       return {
-        positions,
+        vertices,
         colors,
         normal,
         uvs
@@ -1693,10 +1726,10 @@ fn frag_main(
         if (!isTypedArray(vertices)) {
           if (!Array.isArray(vertices)) {
             vertices = ShaderHelper.combineVertices(
+              typeof vertices.vertex?.[0] === "object" ? ShaderHelper.flattenArray(vertices.vertex) : vertices.vertex,
               typeof vertices.color?.[0] === "object" ? ShaderHelper.flattenArray(vertices.color) : vertices.color,
-              typeof vertices.position?.[0] === "object" ? ShaderHelper.flattenArray(vertices.position) : vertices.position,
-              typeof vertices.normal?.[0] === "object" ? ShaderHelper.flattenArray(vertices.normal) : vertices.normal,
-              typeof vertices.uv?.[0] === "object" ? ShaderHelper.flattenArray(vertices.uv) : vertices.uv
+              typeof vertices.uv?.[0] === "object" ? ShaderHelper.flattenArray(vertices.uv) : vertices.uv,
+              typeof vertices.normal?.[0] === "object" ? ShaderHelper.flattenArray(vertices.normal) : vertices.normal
             );
           } else
             vertices = new Float32Array(typeof vertices === "object" ? ShaderHelper.flattenArray(vertices) : vertices);
@@ -1704,6 +1737,7 @@ fn frag_main(
         if (bufferGroup.vertexBuffers?.[index]?.size !== vertices.byteLength) {
           if (!bufferGroup.vertexBuffers)
             bufferGroup.vertexBuffers = [];
+          bufferGroup.vertexCount = vertices.length / 13;
           const vertexBuffer = this.device.createBuffer({
             size: vertices.byteLength,
             usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC
@@ -1752,14 +1786,14 @@ fn frag_main(
           bufferGroup.textures[name],
           [texture.width, texture.height]
         );
-      const sampler = this.device.createSampler(samplerSettings ? samplerSettings : {
+      const sampler2 = this.device.createSampler(samplerSettings ? samplerSettings : {
         magFilter: "linear",
         minFilter: "linear",
         mipmapFilter: "linear",
         addressModeU: "repeat",
         addressModeV: "repeat"
       });
-      bufferGroup.samplers[name] = sampler;
+      bufferGroup.samplers[name] = sampler2;
       return true;
     };
     setUBOposition = (dataView, inputTypes, typeInfo, offset, input, inpIdx) => {
@@ -2428,6 +2462,479 @@ fn frag_main(
     };
   };
 
+  // exampleCube.js
+  var cubeVertices = new Float32Array([
+    // float4 vertex, float4 color, float2 uv, float3 normal
+    1,
+    -1,
+    1,
+    1,
+    1,
+    0,
+    1,
+    1,
+    0,
+    1,
+    0,
+    0,
+    0,
+    -1,
+    -1,
+    1,
+    1,
+    0,
+    0,
+    1,
+    1,
+    1,
+    1,
+    0,
+    0,
+    0,
+    -1,
+    -1,
+    -1,
+    1,
+    0,
+    0,
+    0,
+    1,
+    1,
+    0,
+    0,
+    0,
+    0,
+    1,
+    -1,
+    -1,
+    1,
+    1,
+    0,
+    0,
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    1,
+    -1,
+    1,
+    1,
+    1,
+    0,
+    1,
+    1,
+    0,
+    1,
+    0,
+    0,
+    0,
+    -1,
+    -1,
+    -1,
+    1,
+    0,
+    0,
+    0,
+    1,
+    1,
+    0,
+    0,
+    0,
+    0,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    0,
+    1,
+    0,
+    0,
+    0,
+    1,
+    -1,
+    1,
+    1,
+    1,
+    0,
+    1,
+    1,
+    1,
+    1,
+    0,
+    0,
+    0,
+    1,
+    -1,
+    -1,
+    1,
+    1,
+    0,
+    0,
+    1,
+    1,
+    0,
+    0,
+    0,
+    0,
+    1,
+    1,
+    -1,
+    1,
+    1,
+    1,
+    0,
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    0,
+    1,
+    0,
+    0,
+    0,
+    1,
+    -1,
+    -1,
+    1,
+    1,
+    0,
+    0,
+    1,
+    1,
+    0,
+    0,
+    0,
+    0,
+    -1,
+    1,
+    1,
+    1,
+    0,
+    1,
+    1,
+    1,
+    0,
+    1,
+    0,
+    0,
+    0,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    0,
+    0,
+    0,
+    1,
+    1,
+    -1,
+    1,
+    1,
+    1,
+    0,
+    1,
+    1,
+    0,
+    0,
+    0,
+    0,
+    -1,
+    1,
+    -1,
+    1,
+    0,
+    1,
+    0,
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    -1,
+    1,
+    1,
+    1,
+    0,
+    1,
+    1,
+    1,
+    0,
+    1,
+    0,
+    0,
+    0,
+    1,
+    1,
+    -1,
+    1,
+    1,
+    1,
+    0,
+    1,
+    1,
+    0,
+    0,
+    0,
+    0,
+    -1,
+    -1,
+    1,
+    1,
+    0,
+    0,
+    1,
+    1,
+    0,
+    1,
+    0,
+    0,
+    0,
+    -1,
+    1,
+    1,
+    1,
+    0,
+    1,
+    1,
+    1,
+    1,
+    1,
+    0,
+    0,
+    0,
+    -1,
+    1,
+    -1,
+    1,
+    0,
+    1,
+    0,
+    1,
+    1,
+    0,
+    0,
+    0,
+    0,
+    -1,
+    -1,
+    -1,
+    1,
+    0,
+    0,
+    0,
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    -1,
+    -1,
+    1,
+    1,
+    0,
+    0,
+    1,
+    1,
+    0,
+    1,
+    0,
+    0,
+    0,
+    -1,
+    1,
+    -1,
+    1,
+    0,
+    1,
+    0,
+    1,
+    1,
+    0,
+    0,
+    0,
+    0,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    0,
+    1,
+    0,
+    0,
+    0,
+    -1,
+    1,
+    1,
+    1,
+    0,
+    1,
+    1,
+    1,
+    1,
+    1,
+    0,
+    0,
+    0,
+    -1,
+    -1,
+    1,
+    1,
+    0,
+    0,
+    1,
+    1,
+    1,
+    0,
+    0,
+    0,
+    0,
+    -1,
+    -1,
+    1,
+    1,
+    0,
+    0,
+    1,
+    1,
+    1,
+    0,
+    0,
+    0,
+    0,
+    1,
+    -1,
+    1,
+    1,
+    1,
+    0,
+    1,
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    0,
+    1,
+    0,
+    0,
+    0,
+    1,
+    -1,
+    -1,
+    1,
+    1,
+    0,
+    0,
+    1,
+    0,
+    1,
+    0,
+    0,
+    0,
+    -1,
+    -1,
+    -1,
+    1,
+    0,
+    0,
+    0,
+    1,
+    1,
+    1,
+    0,
+    0,
+    0,
+    -1,
+    1,
+    -1,
+    1,
+    0,
+    1,
+    0,
+    1,
+    1,
+    0,
+    0,
+    0,
+    0,
+    1,
+    1,
+    -1,
+    1,
+    1,
+    1,
+    0,
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    1,
+    -1,
+    -1,
+    1,
+    1,
+    0,
+    0,
+    1,
+    0,
+    1,
+    0,
+    0,
+    0,
+    -1,
+    1,
+    -1,
+    1,
+    0,
+    1,
+    0,
+    1,
+    1,
+    0,
+    0,
+    0,
+    0
+  ]);
+
   // examplets.js
   function dft(inputData = new Float32Array(), outputData = [], outp3 = mat2x2(vec2(1, 1), vec2(1, 1)), outp4 = "i32", outp5 = vec3(1, 2, 3), outp6 = [vec2(1, 1)]) {
     function add(a = vec2f(0, 0), b2 = vec2f(0, 0)) {
@@ -2469,7 +2976,7 @@ fn frag_main(
     return [inputData, outputData];
   }
   function setupWebGPUConverterUI(fn, target = document.body, shaderType) {
-    let webGPUCode = WGSLTranspiler.convertToWebGPU(dft, shaderType);
+    let webGPUCode = WGSLTranspiler.convertToWebGPU(fn, shaderType);
     const uniqueID = Date.now();
     const beforeTextAreaID = `t2_${uniqueID}`;
     const afterTextAreaID = `t1_${uniqueID}`;
@@ -2492,13 +2999,12 @@ fn frag_main(
       webGPUCode = WGSLTranspiler.convertToWebGPU(fstr, shaderType);
       document.getElementById(afterTextAreaID).value = webGPUCode.code;
     }
-    parseFunction();
     document.getElementById(beforeTextAreaID).oninput = () => {
       parseFunction();
     };
     return uniqueID;
   }
-  var ex1Id = setupWebGPUConverterUI(dft, document.getElementById("ex1"));
+  var ex1Id = setupWebGPUConverterUI(dft, document.getElementById("ex1"), "compute");
   setTimeout(() => {
     console.time("createComputePipeline");
     WebGPUjs.createPipeline(dft).then((pipeline) => {
@@ -2582,4 +3088,14 @@ fn frag_main(
       console.log(pipeline);
     });
   }, 500);
+  function cubeExampleVert(modelViewProjectionMatrix = "mat4x4<f32>") {
+    position = modelViewProjectionMatrix * position;
+    uv = uvIn;
+    vertex = 0.5 * (position + vec4f(1, 1, 1, 1));
+  }
+  function cubeExampleFrag() {
+    return textureSample(exampleTexture, sampler, uv) * vertex;
+  }
+  var ex3Id1 = setupWebGPUConverterUI(cubeExampleVert, document.getElementById("ex3"), "vertex");
+  var ex3Id2 = setupWebGPUConverterUI(cubeExampleFrag, document.getElementById("ex3"), "fragment");
 })();

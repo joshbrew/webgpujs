@@ -1,6 +1,8 @@
 import { WebGPUjs } from "../src/pipeline";
 import { WGSLTranspiler } from "../src/transpiler";
 
+import { cubeVertices } from "./exampleCube";
+
 
 function dft(
     inputData = new Float32Array(), 
@@ -73,7 +75,7 @@ function dft(
 //explicit return statements will define only that variable as an output (i.e. a mutable read_write buffer)
 
 function setupWebGPUConverterUI(fn, target=document.body, shaderType) {
-    let webGPUCode = WGSLTranspiler.convertToWebGPU(dft, shaderType);
+    let webGPUCode = WGSLTranspiler.convertToWebGPU(fn, shaderType);
     const uniqueID = Date.now();
 
     const beforeTextAreaID = `t2_${uniqueID}`;
@@ -101,8 +103,6 @@ function setupWebGPUConverterUI(fn, target=document.body, shaderType) {
         document.getElementById(afterTextAreaID).value = webGPUCode.code;
     }
 
-    // Initial population of the 'after' textarea
-    parseFunction();
 
     document.getElementById(beforeTextAreaID).oninput = () => {
         parseFunction();
@@ -111,7 +111,7 @@ function setupWebGPUConverterUI(fn, target=document.body, shaderType) {
     return uniqueID;
 }
 
-let ex1Id = setupWebGPUConverterUI(dft, document.getElementById('ex1'));
+let ex1Id = setupWebGPUConverterUI(dft, document.getElementById('ex1'), 'compute');
 
 setTimeout(() => {     
 console.time('createComputePipeline');
@@ -159,66 +159,66 @@ console.time('createComputePipeline');
 }, 1000);
 
 
-const dftReference = `
+// const dftReference = `
                 
-struct InputData {
-    values : array<f32>
-}
+// struct InputData {
+//     values : array<f32>
+// }
 
-struct OutputData {
-    values: array<f32>
-}
+// struct OutputData {
+//     values: array<f32>
+// }
 
-@group(0) @binding(0)
-var<storage, read> inputData: InputData;
+// @group(0) @binding(0)
+// var<storage, read> inputData: InputData;
 
-@group(0) @binding(1)
-var<storage, read_write> outputData: OutputData;
+// @group(0) @binding(1)
+// var<storage, read_write> outputData: OutputData;
 
-@compute @workgroup_size(256)
-fn main(
-    @builtin(global_invocation_id) threadId: vec3<u32>
-) {
-    let N = arrayLength(&inputData.values);
-    let k = threadId.x;
-    var sum = vec2<f32>(0.0, 0.0);
+// @compute @workgroup_size(256)
+// fn main(
+//     @builtin(global_invocation_id) threadId: vec3<u32>
+// ) {
+//     let N = arrayLength(&inputData.values);
+//     let k = threadId.x;
+//     var sum = vec2<f32>(0.0, 0.0);
 
-    for (var n = 0u; n < N; n = n + 1u) {
-        let phase = 2.0 * 3.14159265359 * f32(k) * f32(n) / f32(N);
-        sum = sum + vec2<f32>(
-            inputData.values[n] * cos(phase),
-            -inputData.values[n] * sin(phase)
-        );
-    }
+//     for (var n = 0u; n < N; n = n + 1u) {
+//         let phase = 2.0 * 3.14159265359 * f32(k) * f32(n) / f32(N);
+//         sum = sum + vec2<f32>(
+//             inputData.values[n] * cos(phase),
+//             -inputData.values[n] * sin(phase)
+//         );
+//     }
 
-    let outputIndex = k * 2;
-    if (outputIndex + 1 < arrayLength(&outputData.values)) {
-        outputData.values[outputIndex] = sum.x;
-        outputData.values[outputIndex + 1] = sum.y;
-    }
-}
+//     let outputIndex = k * 2;
+//     if (outputIndex + 1 < arrayLength(&outputData.values)) {
+//         outputData.values[outputIndex] = sum.x;
+//         outputData.values[outputIndex + 1] = sum.y;
+//     }
+// }
 
-`
-
-
+// `
 
 
 
-function matrixMultiply(
-    matrixA = [vec4(1,0,0,0), vec4(0,1,0,0), vec4(0,0,1,0), vec4(0,0,0,1)],
-    matrixB = [vec4(1,0,0,0), vec4(0,1,0,0), vec4(0,0,1,0), vec4(0,0,0,1)]
-) {
-    const row = threadId.x;
-    const col = threadId.y;
+
+
+// function matrixMultiply(
+//     matrixA = [vec4(1,0,0,0), vec4(0,1,0,0), vec4(0,0,1,0), vec4(0,0,0,1)],
+//     matrixB = [vec4(1,0,0,0), vec4(0,1,0,0), vec4(0,0,1,0), vec4(0,0,0,1)]
+// ) {
+//     const row = threadId.x;
+//     const col = threadId.y;
     
-    let sum = 0.0;
-    for (let i = 0; i < matrixA.length; i++) {
-        sum += matrixA[row][i] * matrixB[i][col];
-    }
-    matrixA[row *  + col] = sum;
+//     let sum = 0.0;
+//     for (let i = 0; i < matrixA.length; i++) {
+//         sum += matrixA[row][i] * matrixB[i][col];
+//     }
+//     matrixA[row *  + col] = sum;
 
-    return matrixA
-}
+//     return matrixA
+// }
 
 
 
@@ -277,3 +277,26 @@ setTimeout(() => {
     });
     
 },500)
+
+
+
+
+//texture
+function cubeExampleVert(
+    modelViewProjectionMatrix='mat4x4<f32>'
+) {
+    position = modelViewProjectionMatrix * position;
+    uv = uvIn;
+    vertex = 0.5 * (position + vec4f(1,1,1,1))
+}
+
+function cubeExampleFrag() {
+    return textureSample(exampleTexture, sampler, uv) * vertex;
+}
+
+
+let ex3Id1 = setupWebGPUConverterUI(cubeExampleVert, document.getElementById('ex3'), 'vertex');
+let ex3Id2 = setupWebGPUConverterUI(cubeExampleFrag, document.getElementById('ex3'), 'fragment');
+
+//load texture data as unint8array or we can specify with _rgba8unorm etc
+//set cubeVertices as the vbo

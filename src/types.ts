@@ -48,10 +48,10 @@ export type RenderPassSettings = {
     firstIndex?:number,
     useRenderBundle?:any,
     vbos?:(Float32Array|{
-        color?:number[]|(number[][]),
-        position?:number[]|(number[][]),
-        normal?:number[]|(number[][]),
-        uv?:number[]|(number[][])
+        vertex?:number[]|(number[][]), //vec4f
+        color?:number[]|(number[][]), //vec4f
+        uv?:number[]|(number[][]),      //vec2f
+        normal?:number[]|(number[][]) //vec3f
     })[],
     outputVBOs?:boolean,
     textures?:{

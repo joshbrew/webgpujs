@@ -205,16 +205,17 @@ export class ShaderHelper {
                 let vboStrings = Array.from({length: options.nVertexBuffers}, (_, i) => {
                     vboInputStrings.push(
                 
-`@location(${4*i}) color${i>0 ? i+1 : ''}In: vec4<f32>,
-    @location(${4*i+1}) vertex${i>0 ? i+1 : ''}In: vec3<f32>, 
-    @location(${4*i+2}) normal${i>0 ? i+1 : ''}In: vec3<f32>,
-    @location(${4*i+3}) uv${i>0 ? i+1 : ''}In: vec2<f32>${i===options.nVertexBuffers-1 ? '' : ','}`
+`@location(${4*i}) vertex${i>0 ? i+1 : ''}In: vec4<f32>,
+    @location(${4*i+1}) color${i>0 ? i+1 : ''}In: vec4<f32>, 
+    @location(${4*i+3}) uv${i>0 ? i+1 : ''}In: vec2<f32>,
+    @location(${4*i+2}) normal${i>0 ? i+1 : ''}In: vec3<f32>${i===options.nVertexBuffers-1 ? '' : ','}`
                     );
                 return `
-    @location(${4*i}) color${i>0 ? i+1 : ''}: vec4<f32>,
-    @location(${4*i+1}) vertex${i>0 ? i+1 : ''}: vec3<f32>, 
-    @location(${4*i+2}) normal${i>0 ? i+1 : ''}: vec3<f32>,
-    @location(${4*i+3}) uv${i>0 ? i+1 : ''}: vec2<f32>${i===options.nVertexBuffers-1 ? '' : ','}`;
+    
+    @location(${4*i}) vertex${i>0 ? i+1 : ''}: vec4<f32>, 
+    @location(${4*i+1}) color${i>0 ? i+1 : ''}: vec4<f32>,
+    @location(${4*i+2}) uv${i>0 ? i+1 : ''}: vec2<f32>,
+    @location(${4*i+3}) normal${i>0 ? i+1 : ''}: vec3<f32>${i===options.nVertexBuffers-1 ? '' : ','}`;
             });
 
                 this.vertex = {
@@ -270,12 +271,12 @@ fn frag_main(
         // 5: Create a GPUVertexBufferLayout and GPURenderPipelineDescriptor to provide a definition of our render pipline
         const vertexBuffers = Array.from({length:nVertexBuffers}, (_,i) => {
             return {
-                arrayStride: 48,
+                arrayStride: 52,
                 attributes: [
-                    {format: "float32x4", offset: 0, shaderLocation:  4*i},     //color
-                    {format: "float32x3", offset: 16, shaderLocation: 4*i+1},   //position
-                    {format: "float32x3", offset: 28, shaderLocation: 4*i+2},   //normal
-                    {format: "float32x2", offset: 40, shaderLocation: 4*i+3}    //uv
+                    {format: "float32x4", offset: 0, shaderLocation:  4*i},   //vertex vec4
+                    {format: "float32x4", offset: 16, shaderLocation: 4*i+1},     //color vec4
+                    {format: "float32x2", offset: 32, shaderLocation: 4*i+2},    //uv vec2
+                    {format: "float32x3", offset: 40, shaderLocation: 4*i+3}   //normal vec3
                 ]
             }
         });
@@ -387,78 +388,83 @@ fn frag_main(
 
     //we're just assuming that for the default frag/vertex we may want colors, positions, normals, or uvs. If you define your entire own shader pipeline then this can be ignored
     static combineVertices(
+        vertices, //4d vec array
         colors,    //4d vec array
-        positions, //3d vec array
-        normals,   //3d vec array
-        uvs        //2d vec array
+        uvs,        //2d vec array
+        normals   //3d vec array
     ) {
         let length = 0;
         if(colors) length = colors.length / 4; 
-        if (positions?.length > length) length = positions.length / 3;
-        if (normals?.length > length) length = normals.length / 3;
-        if (uvs?.length > length) length = uvs.length / 2;
-        const vertexCount = length; // Assuming each position has 3 components
-        const interleavedVertices = new Float32Array(vertexCount * 12); // 12 values per vertex
+        if (vertices?.length/4 > length) length = vertices.length / 4;
+        if (normals?.length/3 > length) length = normals.length / 3;
+        if (uvs?.length/2 > length) length = uvs.length / 2;
+        const vertexCount = length;
+        const interleavedVertices = new Float32Array(vertexCount * 13); // 13 values per vertex (we are just assuming you might want all 4 per object)
 
         for (let i = 0; i < vertexCount; i++) {
-            const posOffset = i * 3;
+            const posOffset = i * 4;
             const colOffset = i * 4;
             const norOffset = i * 3;
             const uvOffset = i * 2;
-            const interleavedOffset = i * 12;
+            const interleavedOffset = i * 13;
 
-            interleavedVertices[interleavedOffset] = colors ? colors[colOffset] || 0 : 0;
-            interleavedVertices[interleavedOffset + 1] = colors ? colors[colOffset + 1] || 0 : 0;
-            interleavedVertices[interleavedOffset + 2] = colors ? colors[colOffset + 2] || 0 : 0;
-            interleavedVertices[interleavedOffset + 3] = colors ? colors[colOffset + 3] || 0 : 0;
-            interleavedVertices[interleavedOffset + 4] = positions ? positions[posOffset] || 0 : 0;
-            interleavedVertices[interleavedOffset + 5] = positions ? positions[posOffset + 1] || 0 : 0;
-            interleavedVertices[interleavedOffset + 6] = positions ? positions[posOffset + 2] || 0 : 0;
-            interleavedVertices[interleavedOffset + 7] = normals ? normals[norOffset] || 0 : 0;
-            interleavedVertices[interleavedOffset + 8] = normals ? normals[norOffset + 1] || 0 : 0;
-            interleavedVertices[interleavedOffset + 9] = normals ? normals[norOffset + 2] || 0 : 0;
-            interleavedVertices[interleavedOffset + 10] = uvs ? uvs[uvOffset] || 0 : 0;
-            interleavedVertices[interleavedOffset + 11] = uvs ? uvs[uvOffset + 1] || 0 : 0;
+            interleavedVertices[interleavedOffset] =  vertices ? vertices[posOffset] || 0 : 0;
+            interleavedVertices[interleavedOffset + 1] =  vertices ? vertices[posOffset + 1] || 0 : 0;
+            interleavedVertices[interleavedOffset + 2] =  vertices ? vertices[posOffset + 2] || 0 : 0;
+            interleavedVertices[interleavedOffset + 3] =  vertices ? vertices[posOffset + 3] || 0 : 0;
+
+            interleavedVertices[interleavedOffset + 4] =      colors ? colors[colOffset] || 0 : 0;
+            interleavedVertices[interleavedOffset + 5] =  colors ? colors[colOffset + 1] || 0 : 0;
+            interleavedVertices[interleavedOffset + 6] =  colors ? colors[colOffset + 2] || 0 : 0;
+            interleavedVertices[interleavedOffset + 7] =  colors ? colors[colOffset + 3] || 0 : 0;
+
+            interleavedVertices[interleavedOffset + 8] = uvs ? uvs[uvOffset] || 0 : 0;
+            interleavedVertices[interleavedOffset + 9] = uvs ? uvs[uvOffset + 1] || 0 : 0;
+
+            interleavedVertices[interleavedOffset + 10] =  normals ? normals[norOffset] || 0 : 0;
+            interleavedVertices[interleavedOffset + 11] =  normals ? normals[norOffset + 1] || 0 : 0;
+            interleavedVertices[interleavedOffset + 12] = normals ? normals[norOffset + 2] || 0 : 0;
         }
 
         return interleavedVertices;
     }
 
     static splitVertices(interleavedVertices) {
-        const vertexCount = interleavedVertices.length / 12;  // Because 12 values per vertex
+        const vertexCount = interleavedVertices.length / 13;  // 13 values per vertex (we are just assuming you might want all 4 per object)
 
         // Pre-allocating space
         const colors = new Float32Array(vertexCount * 4);
-        const positions = new Float32Array(vertexCount * 3);
+        const vertices = new Float32Array(vertexCount * 4);
         const normal = new Float32Array(vertexCount * 3);
         const uvs = new Float32Array(vertexCount * 2);
 
         for (let i = 0; i < vertexCount; i++) {
-            const offset = i * 12;
-            const posOffset = i * 3;
+            const posOffset = i * 4;
             const colOffset = i * 4;
             const norOffset = i * 3;
             const uvOffset = i * 2;
+            const offset = i * 13;
 
-            colors[colOffset] = interleavedVertices[offset];
-            colors[colOffset + 1] = interleavedVertices[offset + 1];
-            colors[colOffset + 2] = interleavedVertices[offset + 2];
-            colors[colOffset + 3] = interleavedVertices[offset + 3];
+            vertices[posOffset] = interleavedVertices[offset];
+            vertices[posOffset + 1] = interleavedVertices[offset + 1];
+            vertices[posOffset + 2] = interleavedVertices[offset + 2];
+            vertices[posOffset + 3] = interleavedVertices[offset + 3];
 
-            positions[posOffset] = interleavedVertices[offset + 4];
-            positions[posOffset + 1] = interleavedVertices[offset + 5];
-            positions[posOffset + 2] = interleavedVertices[offset + 6];
+            colors[colOffset] = interleavedVertices[offset + 4];
+            colors[colOffset + 1] = interleavedVertices[offset + 5];
+            colors[colOffset + 2] = interleavedVertices[offset + 7];
+            colors[colOffset + 3] = interleavedVertices[offset + 8];
 
-            normal[norOffset] = interleavedVertices[offset + 7];
-            normal[norOffset + 1] = interleavedVertices[offset + 8];
-            normal[norOffset + 2] = interleavedVertices[offset + 9];
+            uvs[uvOffset] = interleavedVertices[offset + 8];
+            uvs[uvOffset + 1] = interleavedVertices[offset + 9];
 
-            uvs[uvOffset] = interleavedVertices[offset + 10];
-            uvs[uvOffset + 1] = interleavedVertices[offset + 11];
+            normal[norOffset] = interleavedVertices[offset + 10];
+            normal[norOffset + 1] = interleavedVertices[offset + 11];
+            normal[norOffset + 2] = interleavedVertices[offset + 12];
         }
 
         return {
-            positions,
+            vertices,
             colors,
             normal,
             uvs
@@ -628,17 +634,20 @@ export class ShaderContext {
             if(!isTypedArray(vertices)) {
                 if(!Array.isArray(vertices)) {
                     vertices = ShaderHelper.combineVertices(
+                        typeof vertices.vertex?.[0] === 'object' ? ShaderHelper.flattenArray(vertices.vertex) : vertices.vertex,
                         typeof vertices.color?.[0] === 'object' ? ShaderHelper.flattenArray(vertices.color) : vertices.color,
-                        typeof vertices.position?.[0] === 'object' ? ShaderHelper.flattenArray(vertices.position) : vertices.position,
+                        typeof vertices.uv?.[0] === 'object' ? ShaderHelper.flattenArray(vertices.uv) : vertices.uv,
                         typeof vertices.normal?.[0] === 'object' ? ShaderHelper.flattenArray(vertices.normal) : vertices.normal,
-                        typeof vertices.uv?.[0] === 'object' ? ShaderHelper.flattenArray(vertices.uv) : vertices.uv
-                        );
-                    }
-                    else vertices = new Float32Array(typeof vertices === 'object' ? ShaderHelper.flattenArray(vertices) : vertices);
+                    );
                 }
+                else vertices = new Float32Array(typeof vertices === 'object' ? ShaderHelper.flattenArray(vertices) : vertices);
+            }
 
             if(bufferGroup.vertexBuffers?.[index]?.size !== vertices.byteLength) {
                 if(!bufferGroup.vertexBuffers) bufferGroup.vertexBuffers = [] as any[];
+                
+                bufferGroup.vertexCount = vertices.length / 13;
+
                 const vertexBuffer = this.device.createBuffer({
                     size: vertices.byteLength,
                     usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC, 
@@ -794,13 +803,6 @@ export class ShaderContext {
                 if(node.isInput) inpIdx++;
             });
 
-            // if(this.defaultUniforms) {
-            //     values.forEach((v,i) => {
-            //         const typeInfo = wgslTypeSizes[this.builtInUniforms[this.defaultUniforms[i]].type];
-    
-            //         offset = this.setUBOposition(dataView,inputTypes,typeInfo,offset,v,i);
-            //     })
-            // }
             bufferGroup.uniformBuffer.unmap();
         }
 

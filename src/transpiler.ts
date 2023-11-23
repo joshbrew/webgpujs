@@ -68,7 +68,6 @@ export class WGSLTranspiler {
         const result = [] as any[];
         let depth = 0; // depth of nested structures
         let currentToken = '';
-
         for (let i = 0; i < str.length; i++) {
             const char = str[i];
 
@@ -101,7 +100,7 @@ export class WGSLTranspiler {
             token: param,
             isInput: true
         }));
-        
+
         // Capture variables, arrays, and their assignments
         const assignmentTokens = (funcStr.match(/(const|let|var)\s+(\w+)\s*=\s*([^;]+)/g) || []).map(token => ({
             token,
@@ -117,22 +116,40 @@ export class WGSLTranspiler {
             isInput: false // or true, based on your requirements
         }));
 
+        // Exclude the function head (declaration) from the function call matching
+        let functionBody = funcStr.substring(funcStr.indexOf('{') + 1, funcStr.lastIndexOf('}'));
+        
+        // Capture variable names referenced inside of function calls, excluding numbers and vec/mat constructs
+        const textureCallTokens = (functionBody.match(/texture.*\w+\(([^)]+)\)/g) || []).flatMap(call => {
+            // Extract arguments from each function call
+            let args = call.substring(call.indexOf('(') + 1, call.lastIndexOf(')'));
+            return this.splitIgnoringBrackets(args).map(arg => {
+                arg = arg.trim();
+                // Exclude if argument is a number, vec, or mat, unless it contains nested variable names
+                if (!isNaN(arg) || /^.*(vec|mat).*\(/.test(arg)) {
+                    return null;
+                }
+                return { token: arg, isInput: false };
+            }).filter(arg => arg !== null);
+        });
+        params =  params.concat(assignmentTokens);
         params = params.concat(builtInUniformsTokens);
+        params = params.concat(textureCallTokens);
         // Combine both sets of tokens
-        return params.concat(assignmentTokens);
+        return params;
     }
 
     static excludedNames = {
         'color':true,
         'position':true,
         'uv':true,
+        'vertex':true,
         'normal':true,
         'pixel':true
     }
 
     static parse = (fstr, tokens, shaderType='compute') => {
         const ast = [] as any[];
-
         // Extract all returned variables from the tokens
         const returnMatches = fstr.match(/^(?![ \t]*\/\/).*\breturn .*;/gm);
         let returnedVars = returnMatches ? returnMatches.map(match => match.replace(/^[ \t]*return /, '').replace(';', '')) : undefined;
@@ -142,8 +159,10 @@ export class WGSLTranspiler {
 
         const functionBody = fstr.substring(fstr.indexOf('{')); 
         //basic function splitting, we dont support object inputs right now, anyway. e.g. we could add {x,y,z} objects to define vectors
-
+        let checked = {};
         tokens.forEach(({ token, isInput },i) => {
+            if(checked[token]) return; //skip redundancies
+            checked[token] = true;
             let isReturned = returnedVars?.find((v) => {
                 if(token.includes(v)) {
                     if(
@@ -198,6 +217,7 @@ export class WGSLTranspiler {
                         });
                     }
                 } else {
+
                     ast.push({
                         type: 'variable',
                         name: variableMatch[2],
@@ -214,7 +234,6 @@ export class WGSLTranspiler {
                     type: 'variable',
                     name: token,
                     value: 'unknown',
-                    isUniform:true,
                     isInput,
                     isReturned,
                     isModified
@@ -347,7 +366,7 @@ export class WGSLTranspiler {
 
         let uniformsStruct = ''; // Start the UniformsStruct
         let defaultsStruct = '';
-        let hasUniforms = 0; // Flag to check if there are any uniforms
+        let hasUniforms = false as any; // Flag to check if there are any uniforms
         let defaultUniforms;
 
         const params = [] as any[];
@@ -363,11 +382,9 @@ export class WGSLTranspiler {
                 return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');  // $& means the whole matched string
             }
 
-
             //todo: texture types - texture_1d, texture_2d, texture_2d_array, texture_3d
             //let prevTextureBinding;
-            
-            //methods for parsing texture types, this is all placeholder to have a functional parsing method as it's a bit ham-fisted
+            //methods for parsing texture types, we didn't really have a choice but to use variable names for implicit texture typing, but it should work in general
             if (new RegExp(`textureSampleCompare\\(${escapeRegExp(node.name)},`).test(funcStr)) { 
                 let nm = node.name.toLowerCase();
                 if(nm.includes('deptharr')) node.isDepthTextureArray = true;
@@ -379,10 +396,10 @@ export class WGSLTranspiler {
                 node.isTexture = true;
                 node.isDepthTexture = true;
                 //prevTextureBinding = bindingIncr; //the output texture should share the binding (this is rudimentary, we can't really anticipate better than this)
-            } else if(new RegExp(`textureSampleCompare\\(.*,${escapeRegExp(node.name)}`).test(funcStr)) {
+            } else if(new RegExp(`textureSampleCompare\\(\\w+\\s*,\\s*${escapeRegExp(node.name)}`).test(funcStr)) {
                 node.isComparisonSampler = true;
                 node.isSampler = true;
-            } else if (new RegExp(`textureSample.*\\(.*,${escapeRegExp(node.name)},`).test(funcStr)) { 
+            } else if (new RegExp(`textureSample\\(\\w+\\s*,\\s*${escapeRegExp(node.name)}`).test(funcStr)) { 
                 node.isSampler = true;
             } else if(new RegExp(`textureStore\\(${escapeRegExp(node.name)},`).test(funcStr)) {
                 let nm = node.name.toLowerCase();
@@ -458,7 +475,7 @@ export class WGSLTranspiler {
                 else format = 'rgba16float'; //assumed
 
                 let typ; 
-                if(node.is3dStorageTexture) typ = 'texture_storage_3d<'+format+',write>'; //todo: read and read_write currently experimental: https://developer.chrome.com/blog/new-in-webgpu-118/
+                if(node.is3dStorageTexture) typ = 'texture_storage_3d<'+format+',write>'; //todo: read and read_write currently experimental: https://developer.chrome.com/blog/new-in-webgpu-118/ But we should default to read_write when we can
                 else if(node.is1dStorageTexture) typ = 'texture_storage_3d<'+format+',write>';
                 else if (node.is2dStorageTextureArray) typ = 'texture_storage_2d_array<'+format+',write>';
                 else typ = 'texture_storage_2d<'+format+',write>';
@@ -469,7 +486,6 @@ export class WGSLTranspiler {
                 //if(typeof prevTextureBinding === 'undefined') //e.g. texture_2d in the vertex on binding 0 is written to on the compute on the storage texture on binding 0
                 bindingIncr++; 
             } else if (node.isSampler) {
-
                 let typ;
                 if(node.isComparisonSampler) typ = 'sampler_comparison';
                 else typ = 'sampler';
@@ -494,6 +510,7 @@ export class WGSLTranspiler {
                     bindingIncr++;
                 }
                 else if (node.isUniform) {
+                    if(shaderType === 'vertex') console.log(node);
                     if(!hasUniforms) {
                         uniformsStruct = `struct UniformsStruct {\n`;
                         hasUniforms = bindingIncr; // Set the flag to the index
@@ -522,7 +539,7 @@ export class WGSLTranspiler {
             bindingIncr++;
         }
 
-        if (hasUniforms) { // If there are any uniforms, add the UniformsStruct and its binding to the code
+        if (hasUniforms !== false) { // If there are any uniforms, add the UniformsStruct and its binding to the code
             uniformsStruct += '};\n\n'; // Close the UniformsStruct
             code += uniformsStruct;
             code += `@group(${bindGroup}) @binding(${hasUniforms}) var<uniform> uniforms: UniformsStruct;\n\n`;
@@ -608,16 +625,16 @@ export class WGSLTranspiler {
             let vboStrings = Array.from({length: nVertexBuffers}, (_, i) => {
                 if(shaderType === 'vertex') vboInputStrings.push(
                     
-`@location(${4*i}) color${i>0 ? i+1 : ''}In: vec4<f32>,
-    @location(${4*i+1}) vertex${i>0 ? i+1 : ''}In: vec3<f32>, 
-    @location(${4*i+2}) normal${i>0 ? i+1 : ''}In: vec3<f32>,
-    @location(${4*i+3}) uv${i>0 ? i+1 : ''}In: vec2<f32>${i===nVertexBuffers-1 ? '' : ','}`
+`@location(${4*i}) vertex${i>0 ? i+1 : ''}In: vec4<f32>, 
+    @location(${4*i+1}) color${i>0 ? i+1 : ''}In: vec4<f32>,
+    @location(${4*i+2}) uv${i>0 ? i+1 : ''}In: vec2<f32>,
+    @location(${4*i+3}) normal${i>0 ? i+1 : ''}In: vec3<f32>${i===nVertexBuffers-1 ? '' : ','}`
                 );
                 return `
-    @location(${4*i}) color${i>0 ? i+1 : ''}: vec4<f32>,
-    @location(${4*i+1}) vertex${i>0 ? i+1 : ''}: vec3<f32>, 
-    @location(${4*i+2}) normal${i>0 ? i+1 : ''}: vec3<f32>,
-    @location(${4*i+3}) uv${i>0 ? i+1 : ''}: vec2<f32>${i===nVertexBuffers-1 ? '' : ','}`;
+    @location(${4*i}) vertex${i>0 ? i+1 : ''}: vec4<f32>,
+    @location(${4*i+1}) color${i>0 ? i+1 : ''}: vec4<f32>, 
+    @location(${4*i+2}) uv${i>0 ? i+1 : ''}: vec2<f32>,
+    @location(${4*i+3}) normal${i>0 ? i+1 : ''}: vec3<f32>${i===nVertexBuffers-1 ? '' : ','}`;
             });
 
             vtxInps = `
