@@ -383,7 +383,7 @@ export class WGSLTranspiler {
             }
 
             //todo: texture types - texture_1d, texture_2d, texture_2d_array, texture_3d
-            //let prevTextureBinding;
+            let prevTextureBinding;
             //methods for parsing texture types, we didn't really have a choice but to use variable names for implicit texture typing, but it should work in general
             if (new RegExp(`textureSampleCompare\\(${escapeRegExp(node.name)},`).test(funcStr)) { 
                 let nm = node.name.toLowerCase();
@@ -395,7 +395,7 @@ export class WGSLTranspiler {
 
                 node.isTexture = true;
                 node.isDepthTexture = true;
-                //prevTextureBinding = bindingIncr; //the output texture should share the binding (this is rudimentary, we can't really anticipate better than this)
+                prevTextureBinding = bindingIncr; //the output texture should share the binding (this is rudimentary, we can't really anticipate better than this)
             } else if(new RegExp(`textureSampleCompare\\(\\w+\\s*,\\s*${escapeRegExp(node.name)}`).test(funcStr)) {
                 node.isComparisonSampler = true;
                 node.isSampler = true;
@@ -408,7 +408,6 @@ export class WGSLTranspiler {
                 else if(nm.includes('2darr')) node.is2dStorageTextureArray = true;
                 
                 node.isStorageTexture = true;
-                //prevTextureBinding = bindingIncr;
             } else if (new RegExp(`texture.*\\(${escapeRegExp(node.name)},`).test(funcStr)) { //todo: we could infer texture dimensions from the second input type
                 let nm = node.name.toLowerCase();
                 //rudimentary way to dynamically type textures since we can't predict based on texture function calls
@@ -428,7 +427,7 @@ export class WGSLTranspiler {
                     node.isDepthTexture = true;
 
                 node.isTexture = true;
-                //prevTextureBinding = bindingIncr;
+                prevTextureBinding = bindingIncr;
             } 
 
             if(variableTypes?.[node.name]) {
@@ -483,8 +482,9 @@ export class WGSLTranspiler {
                 params.push(node);
                 code += `@group(${bindGroup}) @binding(${bindingIncr}) var ${node.name}: ${typ};\n`; //todo rgba8unorm is not only type
                 
-                //if(typeof prevTextureBinding === 'undefined') //e.g. texture_2d in the vertex on binding 0 is written to on the compute on the storage texture on binding 0
-                bindingIncr++; 
+                if(typeof prevTextureBinding === 'undefined') //e.g. texture_2d in the vertex on binding 0 is written to on the compute on the storage texture on binding 0
+                    bindingIncr++; 
+                else prevTextureBinding = undefined; //reset, we're just assuming if a texture input is followed by a storage texture, we'll give them the same binding
             } else if (node.isSampler) {
                 let typ;
                 if(node.isComparisonSampler) typ = 'sampler_comparison';

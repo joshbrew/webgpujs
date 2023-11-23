@@ -646,7 +646,7 @@ export class ShaderContext {
             if(bufferGroup.vertexBuffers?.[index]?.size !== vertices.byteLength) {
                 if(!bufferGroup.vertexBuffers) bufferGroup.vertexBuffers = [] as any[];
                 
-                bufferGroup.vertexCount = vertices.length / 13;
+                if(!bufferGroup.vertexCount) bufferGroup.vertexCount = vertices.length / 13;
 
                 const vertexBuffer = this.device.createBuffer({
                     size: vertices.byteLength,

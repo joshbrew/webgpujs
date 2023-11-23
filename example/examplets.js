@@ -313,7 +313,8 @@ const createImageExample = async () => {
             textures:{
                 image:textureData //corresponds to the variable
             }
-        }
+        },
+        inputs:[[0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0]] //placeholder mat4 projection matrix (copy wgsl-matrix library example from webgpu samples)
     }).then(pipeline => {
         console.timeEnd('createRenderPipeline and render triangle');
         console.log(pipeline);

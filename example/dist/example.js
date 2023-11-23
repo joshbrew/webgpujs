@@ -340,6 +340,7 @@
         function escapeRegExp(string) {
           return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
         }
+        let prevTextureBinding;
         if (new RegExp(`textureSampleCompare\\(${escapeRegExp(node.name)},`).test(funcStr)) {
           let nm = node.name.toLowerCase();
           if (nm.includes("deptharr"))
@@ -354,6 +355,7 @@
             node.isDepthMSAATexture = true;
           node.isTexture = true;
           node.isDepthTexture = true;
+          prevTextureBinding = bindingIncr;
         } else if (new RegExp(`textureSampleCompare\\(\\w+\\s*,\\s*${escapeRegExp(node.name)}`).test(funcStr)) {
           node.isComparisonSampler = true;
           node.isSampler = true;
@@ -395,6 +397,7 @@
           if (nm.includes("depth"))
             node.isDepthTexture = true;
           node.isTexture = true;
+          prevTextureBinding = bindingIncr;
         }
         if (variableTypes?.[node.name]) {
           if (typeof variableTypes[node.name] === "string") {
@@ -461,7 +464,10 @@
           params.push(node);
           code += `@group(${bindGroup}) @binding(${bindingIncr}) var ${node.name}: ${typ};
 `;
-          bindingIncr++;
+          if (typeof prevTextureBinding === "undefined")
+            bindingIncr++;
+          else
+            prevTextureBinding = void 0;
         } else if (node.isSampler) {
           let typ;
           if (node.isComparisonSampler)
@@ -1735,7 +1741,8 @@ fn frag_main(
         if (bufferGroup.vertexBuffers?.[index]?.size !== vertices.byteLength) {
           if (!bufferGroup.vertexBuffers)
             bufferGroup.vertexBuffers = [];
-          bufferGroup.vertexCount = vertices.length / 13;
+          if (!bufferGroup.vertexCount)
+            bufferGroup.vertexCount = vertices.length / 13;
           const vertexBuffer = this.device.createBuffer({
             size: vertices.byteLength,
             usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC
