@@ -567,12 +567,18 @@ export class ShaderContext {
                 return undefined;
             } else if(node.isTexture || node.isStorageTexture) { //rudimentary storage texture checks since typically they'll share bindings
                 const buffer = {
-                    binding: bufferIncr,
+                    binding: node.binding,
                     visibility} as any;
                 if(node.isDepthTexture) buffer.texture = { sampleType:'depth' };
                 else if(textures[node.name]) {
                     buffer.resource = {
                         resource: textures[node.name] ? textures[node.name].createView() : {} //todo: texture dimensions/format/etc customizable
+                    };
+                } else if (node.isStorageTexture && !node.isSharedStorageTexture) {
+                    buffer.storageTexture = { //placeholder stuff but anyway you can provide your own bindings as the inferencing is a stretch after a point
+                        access:'write-only', //read-write only in chrome beta
+                        format:textures[node.name]?.format ? textures[node.name].format : 'rgbaunorm',
+                        viewDimension:node.name.includes('3d') ? '3d' : node.name.includes('1d') ? '1d' : '2d'
                     };
                 } else { //IDK
                     buffer.texture = { sampleType:'unfilterable-float' }
@@ -581,7 +587,7 @@ export class ShaderContext {
                 return buffer;
             } else if(node.isSampler) {
                 const buffer = {
-                    binding: bufferIncr,
+                    binding: node.binding,
                     visibility,
                     resource: samplers[node.name] ? samplers[node.name] : {}
                 };
@@ -589,7 +595,7 @@ export class ShaderContext {
                 return buffer;
             } else {
                 const buffer = {
-                    binding: bufferIncr,
+                    binding: node.binding,
                     visibility,
                     buffer: {
                         type: (isReturned || node.isModified) ? 'storage' : 'read-only-storage'

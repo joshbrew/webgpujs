@@ -331,6 +331,7 @@
       const params = [];
       let bindingIncr = 0;
       let names = {};
+      let prevTextureBinding;
       ast.forEach((node, i) => {
         if (names[node.name])
           return;
@@ -340,7 +341,6 @@
         function escapeRegExp(string) {
           return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
         }
-        let prevTextureBinding;
         if (new RegExp(`textureSampleCompare\\(${escapeRegExp(node.name)},`).test(funcStr)) {
           let nm = node.name.toLowerCase();
           if (nm.includes("deptharr"))
@@ -370,6 +370,8 @@
           else if (nm.includes("2darr"))
             node.is2dStorageTextureArray = true;
           node.isStorageTexture = true;
+          if (prevTextureBinding !== void 0)
+            node.isSharedStorageTexture = true;
         } else if (new RegExp(`texture.*\\(${escapeRegExp(node.name)},`).test(funcStr)) {
           let nm = node.name.toLowerCase();
           if (nm.includes("deptharr"))
@@ -399,6 +401,7 @@
           node.isTexture = true;
           prevTextureBinding = bindingIncr;
         }
+        node.binding = bindingIncr;
         if (variableTypes?.[node.name]) {
           if (typeof variableTypes[node.name] === "string") {
             code += `@group(${bindGroup}) @binding(${bindingIncr}) var ${node.name}: ${variableTypes[node.name]};
@@ -502,8 +505,6 @@
             }
             bindingIncr++;
           } else if (node.isUniform) {
-            if (shaderType === "vertex")
-              console.log(node);
             if (!hasUniforms) {
               uniformsStruct = `struct UniformsStruct {
 `;
@@ -1665,7 +1666,7 @@ fn frag_main(
           return void 0;
         } else if (node.isTexture || node.isStorageTexture) {
           const buffer = {
-            binding: bufferIncr,
+            binding: node.binding,
             visibility
           };
           if (node.isDepthTexture)
@@ -1675,6 +1676,14 @@ fn frag_main(
               resource: textures[node.name] ? textures[node.name].createView() : {}
               //todo: texture dimensions/format/etc customizable
             };
+          } else if (node.isStorageTexture && !node.isSharedStorageTexture) {
+            buffer.storageTexture = {
+              //placeholder stuff but anyway you can provide your own bindings as the inferencing is a stretch after a point
+              access: "write-only",
+              //read-write only in chrome beta
+              format: textures[node.name]?.format ? textures[node.name].format : "rgbaunorm",
+              viewDimension: node.name.includes("3d") ? "3d" : node.name.includes("1d") ? "1d" : "2d"
+            };
           } else {
             buffer.texture = { sampleType: "unfilterable-float" };
           }
@@ -1682,7 +1691,7 @@ fn frag_main(
           return buffer;
         } else if (node.isSampler) {
           const buffer = {
-            binding: bufferIncr,
+            binding: node.binding,
             visibility,
             resource: samplers[node.name] ? samplers[node.name] : {}
           };
@@ -1690,7 +1699,7 @@ fn frag_main(
           return buffer;
         } else {
           const buffer = {
-            binding: bufferIncr,
+            binding: node.binding,
             visibility,
             buffer: {
               type: isReturned || node.isModified ? "storage" : "read-only-storage"

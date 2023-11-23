@@ -374,6 +374,7 @@ export class WGSLTranspiler {
         let bindingIncr = 0;
 
         let names = {};
+        let prevTextureBinding;
         ast.forEach((node, i) => {
             if(names[node.name]) return;
             names[node.name] = true;
@@ -383,7 +384,6 @@ export class WGSLTranspiler {
             }
 
             //todo: texture types - texture_1d, texture_2d, texture_2d_array, texture_3d
-            let prevTextureBinding;
             //methods for parsing texture types, we didn't really have a choice but to use variable names for implicit texture typing, but it should work in general
             if (new RegExp(`textureSampleCompare\\(${escapeRegExp(node.name)},`).test(funcStr)) { 
                 let nm = node.name.toLowerCase();
@@ -408,6 +408,7 @@ export class WGSLTranspiler {
                 else if(nm.includes('2darr')) node.is2dStorageTextureArray = true;
                 
                 node.isStorageTexture = true;
+                if(prevTextureBinding !== undefined) node.isSharedStorageTexture = true; //shares a binding with a texture (assumed if following a texture)
             } else if (new RegExp(`texture.*\\(${escapeRegExp(node.name)},`).test(funcStr)) { //todo: we could infer texture dimensions from the second input type
                 let nm = node.name.toLowerCase();
                 //rudimentary way to dynamically type textures since we can't predict based on texture function calls
@@ -429,6 +430,8 @@ export class WGSLTranspiler {
                 node.isTexture = true;
                 prevTextureBinding = bindingIncr;
             } 
+
+            node.binding = bindingIncr;
 
             if(variableTypes?.[node.name]) {
                 if(typeof variableTypes[node.name] === 'string') {
@@ -510,7 +513,7 @@ export class WGSLTranspiler {
                     bindingIncr++;
                 }
                 else if (node.isUniform) {
-                    if(shaderType === 'vertex') console.log(node);
+                    //if(shaderType === 'vertex') console.log(node);
                     if(!hasUniforms) {
                         uniformsStruct = `struct UniformsStruct {\n`;
                         hasUniforms = bindingIncr; // Set the flag to the index

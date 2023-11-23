@@ -284,13 +284,13 @@ setTimeout(() => {
 function cubeExampleVert( 
     modelViewProjectionMatrix='mat4x4<f32>'
 ) {
-    position = modelViewProjectionMatrix * position;
+    position = modelViewProjectionMatrix * position; //alternatively we could use a builtInUniform to transform the projection matrix with the timestamp increment
     uv = uvIn;
     vertex = 0.5 * (position + vec4f(1,1,1,1))
 }
 
 function cubeExampleFrag() {
-    return textureSample(image, sampler, uv) * vertex; 
+    return textureSample(image, sampler, uv) * vertex;
 }
 
 const createImageExample = async () => {
@@ -300,27 +300,40 @@ const createImageExample = async () => {
         source:imageBitmap
     }
 
+    let projectionMatrix = new Float32Array(16);
+
+    let canv2 = document.createElement('canvas'); canv2.width = 800; canv2.height = 600;
+
     WebGPUjs.createPipeline({
         vertex:vertexExample,
         fragment:fragmentExample
     },{
-        canvas,
+        canv2,
         renderPass:{
             vertexCount:3,
             vbos:[ //we can upload vbos
-                cubeVertices
+                cubeVertices //the shader system will set the draw call count based on the number of rows (assumed to be position4,color4,uv2,normal3 or vertexCount = len/13) in the vertices of the first supplied vbo
             ],
             textures:{
                 image:textureData //corresponds to the variable
             }
         },
-        inputs:[[0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0]] //placeholder mat4 projection matrix (copy wgsl-matrix library example from webgpu samples)
+        inputs:[projectionMatrix] //placeholder mat4 projection matrix (copy wgsl-matrix library example from webgpu samples)
     }).then(pipeline => {
         console.timeEnd('createRenderPipeline and render triangle');
         console.log(pipeline);
         //should have rendered
+        let anim = () => {
+            //update projection matrix then re-render
+            pipeline.render();
+            requestAnimationFrame(anim);
+        }
+        //anim();
     });
+
+    document.getElementById('ex3').appendChild(canv2);
 }
+//createImageExample
 
 let ex3Id1 = setupWebGPUConverterUI(cubeExampleVert, document.getElementById('ex3'), 'vertex');
 let ex3Id2 = setupWebGPUConverterUI(cubeExampleFrag, document.getElementById('ex3'), 'fragment');
