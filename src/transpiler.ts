@@ -458,10 +458,10 @@ export class WGSLTranspiler {
                 else format = 'rgba16float'; //assumed
 
                 let typ; 
-                if(node.is3dStorageTexture) typ = 'texture_storage_3d<'+format+',read_write>';
-                else if(node.is1dStorageTexture) typ = 'texture_storage_3d<'+format+',read_write>';
-                else if (node.is2dStorageTextureArray) typ = 'texture_storage_2d_array<'+format+',read_write>';
-                else typ = 'texture_storage_2d<'+format+',read_write>';
+                if(node.is3dStorageTexture) typ = 'texture_storage_3d<'+format+',write>'; //todo: read and read_write currently experimental: https://developer.chrome.com/blog/new-in-webgpu-118/
+                else if(node.is1dStorageTexture) typ = 'texture_storage_3d<'+format+',write>';
+                else if (node.is2dStorageTextureArray) typ = 'texture_storage_2d_array<'+format+',write>';
+                else typ = 'texture_storage_2d<'+format+',write>';
 
                 params.push(node);
                 code += `@group(${bindGroup}) @binding(${bindingIncr}) var ${node.name}: ${typ};\n\n`; //todo rgba8unorm is not only type
@@ -1416,7 +1416,7 @@ export const textureFormats = [ //https://www.w3.org/TR/webgpu/#texture-formats
     "rgba8sint",
     "bgra8unorm",
     "bgra8unorm-srgb",
-    
+
     // Packed 32-bit formats
     "rgb9e5ufloat",
     "rgb10a2uint",

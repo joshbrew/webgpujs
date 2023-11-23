@@ -434,13 +434,13 @@ var WGSLTranspiler = class _WGSLTranspiler {
           format = "rgba16float";
         let typ;
         if (node.is3dStorageTexture)
-          typ = "texture_storage_3d<" + format + ",read_write>";
+          typ = "texture_storage_3d<" + format + ",write>";
         else if (node.is1dStorageTexture)
-          typ = "texture_storage_3d<" + format + ",read_write>";
+          typ = "texture_storage_3d<" + format + ",write>";
         else if (node.is2dStorageTextureArray)
-          typ = "texture_storage_2d_array<" + format + ",read_write>";
+          typ = "texture_storage_2d_array<" + format + ",write>";
         else
-          typ = "texture_storage_2d<" + format + ",read_write>";
+          typ = "texture_storage_2d<" + format + ",write>";
         params.push(node);
         code += `@group(${bindGroup}) @binding(${bindingIncr}) var ${node.name}: ${typ};
 
