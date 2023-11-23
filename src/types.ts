@@ -8,6 +8,7 @@ export type ShaderOptions = {
     inputs?:any[],
     bindGroupLayouts?:GPUBindGroupLayout[],
     bindGroups?:GPUBindGroup[],
+    lastBinding?:number,
     bufferGroups?:any,
     skipCombinedBindings?:boolean
 }
@@ -81,6 +82,7 @@ export type TranspiledShader = {
     code: string;
     bindings: string;
     bindGroupNumber:number;
+    lastBinding:number; //the last binding in the list, e.g. vertex and fragment bindings need to be in series
     ast: any[];
     params: any[];
     funcStr: string;

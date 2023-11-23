@@ -25,6 +25,7 @@ What's left todo:
 - Make the transpiler demo actually update the render or compute outputs
 - more recyclability in each step of the pipeline (just need to build stuff out more now that the worst bugs are out of the way)
 
+How: Reproducing these examples so they can all work https://webgpu.github.io/webgpu-samples
 
 What's cooking? 
 

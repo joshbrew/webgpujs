@@ -2,7 +2,7 @@ import { WebGPUjs } from "../src/pipeline";
 import { WGSLTranspiler } from "../src/transpiler";
 
 import { cubeVertices } from "./exampleCube";
-
+import { mat4 as m4, vec3 as v3 } from 'wgpu-matrix' //they'll transform the dummy functions on the bundle step if not renamed
 
 function dft(
     inputData = new Float32Array(), 
@@ -74,8 +74,8 @@ function dft(
 
 //explicit return statements will define only that variable as an output (i.e. a mutable read_write buffer)
 
-function setupWebGPUConverterUI(fn, target=document.body, shaderType) {
-    let webGPUCode = WGSLTranspiler.convertToWebGPU(fn, shaderType);
+function setupWebGPUConverterUI(fn, target=document.body, shaderType, lastBinding) {
+    let webGPUCode = WGSLTranspiler.convertToWebGPU(fn, shaderType,undefined,undefined,undefined,undefined,undefined,lastBinding);
     const uniqueID = Date.now();
 
     const beforeTextAreaID = `t2_${uniqueID}`;
@@ -107,8 +107,7 @@ function setupWebGPUConverterUI(fn, target=document.body, shaderType) {
     document.getElementById(beforeTextAreaID).oninput = () => {
         parseFunction();
     };
-
-    return uniqueID;
+    return {uniqueID, webGPUCode};
 }
 
 let ex1Id = setupWebGPUConverterUI(dft, document.getElementById('ex1'), 'compute');
@@ -148,7 +147,7 @@ console.time('createComputePipeline');
                     pipeline.addFunction(function mul(a=vec2f(2,0),b=vec2f(2,0)) { return a * b; })
                     console.timeEnd('addFunction and recompile shader pipeline');
                     console.log(pipeline);
-                    document.getElementById('t1_'+ex1Id).value = pipeline.compute.code;
+                    document.getElementById('t1_'+ex1Id.uniqueID).value = pipeline.compute.code;
                 
                 });
             });
@@ -249,7 +248,7 @@ canvas.width = 800; canvas.height = 600;
 document.getElementById('ex2').appendChild(canvas);
 
 let ex12Id1 = setupWebGPUConverterUI(vertexExample, document.getElementById('ex2'), 'vertex');
-let ex12Id2 = setupWebGPUConverterUI(fragmentExample, document.getElementById('ex2'), 'fragment');
+let ex12Id2 = setupWebGPUConverterUI(fragmentExample, document.getElementById('ex2'), 'fragment',ex12Id1.lastBinding);
 
 setTimeout(() => {
     console.time('createRenderPipeline and render triangle');
@@ -262,10 +261,11 @@ setTimeout(() => {
         renderPass:{
             vertexCount:3,
             // vbos:[ //upload vbos, we'll also just fill a dummy vbo for you if none are provided
-            //     {
-            //         //position
+            //     { // pos vec4, color vec4, uv vec2, normal vec3
+            //         //vertex
             //         color:new Array(3*4).fill(0)
-            //         //
+            //         //uv
+            //         //normal
             //     }
             // ],
         }
@@ -290,7 +290,7 @@ function cubeExampleVert(
 }
 
 function cubeExampleFrag() {
-    return textureSample(image, sampler, uv) * vertex;
+    return textureSample(image, imgSampler, uv) * vertex;
 }
 
 const createImageExample = async () => {
@@ -300,17 +300,44 @@ const createImageExample = async () => {
         source:imageBitmap
     }
 
-    let projectionMatrix = new Float32Array(16);
+    let canv2 = document.createElement('canvas'); 
+    canv2.width = 800; canv2.height = 600;
+    document.getElementById('ex3').appendChild(canv2);
+    let ex3Id1 = setupWebGPUConverterUI(cubeExampleVert, document.getElementById('ex3'), 'vertex');
+    let ex3Id2 = setupWebGPUConverterUI(cubeExampleFrag, document.getElementById('ex3'), 'fragment', ex3Id1.webGPUCode.lastBinding);
+    
 
-    let canv2 = document.createElement('canvas'); canv2.width = 800; canv2.height = 600;
+    const aspect = canv2.width / canv2.height;
+    const projectionMatrix = m4.perspective(
+        (2 * Math.PI) / 5,
+        aspect,
+        1,
+        100.0
+    );
+    const modelViewProjectionMatrix = m4.create();
 
+    function getTransformationMatrix() {
+        const viewMatrix = m4.identity();
+        m4.translate(viewMatrix, v3.fromValues(0, 0, -4), viewMatrix);
+        const now = Date.now() / 1000;
+        m4.rotate(
+            viewMatrix,
+            v3.fromValues(Math.sin(now), Math.cos(now), 0),
+            1,
+            viewMatrix
+        );
+        m4.multiply(projectionMatrix, viewMatrix, modelViewProjectionMatrix);
+        return modelViewProjectionMatrix;
+    } 
+
+    console.time('createRenderPipeline and render texture');
     WebGPUjs.createPipeline({
-        vertex:vertexExample,
-        fragment:fragmentExample
+        vertex:cubeExampleVert,
+        fragment:cubeExampleFrag
     },{
-        canv2,
+        canvas:canv2,
         renderPass:{
-            vertexCount:3,
+            vertexCount:cubeVertices.length/13,
             vbos:[ //we can upload vbos
                 cubeVertices //the shader system will set the draw call count based on the number of rows (assumed to be position4,color4,uv2,normal3 or vertexCount = len/13) in the vertices of the first supplied vbo
             ],
@@ -320,23 +347,23 @@ const createImageExample = async () => {
         },
         inputs:[projectionMatrix] //placeholder mat4 projection matrix (copy wgsl-matrix library example from webgpu samples)
     }).then(pipeline => {
-        console.timeEnd('createRenderPipeline and render triangle');
+        console.timeEnd('createRenderPipeline and render texture');
         console.log(pipeline);
         //should have rendered
         let anim = () => {
             //update projection matrix then re-render
-            pipeline.render();
+            const transformationMatrix = getTransformationMatrix();
+            pipeline.render({
+                vertexCount:cubeVertices.length/13 // pos vec4, color vec4, uv vec2, normal vec3
+            },transformationMatrix);
             requestAnimationFrame(anim);
         }
         //anim();
     });
 
-    document.getElementById('ex3').appendChild(canv2);
 }
 //createImageExample
-
-let ex3Id1 = setupWebGPUConverterUI(cubeExampleVert, document.getElementById('ex3'), 'vertex');
-let ex3Id2 = setupWebGPUConverterUI(cubeExampleFrag, document.getElementById('ex3'), 'fragment');
+createImageExample();
 
 //load texture data as unint8array or we can specify with _rgba8unorm etc
 //set cubeVertices as the vbo

@@ -341,7 +341,14 @@ export class WGSLTranspiler {
         }, [] as any[]);
     }
 
-    static generateDataStructures(funcStr, ast, bindGroup=0, shaderType?:'compute'|'fragment'|'vertex',variableTypes?:{[key:string]:string|{binding:string}}) {
+    static generateDataStructures(
+        funcStr, 
+        ast, 
+        bindGroup=0, 
+        shaderType?:'compute'|'fragment'|'vertex',
+        variableTypes?:{[key:string]:string|{binding:string}},
+        minBinding=0
+    ) {
         let code = '//Bindings (data passed to/from CPU) \n';
         // Extract all returned variables from the function string
         // const returnMatches = funcStr.match(/^(?![ \t]*\/\/).*\breturn .*;/gm);
@@ -371,7 +378,7 @@ export class WGSLTranspiler {
 
         const params = [] as any[];
 
-        let bindingIncr = 0;
+        let bindingIncr = minBinding;
 
         let names = {};
         let prevTextureBinding;
@@ -432,6 +439,7 @@ export class WGSLTranspiler {
             } 
 
             node.binding = bindingIncr;
+            node.group = bindGroup;
 
             if(variableTypes?.[node.name]) {
                 if(typeof variableTypes[node.name] === 'string') {
@@ -448,9 +456,7 @@ export class WGSLTranspiler {
             if (node.isTexture) {
                 params.push(node);
 
-                let format; 
-                if(node.name.includes('_')) format = node.name.split('_').pop(); //e.g. textureSample(tex0_cube_f32, sampler, ...); will have types parsed correctly, doens't support formats with dashes (https://www.w3.org/TR/webgpu/#texture-formats)
-                else format = 'f32'; //assumed
+                let format = node.name.includes('i32') ? 'i32' : node.name.includes('u32') ? 'u32' : 'f32';
             
                 let typ;
                 if(node.isDepthTextureArray) typ = 'texture_depth_2d_array';
@@ -471,10 +477,8 @@ export class WGSLTranspiler {
                 bindingIncr++;
             } else if (node.isStorageTexture) { 
 
-                let format; 
-                //can append format on end of variable name (won't parse -srgb or compression formats, define those with variableTypes but really you should just write your own shader at that point lol)
-                if(node.name.includes('_')) format = node.name.split('_').pop(); //e.g. textureSample(tex0_depthcube_rgba8unorm, sampler, ...); will have types parsed correctly, doens't support formats with dashes (https://www.w3.org/TR/webgpu/#texture-formats)
-                else format = 'rgba16float'; //assumed
+                let format = textureFormats.find((f) => {if(node.name.includes(f)) return true;});
+                if(!format) format = 'rgba8unorm';
 
                 let typ; 
                 if(node.is3dStorageTexture) typ = 'texture_storage_3d<'+format+',write>'; //todo: read and read_write currently experimental: https://developer.chrome.com/blog/new-in-webgpu-118/ But we should default to read_write when we can
@@ -523,6 +527,7 @@ export class WGSLTranspiler {
                     node.type = uniformType;
                     params.push(node);
                     uniformsStruct += `    ${node.name}: ${uniformType},\n`; // Add the uniform to the UniformsStruct
+                    
                 }
             } else if(this.builtInUniforms[node.name]) {
                 if(!defaultUniforms) {
@@ -548,7 +553,7 @@ export class WGSLTranspiler {
             code += `@group(${bindGroup}) @binding(${hasUniforms}) var<uniform> uniforms: UniformsStruct;\n\n`;
         }
 
-        return {code, params, defaultUniforms};
+        return {code, params, defaultUniforms, lastBinding:bindingIncr};
     }
 
     static extractAndTransposeInnerFunctions = (body, extract=true, ast, params, shaderType) => {
@@ -930,8 +935,10 @@ fn frag_main(
 
             // Replace variables without pixel prefix with pixel prefixed version
             vertexVars.forEach(varName => {
-                const regex = new RegExp(`(?<![a-zA-Z0-9_.])${varName}(?![a-zA-Z0-9_.])`, 'gm');
-                code = code.replace(regex, `pixel.${varName}`);
+                if(!varName.includes('In')) {
+                    const regex = new RegExp(`(?<![a-zA-Z0-9_.])${varName}(?![a-zA-Z0-9_.])`, 'gm');
+                    code = code.replace(regex, `pixel.${varName}`);
+                }
             });
         }
 
@@ -1053,8 +1060,26 @@ fn frag_main(
         const replacementsOriginal = new Map();
         const replacementsReplacement = new Map();
 
-        let changesOriginal = {};
-        let changesReplacement = {};
+        let changesShader1 = {};
+        let changesShader2 = {};
+        
+        // Extract used group-binding pairs from the first shader
+        let usedBindings = new Set();
+        let bmatch;
+        while ((bmatch = bindingRegex.exec(bindings1str)) !== null) {
+            usedBindings.add(`${bmatch[1]}-${bmatch[2]}`);
+        }
+
+        // Adjust bindings in the second shader
+        bindings2str = bindings2str.replace(bindingRegex, (match, group, binding, varName) => {
+            let newBinding = binding;
+            while (usedBindings.has(`${group}-${newBinding}`)) {
+                newBinding = (parseInt(newBinding) + 1).toString();
+                changesShader2[varName] = { group: group, binding: newBinding };
+            }
+            usedBindings.add(`${group}-${newBinding}`);
+            return `@group(${group}) @binding(${newBinding}) var ${varName}:`;
+        });
 
         const extractBindings = (str, replacements, changes) => {
             let match;
@@ -1065,11 +1090,13 @@ fn frag_main(
                     group: match[1],
                     binding: match[2]
                 };
+                usedBindings.add(`${match[1]}-${match[2]}`);
             }
         };
 
-        extractBindings(bindings1str, replacementsOriginal, changesOriginal);
-        extractBindings(bindings2str, replacementsReplacement, changesReplacement);
+        extractBindings(bindings1str, replacementsOriginal, changesShader1);
+        extractBindings(bindings2str, replacementsReplacement, changesShader2);
+
 
         // Combine structs and ensure no duplicate fields
         let match = structRegex.exec(bindings1str);
@@ -1104,7 +1131,7 @@ fn frag_main(
                 const updated = replacementsOriginal.get(varName) + ' ' + match.split(' ').slice(-2).join(' ');
                 const newGroup = (updated as any).match(/@group\((\d+)\)/)[1];
                 const newBinding = (updated as any).match(/@binding\((\d+)\)/)[1];
-                changesOriginal[varName] = { group: newGroup, binding: newBinding };
+                changesShader1[varName] = { group: newGroup, binding: newBinding };
                 return updated;
             }
             return match;
@@ -1117,7 +1144,7 @@ fn frag_main(
                 const updated = replacementsOriginal.get(varName) + ' ' + match.split(' ').slice(-2).join(' ');
                 const newGroup = (updated as any).match(/@group\((\d+)\)/)[1];
                 const newBinding = (updated as any).match(/@binding\((\d+)\)/)[1];
-                changesReplacement[varName] = { group: newGroup, binding: newBinding };
+                changesShader2[varName] = { group: newGroup, binding: newBinding };
                 return updated;
             }
             return match;
@@ -1125,9 +1152,9 @@ fn frag_main(
 
         return {
             code1: result1.trim(),
-            changes1: changesOriginal as any,
+            changes1: changesShader1 as any,
             code2: result2.trim(),
-            changes2: changesReplacement as any
+            changes2: changesShader2 as any
         };
 
         /*
@@ -1146,6 +1173,7 @@ fn frag_main(
                     c: f32,
                     d: f32
                 };
+                @group(0) @binding(0) var arr0: array<f32> //this should be set to @binding(2) since it is the second one
                 @group(1) @binding(0) var arr1: array<f32>;
                 @group(1) @binding(1) var texture1: texture_2d<f32>;
                 @group(1) @binding(2) var textureB: sampler;
@@ -1219,7 +1247,6 @@ fn frag_main(
             shaderCode2 = shaderCode2.replace(regex, `@binding(${newBinding})`);
         }
         shader2Obj.code = shaderCode2;
-
         shader1Obj.ast = combinedAst;
         (shader1Obj as any).returnedVars = combinedReturnedVars;
         shader1Obj.params = combinedParams;
@@ -1237,14 +1264,23 @@ fn frag_main(
         nVertexBuffers=1, 
         workGroupSize=256, 
         gpuFuncs?:(Function|string)[],
-        variableTypes?:{[key:string]:string|{binding:string}}
+        variableTypes?:{[key:string]:string|{binding:string}},
+        lastBinding=0
     ) { //use compute shaders for geometry shaders
         let funcStr = typeof func === 'string' ? func : func.toString();
         funcStr = funcStr.replace(/(?<!\w)this\./g, '');
         const tokens = this.tokenize(funcStr);
         const ast = this.parse(funcStr, tokens, shaderType);
         //console.log(ast);
-        let webGPUCode = this.generateDataStructures(funcStr, ast, bindGroupNumber, shaderType, variableTypes); //simply share bindGroups 0 and 1 between compute and render
+        let webGPUCode = this.generateDataStructures(
+            funcStr, 
+            ast, 
+            bindGroupNumber, 
+            shaderType, 
+            variableTypes, 
+            lastBinding
+        ); //simply share bindGroups 0 and 1 between compute and render
+
         const bindings = webGPUCode.code;
         webGPUCode.code += '\n' + this.generateMainFunctionWorkGroup(
             funcStr, 
@@ -1265,7 +1301,8 @@ fn frag_main(
             defaultUniforms:webGPUCode.defaultUniforms, 
             type:shaderType,
             workGroupSize:shaderType === 'compute' ? workGroupSize : undefined,
-            bindGroupNumber
+            bindGroupNumber,
+            lastBinding:webGPUCode.lastBinding
         } as TranspiledShader;
     }
 

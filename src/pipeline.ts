@@ -100,7 +100,8 @@ export class WebGPUjs {
                 options.nVertexBuffers, 
                 options.workGroupSize, 
                 options.functions,
-                options.variableTypes
+                options.variableTypes,
+                options.lastBinding
             );
 
             if(options.getPrevShaderBindGroups) {
@@ -139,7 +140,8 @@ export class WebGPUjs {
                         options.nVertexBuffers, 
                         options.workGroupSize, 
                         options.functions,
-                        options.variableTypes
+                        options.variableTypes,
+                        options.lastBinding
                     );
                 }
 
@@ -172,7 +174,8 @@ export class WebGPUjs {
                             options.nVertexBuffers, 
                             options.workGroupSize, 
                             options.functions,
-                            options.variableTypes
+                            options.variableTypes,
+                            options.lastBinding
                         );
                     }
                 }
@@ -185,8 +188,10 @@ export class WebGPUjs {
                             options.nVertexBuffers, 
                             options.workGroupSize, 
                             options.functions,
-                            options.variableTypes
+                            options.variableTypes,
+                            options.lastBinding
                         );
+                        options.lastBinding = block.vertex.lastBinding;
                     }
                 }
                 if(block.fragment) {
@@ -198,7 +203,8 @@ export class WebGPUjs {
                             options.nVertexBuffers, 
                             options.workGroupSize, 
                             options.functions,
-                            options.variableTypes
+                            options.variableTypes,
+                            options.lastBinding
                         );
                     }
                 }
