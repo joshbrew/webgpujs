@@ -367,7 +367,7 @@ export class WGSLTranspiler {
             //todo: texture types - texture_1d, texture_2d, texture_2d_array, texture_3d
             //let prevTextureBinding;
             
-            //methods for parsing texture types
+            //methods for parsing texture types, this is all placeholder to have a functional parsing method as it's a bit ham-fisted
             if (new RegExp(`textureSampleCompare\\(${escapeRegExp(node.name)},`).test(funcStr)) { 
                 let nm = node.name.toLowerCase();
                 if(nm.includes('deptharr')) node.isDepthTextureArray = true;
@@ -422,24 +422,29 @@ export class WGSLTranspiler {
                     code += (variableTypes[node.name] as any).binding;
                 }
                 bindingIncr++;
+                params.push(node);
                 return;
             } 
 
             if (node.isTexture) {
                 params.push(node);
-
+                
+                let format; 
+                if(node.name.includes('_')) format = node.name.split('_').pop(); //e.g. textureSample(tex0_depthcube_rgba8unorm, sampler, ...); will have types parsed correctly, doens't support formats with dashes (https://www.w3.org/TR/webgpu/#texture-formats)
+                else format = 'f32'; //assumed
+            
                 let typ;
                 if(node.isDepthTextureArray) typ = 'texture_depth_2d_array';
                 else if(node.isDepthCubeArrayTexture) typ = 'texture_depth_cube_array';
                 else if(node.isDepthMSAATexture) typ = 'texture_depth_multisampled_2d';
                 else if(node.isDepthCuneTexture) typ = 'texture_depth_cube';
                 else if(node.isDepthTexture2d) typ = 'texture_depth_2d';
-                else if(node.isCubeArrayTexture) typ = 'texture_cube_array<f32>';
-                else if(node.isCubeTexture) typ = 'texture_cube<f32>';
-                else if(node.is3dTexture) typ = 'texture_3d<f32>';
-                else if(node.is2dTextureArray) typ = 'texture_2d_array<f32>';
-                else if(node.is1dTexture) typ = 'texture_1d<f32>';
-                else if(node.is2dMSAATexture) typ = 'texture_multisampled_2d<f32>';
+                else if(node.isCubeArrayTexture) typ = 'texture_cube_array<'+format+'>';
+                else if(node.isCubeTexture) typ = 'texture_cube<'+format+'>';
+                else if(node.is3dTexture) typ = 'texture_3d<'+format+'>';
+                else if(node.is2dTextureArray) typ = 'texture_2d_array<'+format+'>';
+                else if(node.is1dTexture) typ = 'texture_1d<'+format+'>';
+                else if(node.is2dMSAATexture) typ = 'texture_multisampled_2d<'+format+'>';
                 else typ = `texture_2d<f32>`;
 
                 code += `@group(${bindGroup}) @binding(${bindingIncr}) var ${node.name}: ${typ};\n\n`;
@@ -447,7 +452,12 @@ export class WGSLTranspiler {
                 bindingIncr++;
             } else if (node.isStorageTexture) { 
 
-                let typ; let format = node.name.includes('8') ? 'rgba8unorm' : 'rgba16float'; //assume float16 (little faster than float32, less precise ofc)
+                let format; 
+                //can append format on end of variable name (won't parse -srgb or compression formats, define those with variableTypes but really you should just write your own shader at that point lol)
+                if(node.name.includes('_')) format = node.name.split('_').pop(); //e.g. textureSample(tex0_depthcube_rgba8unorm, sampler, ...); will have types parsed correctly, doens't support formats with dashes (https://www.w3.org/TR/webgpu/#texture-formats)
+                else format = 'rgba16float'; //assumed
+
+                let typ; 
                 if(node.is3dStorageTexture) typ = 'texture_storage_3d<'+format+',read_write>';
                 else if(node.is1dStorageTexture) typ = 'texture_storage_3d<'+format+',read_write>';
                 else if (node.is2dStorageTextureArray) typ = 'texture_storage_2d_array<'+format+',read_write>';
