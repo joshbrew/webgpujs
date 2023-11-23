@@ -1,6 +1,6 @@
 {
   "name": "webgpujs",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "description": "Barebones esbuild and test node server implementation. For building",
   "main": "./webgpujs.js",
   "module": "./dist/webgpujs.esm.js",

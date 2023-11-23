@@ -40,6 +40,7 @@ export declare class WGSLTranspiler {
         color: boolean;
         position: boolean;
         uv: boolean;
+        vertex: boolean;
         normal: boolean;
         pixel: boolean;
     };

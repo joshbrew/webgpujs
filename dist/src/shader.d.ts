@@ -35,12 +35,12 @@ export declare class ShaderHelper {
     createRenderPassDescriptor: () => GPURenderPassDescriptor;
     updateGraphicsPipeline: (nVertexBuffers?: number, contextSettings?: GPUCanvasConfiguration, renderPipelineDescriptor?: GPURenderPipelineDescriptor, renderPassDescriptor?: GPURenderPassDescriptor) => void;
     static flattenArray(arr: any): any[];
-    static combineVertices(colors: any, //4d vec array
-    positions: any, //3d vec array
-    normals: any, //3d vec array
-    uvs: any): Float32Array;
+    static combineVertices(vertices: any, //4d vec array
+    colors: any, //4d vec array
+    uvs: any, //2d vec array
+    normals: any): Float32Array;
     static splitVertices(interleavedVertices: any): {
-        positions: Float32Array;
+        vertices: Float32Array;
         colors: Float32Array;
         normal: Float32Array;
         uvs: Float32Array;
@@ -102,10 +102,10 @@ export declare class ShaderContext {
         firstIndex?: number;
         useRenderBundle?: any;
         vbos?: (Float32Array | {
+            vertex?: number[] | number[][];
             color?: number[] | number[][];
-            position?: number[] | number[][];
-            normal?: number[] | number[][];
             uv?: number[] | number[][];
+            normal?: number[] | number[][];
         })[];
         outputVBOs?: boolean;
         textures?: {
