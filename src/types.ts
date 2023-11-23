@@ -4,6 +4,7 @@ export type ShaderOptions = {
     bindGroupNumber?:number,
     getPrevShaderBindGroups?:string,
     functions?:Function[],
+    variableTypes?:{[key:string]:string|{binding:string}}, //we can skip the implicit typing of the bindings and set them ourselves e.g. tex1:'texture_2d' or tex1:{binding:'@group(0) @binding(1) var x: texture_2d;'} etc.
     inputs?:any[],
     bindGroupLayouts?:GPUBindGroupLayout[],
     bindGroups?:GPUBindGroup[],

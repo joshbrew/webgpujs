@@ -18,7 +18,6 @@ export class ShaderHelper {
     process = (...inputs:any[]) => { return this.compute?.run(this.compute.computePass, ...inputs)};
     render = (renderPass?:RenderPassSettings, ...inputs:any[]) => { return this.fragment?.run(renderPass ? renderPass : this.fragment.renderPass ? this.fragment.renderPass : {vertexCount:1}, ...inputs);};
 
-
     canvas:HTMLCanvasElement | OffscreenCanvas; 
     context:GPUCanvasContext | OffscreenRenderingContext; 
     device:GPUDevice;
@@ -265,78 +264,6 @@ fn frag_main(
         if(this.context) (this.context as GPUCanvasContext)?.unconfigure();
     }
 
-
-    // Extract all returned variables from the function string
-    createBindGroupFromEntries = (
-        shaderContext, 
-        shaderType, 
-        textureSettings={}, 
-        samplerSettings={}, 
-        visibility=GPUShaderStage.COMPUTE | GPUShaderStage.FRAGMENT
-    ) => {
-        shaderContext.type = shaderType;
-        let bufferIncr = 0;
-        let uniformBufferIdx;
-
-        const entries = shaderContext.params.map((node, i) => {
-            let isReturned = (shaderContext.returnedVars === undefined || shaderContext.returnedVars?.includes(node.name));
-            if (node.isUniform) {
-                if (typeof uniformBufferIdx === 'undefined') {
-                    uniformBufferIdx = i;
-                    bufferIncr++;
-                    return {
-                        binding: uniformBufferIdx,
-                        visibility,
-                        buffer: {
-                            type: 'uniform'
-                        }
-                    };
-                }
-                return undefined;
-            } else if(node.isTexture) {
-                const buffer = {
-                    binding: bufferIncr,
-                    visibility,
-                    texture: textureSettings[node.name] ? textureSettings[node.name] : {}
-                };
-                bufferIncr++;
-                return buffer;
-            } else if(node.isSampler) {
-                const buffer = {
-                    binding: bufferIncr,
-                    visibility,
-                    sampler: samplerSettings[node.name] ? samplerSettings[node.name] : {}
-                };
-                bufferIncr++;
-                return buffer;
-            } else {
-                const buffer = {
-                    binding: bufferIncr,
-                    visibility,
-                    buffer: {
-                        type: (isReturned || node.isModified) ? 'storage' : 'read-only-storage'
-                    }
-                };
-                bufferIncr++;
-                return buffer;
-            }
-        }).filter(v => v);
-
-        if(shaderContext.defaultUniforms) {
-            entries.push({
-                binding:bufferIncr,
-                visibility,
-                buffer: {
-                    type: 'uniform'
-                }
-            })
-        }
-
-        shaderContext.bindGroupLayoutEntries = entries;
-        return entries;
-    }
-
-
     createRenderPipelineDescriptor = (nVertexBuffers=1, swapChainFormat = navigator.gpu.getPreferredCanvasFormat()) => {
         if(!this.fragment || !this.vertex) throw new Error("No Fragment and Vertex ShaderContext defined");
 
@@ -393,16 +320,16 @@ fn frag_main(
                 view: view,
                 loadValue: { r: 0.0, g: 0.0, b: 0.0, a: 1.0 },
                 loadOp: "clear",
-                storeOp: "store"
+                storeOp: "store" //discard
             }],
             depthStencilAttachment: {
                 view: depthTexture.createView(),
                 depthLoadOp: "clear",
                 depthClearValue: 1.0,
-                depthStoreOp: "store",
-                //stencilLoadOp: "clear",
-                //stencilClearValue: 0,
-                //stencilStoreOp: "store"
+                depthStoreOp: "store", //discard
+                // stencilLoadOp: "clear",
+                // stencilClearValue: 0,
+                // stencilStoreOp: "store"
             }
         } as GPURenderPassDescriptor;
     }
@@ -458,16 +385,17 @@ fn frag_main(
         return result;
     }
 
+    //we're just assuming that for the default frag/vertex we may want colors, positions, normals, or uvs. If you define your entire own shader pipeline then this can be ignored
     static combineVertices(
         colors,    //4d vec array
         positions, //3d vec array
-        normal,   //3d vec array
+        normals,   //3d vec array
         uvs        //2d vec array
     ) {
         let length = 0;
         if(colors) length = colors.length / 4; 
         if (positions?.length > length) length = positions.length / 3;
-        if (normal?.length > length) length = normal.length / 3;
+        if (normals?.length > length) length = normals.length / 3;
         if (uvs?.length > length) length = uvs.length / 2;
         const vertexCount = length; // Assuming each position has 3 components
         const interleavedVertices = new Float32Array(vertexCount * 12); // 12 values per vertex
@@ -486,9 +414,9 @@ fn frag_main(
             interleavedVertices[interleavedOffset + 4] = positions ? positions[posOffset] || 0 : 0;
             interleavedVertices[interleavedOffset + 5] = positions ? positions[posOffset + 1] || 0 : 0;
             interleavedVertices[interleavedOffset + 6] = positions ? positions[posOffset + 2] || 0 : 0;
-            interleavedVertices[interleavedOffset + 7] = normal ? normal[norOffset] || 0 : 0;
-            interleavedVertices[interleavedOffset + 8] = normal ? normal[norOffset + 1] || 0 : 0;
-            interleavedVertices[interleavedOffset + 9] = normal ? normal[norOffset + 2] || 0 : 0;
+            interleavedVertices[interleavedOffset + 7] = normals ? normals[norOffset] || 0 : 0;
+            interleavedVertices[interleavedOffset + 8] = normals ? normals[norOffset + 1] || 0 : 0;
+            interleavedVertices[interleavedOffset + 9] = normals ? normals[norOffset + 2] || 0 : 0;
             interleavedVertices[interleavedOffset + 10] = uvs ? uvs[uvOffset] || 0 : 0;
             interleavedVertices[interleavedOffset + 11] = uvs ? uvs[uvOffset + 1] || 0 : 0;
         }
@@ -616,7 +544,6 @@ export class ShaderContext {
             this.updateTexture(textures[key], key, textures[key].samplerSettings, bindGroupNumber); //generate texture buffers and samplers
         }
 
-        let lastTextureBinding;
         const entries = bufferGroup.params ? bufferGroup.params.map((node, i) => {
             let isReturned = (bufferGroup.returnedVars === undefined || bufferGroup.returnedVars?.includes(node.name));
             if (node.isUniform) {
@@ -632,13 +559,18 @@ export class ShaderContext {
                     };
                 }
                 return undefined;
-            } else if(node.isTexture || (node.isStorageTexture && typeof lastTextureBinding === 'undefined')) { //rudimentary storage texture checks since typically they'll share bindings
+            } else if(node.isTexture || node.isStorageTexture) { //rudimentary storage texture checks since typically they'll share bindings
                 const buffer = {
                     binding: bufferIncr,
-                    visibility,
-                    resource: textures[node.name] ? textures[node.name].createView() : {} //todo: texture dimensions/format/etc customizable
-                };
-                lastTextureBinding = bufferIncr;
+                    visibility} as any;
+                if(node.isDepthTexture) buffer.texture = { sampleType:'depth' };
+                else if(textures[node.name]) {
+                    buffer.resource = {
+                        resource: textures[node.name] ? textures[node.name].createView() : {} //todo: texture dimensions/format/etc customizable
+                    };
+                } else { //IDK
+                    buffer.texture = { sampleType:'unfilterable-float' }
+                }
                 bufferIncr++;
                 return buffer;
             } else if(node.isSampler) {
@@ -777,7 +709,7 @@ export class ShaderContext {
 
         bufferGroup.samplers[name] = sampler;
 
-        //todo: we need to pass the sampler and texture view to the bindGroupLayout
+        //todo: we need to pass the updated sampler and texture view to the bindGroupLayout
         return true; //textures/samplers updated
     }
 
@@ -1002,12 +934,6 @@ export class ShaderContext {
                                     }
                                 }
                             }); 
-
-                            // if(this.defaultUniforms) {
-                            //     this.defaultUniforms.forEach((u) => {
-                            //         totalUniformBufferSize += wgslTypeSizes[this.builtInUniforms[u].type].size; //assume 4 bytes per float/int (32 bit)
-                            //     });
-                            // }
 
                             if(totalUniformBufferSize < 8) totalUniformBufferSize += 8 - totalUniformBufferSize; 
                             else totalUniformBufferSize -= totalUniformBufferSize % 16; //correct final buffer size (IDK)

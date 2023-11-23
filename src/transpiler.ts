@@ -322,7 +322,7 @@ export class WGSLTranspiler {
         }, [] as any[]);
     }
 
-    static generateDataStructures(funcStr, ast, bindGroup=0, shaderType:'compute'|'fragment'|'vertex',storageTextureType='rgba8unorm') {
+    static generateDataStructures(funcStr, ast, bindGroup=0, shaderType?:'compute'|'fragment'|'vertex',variableTypes?:{[key:string]:string|{binding:string}}) {
         let code = '//Bindings (data passed to/from CPU) \n';
         // Extract all returned variables from the function string
         // const returnMatches = funcStr.match(/^(?![ \t]*\/\/).*\breturn .*;/gm);
@@ -363,30 +363,109 @@ export class WGSLTranspiler {
                 return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');  // $& means the whole matched string
             }
 
+
             //todo: texture types - texture_1d, texture_2d, texture_2d_array, texture_3d
-            let prevTextureBinding;
-            if (new RegExp(`textureSampl.*\\(.*,${escapeRegExp(node.name)},`).test(funcStr)) { 
+            //let prevTextureBinding;
+            
+            //methods for parsing texture types
+            if (new RegExp(`textureSampleCompare\\(${escapeRegExp(node.name)},`).test(funcStr)) { 
+                let nm = node.name.toLowerCase();
+                if(nm.includes('deptharr')) node.isDepthTextureArray = true;
+                else if(nm.includes('depth')) node.isDepthTexture2d = true;
+                else if(nm.includes('cubearr')) node.isDepthCubeArrayTexture = true;
+                else if(nm.includes('cube')) node.isDepthCubeTexture = true;
+                else if(nm.includes('ms2d')) node.isDepthMSAATexture = true;
+
+                node.isTexture = true;
+                node.isDepthTexture = true;
+                //prevTextureBinding = bindingIncr; //the output texture should share the binding (this is rudimentary, we can't really anticipate better than this)
+            } else if(new RegExp(`textureSampleCompare\\(.*,${escapeRegExp(node.name)}`).test(funcStr)) {
+                node.isComparisonSampler = true;
+                node.isSampler = true;
+            } else if (new RegExp(`textureSample.*\\(.*,${escapeRegExp(node.name)},`).test(funcStr)) { 
                 node.isSampler = true;
             } else if(new RegExp(`textureStore\\(${escapeRegExp(node.name)},`).test(funcStr)) {
+                let nm = node.name.toLowerCase();
+                if(nm.includes('3d')) node.is3dStorageTexture = true;
+                else if(nm.includes('1d')) node.is1dStorageTexture = true;
+                else if(nm.includes('2darr')) node.is2dStorageTextureArray = true;
+                
                 node.isStorageTexture = true;
+                //prevTextureBinding = bindingIncr;
             } else if (new RegExp(`texture.*\\(${escapeRegExp(node.name)},`).test(funcStr)) { //todo: we could infer texture dimensions from the second input type
+                let nm = node.name.toLowerCase();
+                //rudimentary way to dynamically type textures since we can't predict based on texture function calls
+                if(nm.includes('deptharr')) node.isDepthTextureArray = true;
+                else if(nm.includes('depthcubearr')) node.isDepthCubeArrayTexture = true;
+                else if(nm.includes('depthcube')) node.isDepthCubeTexture = true;
+                else if(nm.includes('depthms2d')) node.isDepthMSAATexture = true;
+                else if(nm.includes('depth')) node.isDepthTexture2d = true;
+                else if(nm.includes('cubearr')) node.isCubeArrayTexture = true;
+                else if(nm.includes('cube')) node.isCubeTexture = true;
+                else if(nm.includes('3d')) node.is3dTexture = true;
+                else if(nm.includes('2darr')) node.is2dTextureArray = true;
+                else if(nm.includes('1d')) node.is1dTexture = true;
+                else if(nm.includes('ms2d')) node.is2dMSAATexture = true;
+                 
+                if(nm.includes('depth')) 
+                    node.isDepthTexture = true;
+
                 node.isTexture = true;
-                prevTextureBinding = bindingIncr; //the output texture should share the binding (this is rudimentary, we can't really anticipate better than this)
+                //prevTextureBinding = bindingIncr;
             } 
 
+            if(variableTypes?.[node.name]) {
+                if(typeof variableTypes[node.name] === 'string') {
+                    code += `@group(${bindGroup}) @binding(${bindingIncr}) var ${node.name}: ${variableTypes[node.name]};\n\n`;
+                }
+                else if ('binding' in (variableTypes[node.name] as any)) {
+                    code += (variableTypes[node.name] as any).binding;
+                }
+                bindingIncr++;
+                return;
+            } 
 
             if (node.isTexture) {
                 params.push(node);
-                code += `@group(${bindGroup}) @binding(${bindingIncr}) var ${node.name}: texture_2d<f32>;\n\n`;
+
+                let typ;
+                if(node.isDepthTextureArray) typ = 'texture_depth_2d_array';
+                else if(node.isDepthCubeArrayTexture) typ = 'texture_depth_cube_array';
+                else if(node.isDepthMSAATexture) typ = 'texture_depth_multisampled_2d';
+                else if(node.isDepthCuneTexture) typ = 'texture_depth_cube';
+                else if(node.isDepthTexture2d) typ = 'texture_depth_2d';
+                else if(node.isCubeArrayTexture) typ = 'texture_cube_array<f32>';
+                else if(node.isCubeTexture) typ = 'texture_cube<f32>';
+                else if(node.is3dTexture) typ = 'texture_3d<f32>';
+                else if(node.is2dTextureArray) typ = 'texture_2d_array<f32>';
+                else if(node.is1dTexture) typ = 'texture_1d<f32>';
+                else if(node.is2dMSAATexture) typ = 'texture_multisampled_2d<f32>';
+                else typ = `texture_2d<f32>`;
+
+                code += `@group(${bindGroup}) @binding(${bindingIncr}) var ${node.name}: ${typ};\n\n`;
                 //else  code += `@group(${bindGroup}) @binding(${bindingIncr}) var ${node.name}: texture_storage_2d<${storageTextureType}, write>;\n\n`; //todo: rgba8unorm type should be customizable
                 bindingIncr++;
             } else if (node.isStorageTexture) { 
+
+                let typ;
+                if(node.is3dStorageTexture) typ = 'texture_storage_3d<rgba8unorm,read_write>';
+                else if(node.is1dStorageTexture) typ = 'texture_storage_3d<rgba8unorm,read_write>';
+                else if (node.is2dStorageTextureArray) typ = 'texture_storage_2d_array<rgba8unorm,read_write>';
+                else typ = 'texture_storage_2d<rgba8unorm,read_write>';
+
                 params.push(node);
-                code += `@group(${bindGroup}) @binding(${typeof prevTextureBinding !== 'undefined' ? prevTextureBinding : bindingIncr}) var ${node.name}: texture_storage_2d<rgba8unorm,write>;\n\n`;
-                if(typeof prevTextureBinding === 'undefined') bindingIncr++; //assume not tied to previous texture binding
+                code += `@group(${bindGroup}) @binding(${bindingIncr}) var ${node.name}: ${typ};\n\n`; //todo rgba8unorm is not only type
+                
+                //if(typeof prevTextureBinding === 'undefined') //e.g. texture_2d in the vertex on binding 0 is written to on the compute on the storage texture on binding 0
+                bindingIncr++; 
             } else if (node.isSampler) {
+
+                let typ;
+                if(node.isComparisonSampler) typ = 'sampler_comparison';
+                else typ = 'sampler';
+
                 params.push(node);
-                code += `@group(${bindGroup}) @binding(${bindingIncr}) var ${node.name}: sampler;\n\n`;
+                code += `@group(${bindGroup}) @binding(${bindingIncr}) var ${node.name}: ${typ};\n\n`;
                 bindingIncr++;
             } else if(node.isInput && !this.builtInUniforms[node.name]) {
                 if (node.type === 'array') {
@@ -1127,14 +1206,15 @@ fn frag_main(
         bindGroupNumber=0, 
         nVertexBuffers=1, 
         workGroupSize=256, 
-        gpuFuncs?:(Function|string)[]
+        gpuFuncs?:(Function|string)[],
+        variableTypes?:{[key:string]:string|{binding:string}}
     ) { //use compute shaders for geometry shaders
         let funcStr = typeof func === 'string' ? func : func.toString();
         funcStr = funcStr.replace(/(?<!\w)this\./g, '');
         const tokens = this.tokenize(funcStr);
         const ast = this.parse(funcStr, tokens, shaderType);
         //console.log(ast);
-        let webGPUCode = this.generateDataStructures(funcStr, ast, bindGroupNumber, shaderType); //simply share bindGroups 0 and 1 between compute and render
+        let webGPUCode = this.generateDataStructures(funcStr, ast, bindGroupNumber, shaderType, variableTypes); //simply share bindGroups 0 and 1 between compute and render
         const bindings = webGPUCode.code;
         webGPUCode.code += '\n' + this.generateMainFunctionWorkGroup(
             funcStr, 
@@ -1176,7 +1256,7 @@ function replaceJSFunctions(code, replacements) {
 }
 
 
-// Usage:
+// Usage: replace javascript functions or constants with their WGSL equivalent. Note you can also just call any WGSL function without the javascript equivalent existing as nothing executs in JS
 export const replacements = {
     'Math.PI': `${Math.PI}`,
     'Math.E':  `${Math.E}`,
@@ -1265,7 +1345,7 @@ const wgslTypeSizes16 = {
     'vec4<f16>': { alignment: 8, size: 8 },
     'vec4<i16>': { alignment: 8, size: 8 },
     'vec4<u16>': { alignment: 8, size: 8 },
-    'mat2x2<f16>': { alignment: 4, size: 8 },
+    'mat2x2<f16>': { alignment: 4, size: 8 }, //only f is actually supported in webgpu rn afaik
     'mat2x2<i16>': { alignment: 4, size: 8 },
     'mat2x2<u16>': { alignment: 4, size: 8 },
     'mat3x2<f16>': { alignment: 4, size: 12 },
@@ -1290,7 +1370,7 @@ const wgslTypeSizes16 = {
     'mat3x4<i16>': { alignment: 8, size: 24 },
     'mat3x4<u16>': { alignment: 8, size: 24 },
     'mat4x4<f16>': { alignment: 8, size: 32 },
-    'mat4x4<i16>': { alignment: 8, size: 32 },
+    'mat4x4<i16>': { alignment: 8, size: 32 }, 
     'mat4x4<u16>': { alignment: 8, size: 32 }
 };
 

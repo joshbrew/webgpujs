@@ -76,13 +76,13 @@ export class WebGPUjs {
 
         let device = options.device; //device is required!
         if (!device) {
-            device = this.device;
+            device = WebGPUjs.device;
             if(!device) {
                 const gpu = navigator.gpu;
                 const adapter = await gpu.requestAdapter();
                 if(!adapter) throw new Error('No GPU Adapter found!');
                 device = await adapter.requestDevice();
-                this.device = device;
+                WebGPUjs.device = device;
             }
             options.device = device;
         }
@@ -99,7 +99,8 @@ export class WebGPUjs {
                 options.bindGroupNumber, 
                 options.nVertexBuffers, 
                 options.workGroupSize, 
-                options.functions
+                options.functions,
+                options.variableTypes
             );
 
             if(options.getPrevShaderBindGroups) {
@@ -137,7 +138,8 @@ export class WebGPUjs {
                         options.bindGroupNumber, 
                         options.nVertexBuffers, 
                         options.workGroupSize, 
-                        options.functions
+                        options.functions,
+                        options.variableTypes
                     );
                 }
 
@@ -169,7 +171,8 @@ export class WebGPUjs {
                             options.bindGroupNumber, 
                             options.nVertexBuffers, 
                             options.workGroupSize, 
-                            options.functions
+                            options.functions,
+                            options.variableTypes
                         );
                     }
                 }
@@ -181,7 +184,8 @@ export class WebGPUjs {
                             block.compute ? block.compute.bindGroupNumber + 1 : options.bindGroupNumber, 
                             options.nVertexBuffers, 
                             options.workGroupSize, 
-                            options.functions
+                            options.functions,
+                            options.variableTypes
                         );
                     }
                 }
@@ -193,7 +197,8 @@ export class WebGPUjs {
                             block.compute ? block.compute.bindGroupNumber + 1 : options.bindGroupNumber, 
                             options.nVertexBuffers, 
                             options.workGroupSize, 
-                            options.functions
+                            options.functions,
+                            options.variableTypes
                         );
                     }
                 }
@@ -238,6 +243,7 @@ export class WebGPUjs {
         return new ShaderHelper(shaders, options);
     }
 
+    //we can compile shaders linearly so that bindings with the same variable names/usage become shared
     static combineShaders = (
         shaders: Function | {
             code:Function|string, 
@@ -253,6 +259,7 @@ export class WebGPUjs {
     ):Promise<ShaderHelper> => {
 
         let bindGroupNumber = previousPipeline.bindGroupLayouts.length;
+        options.device = previousPipeline.device;
         if(options.bindGroupLayouts) options.bindGroupLayouts; previousPipeline.bindGroupLayouts.push(...options.bindGroupLayouts);
         options.bindGroupNumber = bindGroupNumber;
         options.bindGroupLayouts = previousPipeline.bindGroupLayouts;
