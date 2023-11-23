@@ -294,6 +294,14 @@ function cubeExampleFrag() {
     return textureSample(exampleTexture, sampler, uv) * vertex;
 }
 
+const createImageExample = async () => {
+    const response = await fetch('./knucks.jpg');
+    const imageBitmap = await createImageBitmap(await response.blob());
+    const textureData = {
+        source:imageBitmap
+    }
+}
+
 
 let ex3Id1 = setupWebGPUConverterUI(cubeExampleVert, document.getElementById('ex3'), 'vertex');
 let ex3Id2 = setupWebGPUConverterUI(cubeExampleFrag, document.getElementById('ex3'), 'fragment');

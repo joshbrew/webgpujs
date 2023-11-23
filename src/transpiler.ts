@@ -464,7 +464,7 @@ export class WGSLTranspiler {
                 else if(node.is2dMSAATexture) typ = 'texture_multisampled_2d<'+format+'>';
                 else typ = `texture_2d<f32>`;
 
-                code += `@group(${bindGroup}) @binding(${bindingIncr}) var ${node.name}: ${typ};\n\n`;
+                code += `@group(${bindGroup}) @binding(${bindingIncr}) var ${node.name}: ${typ};\n`;
                 //else  code += `@group(${bindGroup}) @binding(${bindingIncr}) var ${node.name}: texture_storage_2d<${storageTextureType}, write>;\n\n`; //todo: rgba8unorm type should be customizable
                 bindingIncr++;
             } else if (node.isStorageTexture) { 
@@ -481,7 +481,7 @@ export class WGSLTranspiler {
                 else typ = 'texture_storage_2d<'+format+',write>';
 
                 params.push(node);
-                code += `@group(${bindGroup}) @binding(${bindingIncr}) var ${node.name}: ${typ};\n\n`; //todo rgba8unorm is not only type
+                code += `@group(${bindGroup}) @binding(${bindingIncr}) var ${node.name}: ${typ};\n`; //todo rgba8unorm is not only type
                 
                 //if(typeof prevTextureBinding === 'undefined') //e.g. texture_2d in the vertex on binding 0 is written to on the compute on the storage texture on binding 0
                 bindingIncr++; 

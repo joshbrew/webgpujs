@@ -661,8 +661,9 @@ export class ShaderContext {
         }
     }
 
-    updateTexture = (texture:{
-        data:Uint8Array,
+    updateTexture = (data:{
+        source?:ImageBitmap|any,
+        texture?:GPUTextureDescriptor,
         width:number, 
         height:number, 
         bytesPerRow?:number,
@@ -670,24 +671,24 @@ export class ShaderContext {
         format?:string, //default: 'rgba8unorm' 
         usage?:any,
         samplerSettings?:any
-    }|any, name:string, samplerSettings?, bindGroupNumber=this.bindGroupNumber) => {
-        if(!texture) return;
+    }|ImageBitmap|any, name:string, samplerSettings?, bindGroupNumber=this.bindGroupNumber) => {
+        if(!data) return;
 
         let bufferGroup = this.bufferGroups[bindGroupNumber];
         if(!bufferGroup) {
             bufferGroup = this.makeBufferGroup(bindGroupNumber)
         }
 
-        bufferGroup.textures[name] = this.device.createTexture({
-            label:  texture.label ? texture.label :`texture_g${bindGroupNumber}_${name}`,
-            format: texture.format ? texture.format : 'rgba8unorm',
-            size:  [texture.width, texture.height, 1],
-            usage:  texture.usage ? texture.usage : (GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUBufferUsage.COPY_SRC) //assume read/write (e.g. transforming a texture and returning it)
-        });
+        bufferGroup.textures[name] = this.device.createTexture(data.texture ? data.texture : {
+            label:  data.label ? data.label :`texture_g${bindGroupNumber}_${name}`,
+            format: data.format ? data.format : 'rgba8unorm',
+            size:  [data.width, data.height, 1],
+            usage:  data.usage ? data.usage : (GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT) //GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.COPY_SRC | 
+        } as GPUTextureDescriptor);
 
         let texInfo = {} as any;
-        if(texture.data) texInfo.texture = texture.data;
-        else texInfo.source = texture;
+        if(data.source) texInfo.source = data.source;
+        else texInfo.source = data; 
 
         //todo: more texture settings and stuff
         if(texInfo.texture)
@@ -695,17 +696,17 @@ export class ShaderContext {
                 texInfo,
                 bufferGroup.textures[name],
                 { 
-                    bytesPerRow: texture.bytesPerRow ? texture.bytesPerRow : texture.width * 4 },
+                    bytesPerRow: data.bytesPerRow ? data.bytesPerRow : data.width * 4 },
                 { 
-                    width: texture.width, 
-                    height: texture.height 
+                    width: data.width, 
+                    height: data.height 
                 },
             );
         else if (texInfo.source)
             this.device.queue.copyExternalImageToTexture(
                 texInfo, //e.g. an ImageBitmap
                 bufferGroup.textures[name],
-                [texture.width, texture.height]
+                [data.width, data.height]
             );
 
         const sampler = this.device.createSampler(samplerSettings ? samplerSettings : {

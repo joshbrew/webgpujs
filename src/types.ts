@@ -56,7 +56,8 @@ export type RenderPassSettings = {
     outputVBOs?:boolean,
     textures?:{
         [key:string]:{
-            data:Uint8Array,
+            source?:ImageBitmap|any,
+            texture?:GPUTextureDescriptor,
             width:number, 
             height:number, 
             bytesPerRow?:number,
