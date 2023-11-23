@@ -428,7 +428,7 @@ export class WGSLTranspiler {
 
             if (node.isTexture) {
                 params.push(node);
-                
+
                 let format; 
                 if(node.name.includes('_')) format = node.name.split('_').pop(); //e.g. textureSample(tex0_cube_f32, sampler, ...); will have types parsed correctly, doens't support formats with dashes (https://www.w3.org/TR/webgpu/#texture-formats)
                 else format = 'f32'; //assumed
@@ -1384,29 +1384,129 @@ const wgslTypeSizes16 = {
     'mat4x4<u16>': { alignment: 8, size: 32 }
 };
 
-export const textureFormats = {
-    r: {
-        "8unorm": "r8unorm",
-        "16float": "r16float",
-        "32float": "r32float"
-    },
-    rg: {
-        "8unorm": "rg8unorm",
-        "16float": "rg16float",
-        "32float": "rg32float"
-    },
-    rgba: {
-        "8unorm": "rgba8unorm",
-        "8unorm-srgb": "rgba8unorm-srgb",
-        "10a2unorm": "rgb10a2unorm",
-        "16float": "rgba16float",
-        "32float": "rgba32float"
-    },
-    bgra: {
-        "8unorm": "bgra8unorm",
-        "8unorm-srgb": "bgra8unorm-srgb"
-    }
-};
+
+
+export const textureFormats = [ //https://www.w3.org/TR/webgpu/#texture-formats
+    // 8-bit formats
+    "r8unorm",
+    "r8snorm",
+    "r8uint",
+    "r8sint",
+
+    // 16-bit formats
+    "r16uint",
+    "r16sint",
+    "r16float",
+    "rg8unorm",
+    "rg8snorm",
+    "rg8uint",
+    "rg8sint",
+
+    // 32-bit formats
+    "r32uint",
+    "r32sint",
+    "r32float",
+    "rg16uint",
+    "rg16sint",
+    "rg16float",
+    "rgba8unorm",
+    "rgba8unorm-srgb",
+    "rgba8snorm",
+    "rgba8uint",
+    "rgba8sint",
+    "bgra8unorm",
+    "bgra8unorm-srgb",
+    
+    // Packed 32-bit formats
+    "rgb9e5ufloat",
+    "rgb10a2uint",
+    "rgb10a2unorm",
+    "rg11b10ufloat",
+
+    // 64-bit formats
+    "rg32uint",
+    "rg32sint",
+    "rg32float",
+    "rgba16uint",
+    "rgba16sint",
+    "rgba16float",
+
+    // 128-bit formats
+    "rgba32uint",
+    "rgba32sint",
+    "rgba32float",
+
+    // Depth/stencil formats
+    "stencil8",
+    "depth16unorm",
+    "depth24plus",
+    "depth24plus-stencil8",
+    "depth32float",
+
+    // "depth32float-stencil8" feature
+    "depth32float-stencil8",
+
+    // BC compressed formats usable if "texture-compression-bc" is both
+    // supported by the device/user agent and enabled in requestDevice.
+    "bc1-rgba-unorm",
+    "bc1-rgba-unorm-srgb",
+    "bc2-rgba-unorm",
+    "bc2-rgba-unorm-srgb",
+    "bc3-rgba-unorm",
+    "bc3-rgba-unorm-srgb",
+    "bc4-r-unorm",
+    "bc4-r-snorm",
+    "bc5-rg-unorm",
+    "bc5-rg-snorm",
+    "bc6h-rgb-ufloat",
+    "bc6h-rgb-float",
+    "bc7-rgba-unorm",
+    "bc7-rgba-unorm-srgb",
+
+    // ETC2 compressed formats usable if "texture-compression-etc2" is both
+    // supported by the device/user agent and enabled in requestDevice.
+    "etc2-rgb8unorm",
+    "etc2-rgb8unorm-srgb",
+    "etc2-rgb8a1unorm",
+    "etc2-rgb8a1unorm-srgb",
+    "etc2-rgba8unorm",
+    "etc2-rgba8unorm-srgb",
+    "eac-r11unorm",
+    "eac-r11snorm",
+    "eac-rg11unorm",
+    "eac-rg11snorm",
+
+    // ASTC compressed formats usable if "texture-compression-astc" is both
+    // supported by the device/user agent and enabled in requestDevice.
+    "astc-4x4-unorm",
+    "astc-4x4-unorm-srgb",
+    "astc-5x4-unorm",
+    "astc-5x4-unorm-srgb",
+    "astc-5x5-unorm",
+    "astc-5x5-unorm-srgb",
+    "astc-6x5-unorm",
+    "astc-6x5-unorm-srgb",
+    "astc-6x6-unorm",
+    "astc-6x6-unorm-srgb",
+    "astc-8x5-unorm",
+    "astc-8x5-unorm-srgb",
+    "astc-8x6-unorm",
+    "astc-8x6-unorm-srgb",
+    "astc-8x8-unorm",
+    "astc-8x8-unorm-srgb",
+    "astc-10x5-unorm",
+    "astc-10x5-unorm-srgb",
+    "astc-10x6-unorm",
+    "astc-10x6-unorm-srgb",
+    "astc-10x8-unorm",
+    "astc-10x8-unorm-srgb",
+    "astc-10x10-unorm",
+    "astc-10x10-unorm-srgb",
+    "astc-12x10-unorm",
+    "astc-12x10-unorm-srgb",
+    "astc-12x12-unorm",
+    "astc-12x12-unorm-srgb",
+];
 
 //IDK if this is correct but it mostly depends
 export const imageToTextureFormats = {

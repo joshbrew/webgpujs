@@ -89,3 +89,4 @@ export type TranspiledShader = {
     altBindings?: any;
     returnedVars?: any;
 }
+
