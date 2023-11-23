@@ -430,7 +430,7 @@ export class WGSLTranspiler {
                 params.push(node);
                 
                 let format; 
-                if(node.name.includes('_')) format = node.name.split('_').pop(); //e.g. textureSample(tex0_depthcube_rgba8unorm, sampler, ...); will have types parsed correctly, doens't support formats with dashes (https://www.w3.org/TR/webgpu/#texture-formats)
+                if(node.name.includes('_')) format = node.name.split('_').pop(); //e.g. textureSample(tex0_cube_f32, sampler, ...); will have types parsed correctly, doens't support formats with dashes (https://www.w3.org/TR/webgpu/#texture-formats)
                 else format = 'f32'; //assumed
             
                 let typ;
