@@ -1,7 +1,7 @@
 {
   "name": "webgpujs",
   "version": "0.0.6",
-  "description": "Barebones esbuild and test node server implementation. For building",
+  "description": "Write full featured WGSL pipelines in plain javascript",
   "main": "./webgpujs.js",
   "module": "./dist/webgpujs.esm.js",
   "types": "./dist/index.d.ts",

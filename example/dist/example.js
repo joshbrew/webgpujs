@@ -1433,16 +1433,17 @@ for (var i: i32 = 0; i < ${size}; i = i + 1) {
         this.compute.bufferGroups = this.bufferGroups;
         const entries = this.compute.createBindGroupEntries(options?.renderPass?.textures);
         this.compute.bindGroupLayoutEntries = entries;
-        this.compute.setBindGroupLayout(entries);
+        this.compute.setBindGroupLayout(entries, options.bindGroupNumber);
       }
       if (this.fragment) {
         this.fragment.bufferGroups = this.bufferGroups;
-        const entries = this.fragment.createBindGroupEntries(options?.renderPass?.textures);
+        this.fragment.bindGroupLayouts = this.bindGroupLayouts;
+        const entries = this.fragment.createBindGroupEntries(options?.renderPass?.textures, void 0, GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT);
         this.fragment.bindGroupLayoutEntries = entries;
         this.fragment.bindGroupLayout = this.device.createBindGroupLayout({
           entries
         });
-        this.fragment.setBindGroupLayout(entries);
+        this.fragment.setBindGroupLayout(entries, options.bindGroupNumber);
       }
       if (this.compute) {
         this.compute.shaderModule = this.device.createShaderModule({
@@ -1450,7 +1451,10 @@ for (var i: i32 = 0; i < ${size}; i = i + 1) {
         });
         if (this.bindGroupLayouts.length > 0) {
           this.compute.pipelineLayout = this.device.createPipelineLayout({
-            bindGroupLayouts: this.bindGroupLayouts
+            bindGroupLayouts: this.bindGroupLayouts.filter((v) => {
+              if (v)
+                return true;
+            })
             //this should have the combined compute and vertex/fragment (and accumulated) layouts
           });
         }
@@ -1472,13 +1476,17 @@ for (var i: i32 = 0; i < ${size}; i = i + 1) {
         this.fragment.shaderModule = this.device.createShaderModule({
           code: shaders.fragment.code
         });
+        this.fragment.vertex = this.vertex;
         if (this.bindGroupLayouts.length > 0) {
           this.fragment.pipelineLayout = this.device.createPipelineLayout({
-            bindGroupLayouts: this.bindGroupLayouts
+            bindGroupLayouts: this.bindGroupLayouts.filter((v) => {
+              if (v)
+                return true;
+            })
             //this should have the combined compute and vertex/fragment (and accumulated) layouts
           });
         }
-        this.updateGraphicsPipeline(
+        this.fragment.updateGraphicsPipeline(
           options?.nVertexBuffers,
           options?.contextSettings,
           options?.renderPipelineDescriptor,
@@ -1570,94 +1578,6 @@ fn frag_main(
       if (this.context)
         this.context?.unconfigure();
     };
-    createRenderPipelineDescriptor = (nVertexBuffers = 1, swapChainFormat = navigator.gpu.getPreferredCanvasFormat()) => {
-      if (!this.fragment || !this.vertex)
-        throw new Error("No Fragment and Vertex ShaderContext defined");
-      const vertexBuffers = Array.from({ length: nVertexBuffers }, (_, i) => {
-        return {
-          arrayStride: 52,
-          attributes: [
-            { format: "float32x4", offset: 0, shaderLocation: 4 * i },
-            //vertex vec4
-            { format: "float32x4", offset: 16, shaderLocation: 4 * i + 1 },
-            //color vec4
-            { format: "float32x2", offset: 32, shaderLocation: 4 * i + 2 },
-            //uv vec2
-            { format: "float32x3", offset: 40, shaderLocation: 4 * i + 3 }
-            //normal vec3
-          ]
-        };
-      });
-      const renderPipelineDescriptor = {
-        //https://developer.mozilla.org/en-US/docs/Web/API/GPUDevice/createRenderPipeline
-        layout: this.fragment.pipelineLayout ? this.fragment.pipelineLayout : "auto",
-        vertex: {
-          module: this.vertex.shaderModule,
-          entryPoint: "vtx_main",
-          buffers: vertexBuffers
-        },
-        fragment: {
-          module: this.fragment.shaderModule,
-          entryPoint: "frag_main",
-          targets: [{
-            format: swapChainFormat
-          }]
-        },
-        depthStencil: {
-          format: "depth24plus",
-          depthWriteEnabled: true,
-          depthCompare: "less"
-        }
-      };
-      return renderPipelineDescriptor;
-    };
-    createRenderPassDescriptor = () => {
-      const view = this.context?.getCurrentTexture().createView();
-      const depthTexture = this.device.createTexture({
-        //allows 3D rendering
-        size: { width: this.canvas.width, height: this.canvas.height },
-        format: "depth24plus",
-        usage: GPUTextureUsage.RENDER_ATTACHMENT
-      });
-      return {
-        //some assumptions. todo: unassume
-        colorAttachments: [{
-          view,
-          loadValue: { r: 0, g: 0, b: 0, a: 1 },
-          loadOp: "clear",
-          storeOp: "store"
-          //discard
-        }],
-        depthStencilAttachment: {
-          view: depthTexture.createView(),
-          depthLoadOp: "clear",
-          depthClearValue: 1,
-          depthStoreOp: "store"
-          //discard
-          // stencilLoadOp: "clear",
-          // stencilClearValue: 0,
-          // stencilStoreOp: "store"
-        }
-      };
-    };
-    //todo: break this down more
-    updateGraphicsPipeline = (nVertexBuffers = 1, contextSettings, renderPipelineDescriptor, renderPassDescriptor) => {
-      if (!this.fragment || !this.vertex)
-        throw new Error("No Fragment and Vertex ShaderContext defined");
-      const swapChainFormat = navigator.gpu.getPreferredCanvasFormat();
-      this.context?.configure(contextSettings ? contextSettings : {
-        device: this.device,
-        format: swapChainFormat,
-        //usage: GPUTextureUsage.RENDER_ATTACHMENT,
-        alphaMode: "premultiplied"
-      });
-      if (!renderPipelineDescriptor)
-        renderPipelineDescriptor = this.createRenderPipelineDescriptor(nVertexBuffers, swapChainFormat);
-      if (!renderPassDescriptor)
-        renderPassDescriptor = this.createRenderPassDescriptor();
-      this.fragment.renderPassDescriptor = renderPassDescriptor;
-      this.fragment.graphicsPipeline = this.device.createRenderPipeline(renderPipelineDescriptor);
-    };
     static flattenArray(arr) {
       let result = [];
       for (let i = 0; i < arr.length; i++) {
@@ -1743,6 +1663,8 @@ fn frag_main(
     context;
     device;
     helper;
+    vertex;
+    //The vertex shader context if this is a fragment shader
     code;
     bindings;
     ast;
@@ -1821,6 +1743,7 @@ fn frag_main(
           if (node.isDepthTexture)
             buffer.texture = { sampleType: "depth" };
           else if (bufferGroup.textures?.[node.name]) {
+            buffer.texture = {};
             buffer.resource = bufferGroup.textures?.[node.name] ? bufferGroup.textures[node.name].createView() : {};
           } else if (node.isStorageTexture && !node.isSharedStorageTexture) {
             buffer.storageTexture = {
@@ -1849,6 +1772,7 @@ fn frag_main(
           const buffer = {
             binding: node.binding,
             visibility,
+            sampler: {},
             resource: bufferGroup.samplers[node.name] || {}
           };
           texKeyRot++;
@@ -1889,6 +1813,13 @@ fn frag_main(
           entries
         });
         this.bindGroupLayouts[bindGroupNumber] = this.bindGroupLayout;
+        this.pipelineLayout = this.device.createPipelineLayout({
+          bindGroupLayouts: this.bindGroupLayouts.filter((v) => {
+            if (v)
+              return true;
+          })
+          //this should have the combined compute and vertex/fragment (and accumulated) layouts
+        });
       }
       return this.bindGroupLayout;
     };
@@ -1945,7 +1876,7 @@ fn frag_main(
         label: data.label ? data.label : `texture_g${bindGroupNumber}_${name}`,
         format: data.format ? data.format : "rgba8unorm",
         size: { width: data.width, height: data.height },
-        usage: data.usage ? data.usage : GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT
+        usage: data.usage ? data.usage : data.source ? GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT : GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST
         //GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.COPY_SRC | 
       });
       let texInfo = {};
@@ -2002,22 +1933,20 @@ fn frag_main(
               dataView.setInt32(offset, input, true);
               break;
             case "u32":
-              dataView.setUInt32(offset, input, true);
+              dataView.setUint32(offset, input, true);
               break;
-            case "f16":
-              dataView.setFloat16(offset, input, true);
               break;
             case "i16":
               dataView.setInt16(offset, input, true);
               break;
             case "u16":
-              dataView.setUInt16(offset, input, true);
+              dataView.setUint16(offset, input, true);
               break;
             case "i8":
-              dataView.setInt8(offset, input, true);
+              dataView.setInt8(offset, input);
               break;
             case "u8":
-              dataView.setUInt8(offset, input, true);
+              dataView.setUint8(offset, input);
               break;
           }
         }
@@ -2069,6 +1998,89 @@ fn frag_main(
         if (bufferGroup.defaultUniformBuffer.mapState === "mapped")
           bufferGroup.defaultUniformBuffer.unmap();
       }
+    };
+    createRenderPipelineDescriptor = (nVertexBuffers = 1, swapChainFormat = navigator.gpu.getPreferredCanvasFormat()) => {
+      const vertexBuffers = Array.from({ length: nVertexBuffers }, (_, i) => {
+        return {
+          arrayStride: 52,
+          attributes: [
+            { format: "float32x4", offset: 0, shaderLocation: 4 * i },
+            //vertex vec4
+            { format: "float32x4", offset: 16, shaderLocation: 4 * i + 1 },
+            //color vec4
+            { format: "float32x2", offset: 32, shaderLocation: 4 * i + 2 },
+            //uv vec2
+            { format: "float32x3", offset: 40, shaderLocation: 4 * i + 3 }
+            //normal vec3
+          ]
+        };
+      });
+      const renderPipelineDescriptor = {
+        //https://developer.mozilla.org/en-US/docs/Web/API/GPUDevice/createRenderPipeline
+        layout: this.pipelineLayout ? this.pipelineLayout : "auto",
+        vertex: {
+          module: this.vertex.shaderModule,
+          entryPoint: "vtx_main",
+          buffers: vertexBuffers
+        },
+        fragment: {
+          module: this.shaderModule,
+          entryPoint: "frag_main",
+          targets: [{
+            format: swapChainFormat
+          }]
+        },
+        depthStencil: {
+          format: "depth24plus",
+          depthWriteEnabled: true,
+          depthCompare: "less"
+        }
+      };
+      return renderPipelineDescriptor;
+    };
+    createRenderPassDescriptor = () => {
+      const view = this.context?.getCurrentTexture().createView();
+      const depthTexture = this.device.createTexture({
+        //allows 3D rendering
+        size: { width: this.canvas.width, height: this.canvas.height },
+        format: "depth24plus",
+        usage: GPUTextureUsage.RENDER_ATTACHMENT
+      });
+      return {
+        //some assumptions. todo: unassume
+        colorAttachments: [{
+          view,
+          loadValue: { r: 0, g: 0, b: 0, a: 1 },
+          loadOp: "clear",
+          storeOp: "store"
+          //discard
+        }],
+        depthStencilAttachment: {
+          view: depthTexture.createView(),
+          depthLoadOp: "clear",
+          depthClearValue: 1,
+          depthStoreOp: "store"
+          //discard
+          // stencilLoadOp: "clear",
+          // stencilClearValue: 0,
+          // stencilStoreOp: "store"
+        }
+      };
+    };
+    updateGraphicsPipeline = (nVertexBuffers = 1, contextSettings, renderPipelineDescriptor, renderPassDescriptor) => {
+      const swapChainFormat = navigator.gpu.getPreferredCanvasFormat();
+      this.context?.configure(contextSettings ? contextSettings : {
+        device: this.device,
+        format: swapChainFormat,
+        //usage: GPUTextureUsage.RENDER_ATTACHMENT,
+        alphaMode: "premultiplied"
+      });
+      if (!renderPipelineDescriptor)
+        renderPipelineDescriptor = this.createRenderPipelineDescriptor(nVertexBuffers, swapChainFormat);
+      if (!renderPassDescriptor)
+        renderPassDescriptor = this.createRenderPassDescriptor();
+      this.renderPassDescriptor = renderPassDescriptor;
+      this.graphicsPipeline = this.device.createRenderPipeline(renderPipelineDescriptor);
     };
     makeBufferGroup = (bindGroupNumber = this.bindGroupNumber) => {
       const bufferGroup = {};
@@ -2131,7 +2143,7 @@ fn frag_main(
       } else
         newBindGroupBuffer = true;
       if (textures) {
-        const entries = this.createBindGroupEntries(textures, bindGroupNumber);
+        const entries = this.createBindGroupEntries(textures, bindGroupNumber, this.vertex ? GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT : void 0);
         this.bindGroupLayoutEntries = entries;
         bufferGroup.bindGroupLayoutEntries = entries;
         this.setBindGroupLayout(entries, bindGroupNumber);
@@ -4807,6 +4819,7 @@ fn frag_main(
       mat4Impl.multiply(projectionMatrix, viewMatrix, modelViewProjectionMatrix);
       return modelViewProjectionMatrix;
     }
+    let transformationMatrix = getTransformationMatrix();
     console.time("createRenderPipeline and render texture");
     WebGPUjs.createPipeline({
       vertex: cubeExampleVert,
@@ -4825,19 +4838,29 @@ fn frag_main(
           //corresponds to the variable
         }
       },
-      inputs: [projectionMatrix]
+      inputs: [transformationMatrix]
       //placeholder mat4 projection matrix (copy wgsl-matrix library example from webgpu samples)
     }).then((pipeline) => {
       console.timeEnd("createRenderPipeline and render texture");
       console.log(pipeline);
+      let now = performance.now();
+      let fps = [];
       let anim = () => {
-        const transformationMatrix = getTransformationMatrix();
+        let time = performance.now();
+        let f = 1e3 / (time - now);
+        fps.push(f);
+        let frameTimeAvg = fps.reduce((a, b) => a + b) / fps.length;
+        if (fps.length > 10)
+          fps.shift();
+        now = time;
+        transformationMatrix = getTransformationMatrix();
         pipeline.render({
           vertexCount: cubeVertices.length / 13
           // pos vec4, color vec4, uv vec2, normal vec3
         }, transformationMatrix);
         requestAnimationFrame(anim);
       };
+      anim();
     });
   };
   createImageExample();

@@ -158,68 +158,6 @@ console.time('createComputePipeline');
 }, 1000);
 
 
-// const dftReference = `
-                
-// struct InputData {
-//     values : array<f32>
-// }
-
-// struct OutputData {
-//     values: array<f32>
-// }
-
-// @group(0) @binding(0)
-// var<storage, read> inputData: InputData;
-
-// @group(0) @binding(1)
-// var<storage, read_write> outputData: OutputData;
-
-// @compute @workgroup_size(256)
-// fn main(
-//     @builtin(global_invocation_id) threadId: vec3<u32>
-// ) {
-//     let N = arrayLength(&inputData.values);
-//     let k = threadId.x;
-//     var sum = vec2<f32>(0.0, 0.0);
-
-//     for (var n = 0u; n < N; n = n + 1u) {
-//         let phase = 2.0 * 3.14159265359 * f32(k) * f32(n) / f32(N);
-//         sum = sum + vec2<f32>(
-//             inputData.values[n] * cos(phase),
-//             -inputData.values[n] * sin(phase)
-//         );
-//     }
-
-//     let outputIndex = k * 2;
-//     if (outputIndex + 1 < arrayLength(&outputData.values)) {
-//         outputData.values[outputIndex] = sum.x;
-//         outputData.values[outputIndex + 1] = sum.y;
-//     }
-// }
-
-// `
-
-
-
-
-
-// function matrixMultiply(
-//     matrixA = [vec4(1,0,0,0), vec4(0,1,0,0), vec4(0,0,1,0), vec4(0,0,0,1)],
-//     matrixB = [vec4(1,0,0,0), vec4(0,1,0,0), vec4(0,0,1,0), vec4(0,0,0,1)]
-// ) {
-//     const row = threadId.x;
-//     const col = threadId.y;
-    
-//     let sum = 0.0;
-//     for (let i = 0; i < matrixA.length; i++) {
-//         sum += matrixA[row][i] * matrixB[i][col];
-//     }
-//     matrixA[row *  + col] = sum;
-
-//     return matrixA
-// }
-
-
 
 
 function vertexExample() {
@@ -330,6 +268,7 @@ const createImageExample = async () => {
         return modelViewProjectionMatrix;
     } 
 
+    let transformationMatrix = getTransformationMatrix();
     console.time('createRenderPipeline and render texture');
     WebGPUjs.createPipeline({
         vertex:cubeExampleVert,
@@ -345,20 +284,31 @@ const createImageExample = async () => {
                 image:textureData //corresponds to the variable
             }
         },
-        inputs:[projectionMatrix] //placeholder mat4 projection matrix (copy wgsl-matrix library example from webgpu samples)
+        inputs:[transformationMatrix] //placeholder mat4 projection matrix (copy wgsl-matrix library example from webgpu samples)
     }).then(pipeline => {
         console.timeEnd('createRenderPipeline and render texture');
         console.log(pipeline);
         //should have rendered
+
+        let now = performance.now();
+        let fps = [];
         let anim = () => {
+            let time = performance.now();
+            let f = 1000/(time-now);
+            fps.push(f);
+            let frameTimeAvg = fps.reduce((a,b) => a+b)/(fps.length);
+            //console.log(frameTimeAvg.toFixed(1));
+            if(fps.length > 10) fps.shift();
+            now = time;
+            
             //update projection matrix then re-render
-            const transformationMatrix = getTransformationMatrix();
+            transformationMatrix = getTransformationMatrix(); 
             pipeline.render({
                 vertexCount:cubeVertices.length/13 // pos vec4, color vec4, uv vec2, normal vec3
-            },transformationMatrix);
+            }, transformationMatrix);
             requestAnimationFrame(anim);
         }
-        //anim();
+        anim();
     });
 
 }
@@ -367,3 +317,71 @@ createImageExample();
 
 //load texture data as unint8array or we can specify with _rgba8unorm etc
 //set cubeVertices as the vbo
+
+
+
+
+
+
+
+// const dftReference = `
+                
+// struct InputData {
+//     values : array<f32>
+// }
+
+// struct OutputData {
+//     values: array<f32>
+// }
+
+// @group(0) @binding(0)
+// var<storage, read> inputData: InputData;
+
+// @group(0) @binding(1)
+// var<storage, read_write> outputData: OutputData;
+
+// @compute @workgroup_size(256)
+// fn main(
+//     @builtin(global_invocation_id) threadId: vec3<u32>
+// ) {
+//     let N = arrayLength(&inputData.values);
+//     let k = threadId.x;
+//     var sum = vec2<f32>(0.0, 0.0);
+
+//     for (var n = 0u; n < N; n = n + 1u) {
+//         let phase = 2.0 * 3.14159265359 * f32(k) * f32(n) / f32(N);
+//         sum = sum + vec2<f32>(
+//             inputData.values[n] * cos(phase),
+//             -inputData.values[n] * sin(phase)
+//         );
+//     }
+
+//     let outputIndex = k * 2;
+//     if (outputIndex + 1 < arrayLength(&outputData.values)) {
+//         outputData.values[outputIndex] = sum.x;
+//         outputData.values[outputIndex + 1] = sum.y;
+//     }
+// }
+
+// `
+
+
+
+
+
+// function matrixMultiply(
+//     matrixA = [vec4(1,0,0,0), vec4(0,1,0,0), vec4(0,0,1,0), vec4(0,0,0,1)],
+//     matrixB = [vec4(1,0,0,0), vec4(0,1,0,0), vec4(0,0,1,0), vec4(0,0,0,1)]
+// ) {
+//     const row = threadId.x;
+//     const col = threadId.y;
+    
+//     let sum = 0.0;
+//     for (let i = 0; i < matrixA.length; i++) {
+//         sum += matrixA[row][i] * matrixB[i][col];
+//     }
+//     matrixA[row *  + col] = sum;
+
+//     return matrixA
+// }
+

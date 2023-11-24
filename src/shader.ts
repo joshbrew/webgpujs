@@ -115,17 +115,18 @@ export class ShaderHelper {
             this.compute.bufferGroups = this.bufferGroups;
             const entries = this.compute.createBindGroupEntries(options?.renderPass?.textures);
             this.compute.bindGroupLayoutEntries = entries;
-            this.compute.setBindGroupLayout(entries);
+            this.compute.setBindGroupLayout(entries, options.bindGroupNumber);
         }
         if(this.fragment) {
             //console.log(shaders.fragment.code)
             this.fragment.bufferGroups = this.bufferGroups;
-            const entries = this.fragment.createBindGroupEntries(options?.renderPass?.textures);
+            this.fragment.bindGroupLayouts = this.bindGroupLayouts;
+            const entries = this.fragment.createBindGroupEntries(options?.renderPass?.textures, undefined, GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT);
             this.fragment.bindGroupLayoutEntries = entries;
             this.fragment.bindGroupLayout = this.device.createBindGroupLayout({
                 entries: entries
             });
-            this.fragment.setBindGroupLayout(entries);
+            this.fragment.setBindGroupLayout(entries, options.bindGroupNumber);
         }
 
         //create shader modules
@@ -137,7 +138,7 @@ export class ShaderHelper {
 
             if(this.bindGroupLayouts.length > 0) {
                 this.compute.pipelineLayout = this.device.createPipelineLayout({
-                    bindGroupLayouts:this.bindGroupLayouts //this should have the combined compute and vertex/fragment (and accumulated) layouts
+                    bindGroupLayouts:this.bindGroupLayouts.filter(v => {if(v) return true;}) //this should have the combined compute and vertex/fragment (and accumulated) layouts
                 });
             }
 
@@ -165,13 +166,15 @@ export class ShaderHelper {
                 code: shaders.fragment.code
             });
 
+            this.fragment.vertex = this.vertex;
+
             if(this.bindGroupLayouts.length > 0) {
                 this.fragment.pipelineLayout = this.device.createPipelineLayout({
-                    bindGroupLayouts:this.bindGroupLayouts //this should have the combined compute and vertex/fragment (and accumulated) layouts
+                    bindGroupLayouts:this.bindGroupLayouts.filter(v => {if(v) return true;}) //this should have the combined compute and vertex/fragment (and accumulated) layouts
                 });
             }
 
-            this.updateGraphicsPipeline(
+            this.fragment.updateGraphicsPipeline(
                 options?.nVertexBuffers,  
                 options?.contextSettings,  
                 options?.renderPipelineDescriptor,
@@ -272,114 +275,6 @@ fn frag_main(
         if(this.context) (this.context as GPUCanvasContext)?.unconfigure();
     }
 
-    createRenderPipelineDescriptor = (nVertexBuffers=1, swapChainFormat = navigator.gpu.getPreferredCanvasFormat()) => {
-        if(!this.fragment || !this.vertex) throw new Error("No Fragment and Vertex ShaderContext defined");
-
-        // 5: Create a GPUVertexBufferLayout and GPURenderPipelineDescriptor to provide a definition of our render pipline
-        const vertexBuffers = Array.from({length:nVertexBuffers}, (_,i) => {
-            return {
-                arrayStride: 52,
-                attributes: [
-                    {format: "float32x4", offset: 0, shaderLocation:  4*i},   //vertex vec4
-                    {format: "float32x4", offset: 16, shaderLocation: 4*i+1},     //color vec4
-                    {format: "float32x2", offset: 32, shaderLocation: 4*i+2},    //uv vec2
-                    {format: "float32x3", offset: 40, shaderLocation: 4*i+3}   //normal vec3
-                ]
-            }
-        });
-        
-        const renderPipelineDescriptor = { //https://developer.mozilla.org/en-US/docs/Web/API/GPUDevice/createRenderPipeline
-            layout: this.fragment.pipelineLayout ? this.fragment.pipelineLayout : 'auto',
-            vertex: {
-                module: this.vertex.shaderModule,
-                entryPoint: 'vtx_main',
-                buffers: vertexBuffers
-            },
-            fragment: {
-                module: this.fragment.shaderModule,
-                entryPoint: 'frag_main',
-                targets: [{
-                    format: swapChainFormat
-                }]
-            },
-            depthStencil: {
-                format: "depth24plus", 
-                depthWriteEnabled: true, 
-                depthCompare: "less"
-            }
-        } as GPURenderPipelineDescriptor;
-        
-
-        return renderPipelineDescriptor;
-    }
-
-    createRenderPassDescriptor = () => {
-        
-        const view = (this.context as GPUCanvasContext)?.getCurrentTexture().createView();
-        const depthTexture = this.device.createTexture({
-            //allows 3D rendering
-            size: {width: this.canvas.width, height: this.canvas.height},
-            format: "depth24plus",
-            usage: GPUTextureUsage.RENDER_ATTACHMENT
-        });
-
-        return { //some assumptions. todo: unassume
-            colorAttachments: [{
-                view: view,
-                loadValue: { r: 0.0, g: 0.0, b: 0.0, a: 1.0 },
-                loadOp: "clear",
-                storeOp: "store" //discard
-            }],
-            depthStencilAttachment: {
-                view: depthTexture.createView(),
-                depthLoadOp: "clear",
-                depthClearValue: 1.0,
-                depthStoreOp: "store", //discard
-                // stencilLoadOp: "clear",
-                // stencilClearValue: 0,
-                // stencilStoreOp: "store"
-            }
-        } as GPURenderPassDescriptor;
-    }
-
-    //todo: break this down more
-    updateGraphicsPipeline = (
-        nVertexBuffers=1, 
-        contextSettings?:GPUCanvasConfiguration, 
-        renderPipelineDescriptor?:GPURenderPipelineDescriptor,
-        renderPassDescriptor?:GPURenderPassDescriptor
-    ) => {
-        if(!this.fragment || !this.vertex) throw new Error("No Fragment and Vertex ShaderContext defined");
-
-        // Setup render outputs
-        const swapChainFormat = navigator.gpu.getPreferredCanvasFormat();
-
-        (this.context as GPUCanvasContext)?.configure(contextSettings ? contextSettings : {
-            device: this.device, 
-            format: swapChainFormat, 
-            //usage: GPUTextureUsage.RENDER_ATTACHMENT,
-            alphaMode: 'premultiplied'
-        });
-
-        if(!renderPipelineDescriptor) 
-            renderPipelineDescriptor = this.createRenderPipelineDescriptor(nVertexBuffers, swapChainFormat);
-
-        if(!renderPassDescriptor)
-            renderPassDescriptor = this.createRenderPassDescriptor();
-
-        this.fragment.renderPassDescriptor = renderPassDescriptor;
-
-
-        this.fragment.graphicsPipeline = this.device.createRenderPipeline(renderPipelineDescriptor);
-         
-        // const canvasView = this.device.createTexture({
-        //     size: [this.canvas.width, this.canvas.height],
-        //     sampleCount:4,
-        //     format: navigator.gpu.getPreferredCanvasFormat(),
-        //     usage: GPUTextureUsage.RENDER_ATTACHMENT,
-        // });
-
-    }
 
     static flattenArray(arr) {
         let result = [] as any[];
@@ -486,6 +381,7 @@ export class ShaderContext {
     context:GPUCanvasContext | OffscreenRenderingContext; 
     device:GPUDevice; 
     helper:ShaderHelper;
+    vertex?:ShaderContext; //The vertex shader context if this is a fragment shader
     
     code: string;
     bindings: string;
@@ -582,6 +478,7 @@ export class ShaderContext {
                 } as any;
                 if(node.isDepthTexture) buffer.texture = { sampleType:'depth' };
                 else if(bufferGroup.textures?.[node.name]) {
+                    buffer.texture = {}
                     buffer.resource = bufferGroup.textures?.[node.name] ? bufferGroup.textures[node.name].createView() : {} //todo: texture dimensions/format/etc customizable
                 } else if (node.isStorageTexture && !node.isSharedStorageTexture) {
                     buffer.storageTexture = { //placeholder stuff but anyway you can provide your own bindings as the inferencing is a stretch after a point
@@ -611,6 +508,7 @@ export class ShaderContext {
                 const buffer = {
                     binding: node.binding,
                     visibility,
+                    sampler:{},
                     resource:bufferGroup.samplers[node.name] || {}
                 } as any;
                 
@@ -650,7 +548,12 @@ export class ShaderContext {
             this.bindGroupLayout = this.device.createBindGroupLayout({
                 entries
             });
+            
             this.bindGroupLayouts[bindGroupNumber] = this.bindGroupLayout;
+
+            this.pipelineLayout = this.device.createPipelineLayout({
+                bindGroupLayouts:this.bindGroupLayouts.filter(v => {if(v) return true;}) //this should have the combined compute and vertex/fragment (and accumulated) layouts
+            });
         }
         return this.bindGroupLayout;
     }
@@ -723,7 +626,10 @@ export class ShaderContext {
             label:  data.label ? data.label :`texture_g${bindGroupNumber}_${name}`,
             format: data.format ? data.format : 'rgba8unorm',
             size: {width: data.width, height: data.height},
-            usage:  data.usage ? data.usage : (GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT) //GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.COPY_SRC | 
+            usage:  data.usage ? data.usage : 
+                data.source ? 
+                    (GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT) : 
+                    (GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST) //GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.COPY_SRC | 
         } as GPUTextureDescriptor);
 
         let texInfo = {} as any;
@@ -757,7 +663,7 @@ export class ShaderContext {
         return true; //textures/samplers updated
     }
 
-    setUBOposition = (dataView, inputTypes, typeInfo, offset, input, inpIdx) => { //utility function, should clean up later (i.e. provide the values instead of objects to reference)
+    setUBOposition = (dataView:DataView, inputTypes, typeInfo, offset, input, inpIdx) => { //utility function, should clean up later (i.e. provide the values instead of objects to reference)
         // Ensure the offset is aligned correctly
         offset = Math.ceil(offset / typeInfo.alignment) * typeInfo.alignment;
         if(input !== undefined) {
@@ -781,22 +687,20 @@ export class ShaderContext {
                         dataView.setInt32(offset, input, true);
                         break;
                     case 'u32':
-                        dataView.setUInt32(offset, input, true); 
+                        dataView.setUint32(offset, input, true); 
                         break;
-                    case 'f16':
-                        dataView.setFloat16(offset, input, true); 
                         break;
                     case 'i16':
                         dataView.setInt16(offset, input, true); 
                         break;
                     case 'u16':
-                        dataView.setUInt16(offset, input, true); 
+                        dataView.setUint16(offset, input, true); 
                         break;
                     case 'i8':
-                        dataView.setInt8(offset, input, true);
+                        dataView.setInt8(offset, input);
                         break;
                     case 'u8':
-                        dataView.setUInt8(offset, input, true); 
+                        dataView.setUint8(offset, input); 
                         break;
                 }
             }
@@ -879,6 +783,114 @@ export class ShaderContext {
         } 
     }
 
+
+    createRenderPipelineDescriptor = (
+        nVertexBuffers=1, 
+        swapChainFormat = navigator.gpu.getPreferredCanvasFormat()
+    ) => {
+
+        // 5: Create a GPUVertexBufferLayout and GPURenderPipelineDescriptor to provide a definition of our render pipline
+        const vertexBuffers = Array.from({length:nVertexBuffers}, (_,i) => {
+            return {
+                arrayStride: 52,
+                attributes: [
+                    {format: "float32x4", offset: 0, shaderLocation:  4*i},   //vertex vec4
+                    {format: "float32x4", offset: 16, shaderLocation: 4*i+1},     //color vec4
+                    {format: "float32x2", offset: 32, shaderLocation: 4*i+2},    //uv vec2
+                    {format: "float32x3", offset: 40, shaderLocation: 4*i+3}   //normal vec3
+                ]
+            }
+        });
+        
+        const renderPipelineDescriptor = { //https://developer.mozilla.org/en-US/docs/Web/API/GPUDevice/createRenderPipeline
+            layout: this.pipelineLayout ? this.pipelineLayout : 'auto',
+            vertex: {
+                module: this.vertex.shaderModule,
+                entryPoint: 'vtx_main',
+                buffers: vertexBuffers
+            },
+            fragment: {
+                module: this.shaderModule,
+                entryPoint: 'frag_main',
+                targets: [{
+                    format: swapChainFormat
+                }]
+            },
+            depthStencil: {
+                format: "depth24plus", 
+                depthWriteEnabled: true, 
+                depthCompare: "less"
+            }
+        } as GPURenderPipelineDescriptor;
+        
+
+        return renderPipelineDescriptor;
+    }
+
+    createRenderPassDescriptor = () => {
+        
+        const view = (this.context as GPUCanvasContext)?.getCurrentTexture().createView();
+        const depthTexture = this.device.createTexture({
+            //allows 3D rendering
+            size: {width: this.canvas.width, height: this.canvas.height},
+            format: "depth24plus",
+            usage: GPUTextureUsage.RENDER_ATTACHMENT
+        });
+
+        return { //some assumptions. todo: unassume
+            colorAttachments: [{
+                view: view,
+                loadValue: { r: 0.0, g: 0.0, b: 0.0, a: 1.0 },
+                loadOp: "clear",
+                storeOp: "store" //discard
+            }],
+            depthStencilAttachment: {
+                view: depthTexture.createView(),
+                depthLoadOp: "clear",
+                depthClearValue: 1.0,
+                depthStoreOp: "store", //discard
+                // stencilLoadOp: "clear",
+                // stencilClearValue: 0,
+                // stencilStoreOp: "store"
+            }
+        } as GPURenderPassDescriptor;
+    }
+
+    updateGraphicsPipeline = (
+        nVertexBuffers=1, 
+        contextSettings?:GPUCanvasConfiguration, 
+        renderPipelineDescriptor?:GPURenderPipelineDescriptor,
+        renderPassDescriptor?:GPURenderPassDescriptor
+    ) => {
+        // Setup render outputs
+        const swapChainFormat = navigator.gpu.getPreferredCanvasFormat();
+
+        (this.context as GPUCanvasContext)?.configure(contextSettings ? contextSettings : {
+            device: this.device, 
+            format: swapChainFormat, 
+            //usage: GPUTextureUsage.RENDER_ATTACHMENT,
+            alphaMode: 'premultiplied'
+        });
+
+        if(!renderPipelineDescriptor) 
+            renderPipelineDescriptor = this.createRenderPipelineDescriptor(nVertexBuffers, swapChainFormat);
+
+        if(!renderPassDescriptor)
+            renderPassDescriptor = this.createRenderPassDescriptor();
+
+        this.renderPassDescriptor = renderPassDescriptor;
+
+        this.graphicsPipeline = this.device.createRenderPipeline(renderPipelineDescriptor); 
+            
+        // const canvasView = this.device.createTexture({
+        //     size: [this.canvas.width, this.canvas.height],
+        //     sampleCount:4,
+        //     format: navigator.gpu.getPreferredCanvasFormat(),
+        //     usage: GPUTextureUsage.RENDER_ATTACHMENT,
+        // });
+
+    }
+
     makeBufferGroup = (bindGroupNumber=this.bindGroupNumber) => {
         const bufferGroup = {} as any;
 
@@ -953,7 +965,7 @@ export class ShaderContext {
 
 
         if(textures) {
-            const entries = this.createBindGroupEntries(textures,bindGroupNumber);
+            const entries = this.createBindGroupEntries(textures,bindGroupNumber, this.vertex ? GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT : undefined);
             this.bindGroupLayoutEntries = entries;
             bufferGroup.bindGroupLayoutEntries = entries;
             this.setBindGroupLayout(entries, bindGroupNumber); //we need to reset the sampler and texture data on the bindGroup
@@ -1129,11 +1141,11 @@ export class ShaderContext {
             }))); 
 
             
-
             if(bufferGroup.defaultUniformBuffer) bindGroupEntries.push({
                 binding: bufferGroup.defaultUniformBinding, 
                 resource: {buffer:bufferGroup.defaultUniformBuffer}
             });
+            
             
             //console.log(bindGroupEntries)
             const bindGroup = this.device.createBindGroup({
@@ -1288,7 +1300,9 @@ export class ShaderContext {
                     if(!bufferGroup.vertexBuffers) this.updateVBO({color:new Array(bufferGroup.vertexCount*4).fill(0)}, 0); //put a default in to force it to run a single pass
                     
                     if(bufferGroup.vertexBuffers) 
-                        bufferGroup.vertexBuffers.forEach((vbo,i) => {renderPass.setVertexBuffer(i, vbo)});
+                        bufferGroup.vertexBuffers.forEach((vbo,i) => {
+                            renderPass.setVertexBuffer(i, vbo)
+                        });
                     
                     if(!useRenderBundle) {
 
@@ -1341,7 +1355,6 @@ export class ShaderContext {
                 }
                 (renderPass as GPURenderPassEncoder).end();
             }
-
             if(!skipOutputDef && bufferGroup.outputBuffers?.length > 0) {
                 return this.getOutputData(commandEncoder, bufferGroup.outputBuffers);
             } else {
