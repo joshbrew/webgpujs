@@ -286,7 +286,7 @@ const createImageExample = async () => {
         },
         bindings:{ //binding overrides (assigned to our custom-generated layout)
             image:{
-                texture:{viewDimension:'2d'} 
+                texture:{viewDimension:'2d', sampleType:'float'} 
             }
         },
         renderPipelineDescriptor:{ primitive: {topology:'triangle-list', cullMode:'back'}},

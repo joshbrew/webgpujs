@@ -1746,22 +1746,21 @@ fn frag_main(
           if (node.isDepthTexture)
             buffer.texture = { sampleType: "depth" };
           else if (bufferGroup.textures?.[node.name]) {
-            buffer.texture = { viewDimension: "2d" };
+            buffer.texture = {};
             buffer.resource = bufferGroup.textures?.[node.name] ? bufferGroup.textures[node.name].createView() : {};
           } else if (node.isStorageTexture && !node.isSharedStorageTexture) {
             buffer.storageTexture = {
               //placeholder stuff but anyway you can provide your own bindings as the inferencing is a stretch after a point
               access: "write-only",
-              //read-write only in chrome beta
+              //read-write only in chrome beta, todo: replace this when avaiable in production
               format: textures[node.name]?.format ? textures[node.name].format : "rgbaunorm",
               viewDimension: node.name.includes("3d") ? "3d" : node.name.includes("1d") ? "1d" : "2d"
             };
           } else {
-            buffer.texture = { sampleType: "unfilterable-float" };
+            buffer.texture = { sampleType: "float" };
           }
           if (this.bindings?.[node.name])
             Object.assign(buffer, this.bindings[node.name]);
-          console.log(buffer);
           bufferIncr++;
           return buffer;
         } else if (node.isSampler) {
@@ -4852,7 +4851,7 @@ fn frag_main(
       bindings: {
         //binding overrides (assigned to our custom-generated layout)
         image: {
-          texture: { viewDimension: "2d" }
+          texture: { viewDimension: "2d", sampleType: "float" }
         }
       },
       renderPipelineDescriptor: { primitive: { topology: "triangle-list", cullMode: "back" } },
