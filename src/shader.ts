@@ -493,7 +493,7 @@ export class ShaderContext {
                 return buffer;
             } else if(node.isSampler) { //todo, we may want multiple samplers, need to separate texture and sampler creation
                 if(!bufferGroup.samplers?.[node.name]) {
-                    const sampler = this.device.createSampler(textures[texKeys[texKeyRot]].samplerSettings?.[node.name] ? textures[texKeys[texKeyRot]].samplerSettings[node.name] : {
+                    const sampler = this.device.createSampler((texKeys && textures[texKeys[texKeyRot]].samplerSettings?.[node.name]) ? textures[texKeys[texKeyRot]].samplerSettings[node.name] : {
                         magFilter: 'linear',
                         minFilter: 'linear',
                         mipmapFilter: "linear",
@@ -512,7 +512,7 @@ export class ShaderContext {
                     resource:bufferGroup.samplers[node.name] || {}
                 } as any;
                 
-                texKeyRot++; if(texKeyRot >= texKeys.length) texKeyRot = 0;
+                texKeyRot++; if(texKeyRot >= texKeys?.length) texKeyRot = 0;
                 bufferIncr++;
                 return buffer;
             } else {
@@ -786,7 +786,8 @@ export class ShaderContext {
 
     createRenderPipelineDescriptor = (
         nVertexBuffers=1, 
-        swapChainFormat = navigator.gpu.getPreferredCanvasFormat()
+        swapChainFormat = navigator.gpu.getPreferredCanvasFormat(),
+        renderPipelineDescriptor:Partial<GPURenderPipelineDescriptor>={}
     ) => {
 
         // 5: Create a GPUVertexBufferLayout and GPURenderPipelineDescriptor to provide a definition of our render pipline
@@ -802,7 +803,7 @@ export class ShaderContext {
             }
         });
         
-        const renderPipelineDescriptor = { //https://developer.mozilla.org/en-US/docs/Web/API/GPUDevice/createRenderPipeline
+        renderPipelineDescriptor = { //https://developer.mozilla.org/en-US/docs/Web/API/GPUDevice/createRenderPipeline
             layout: this.pipelineLayout ? this.pipelineLayout : 'auto',
             vertex: {
                 module: this.vertex.shaderModule,
@@ -820,7 +821,8 @@ export class ShaderContext {
                 format: "depth24plus", 
                 depthWriteEnabled: true, 
                 depthCompare: "less"
-            }
+            },
+            ...renderPipelineDescriptor //just overwrite defaults in this case so we can pass specifics in
         } as GPURenderPipelineDescriptor;
         
 
@@ -859,7 +861,7 @@ export class ShaderContext {
     updateGraphicsPipeline = (
         nVertexBuffers=1, 
         contextSettings?:GPUCanvasConfiguration, 
-        renderPipelineDescriptor?:GPURenderPipelineDescriptor,
+        renderPipelineDescriptor?:Partial<GPURenderPipelineDescriptor>,
         renderPassDescriptor?:GPURenderPassDescriptor
     ) => {
         // Setup render outputs
@@ -872,15 +874,14 @@ export class ShaderContext {
             alphaMode: 'premultiplied'
         });
 
-        if(!renderPipelineDescriptor) 
-            renderPipelineDescriptor = this.createRenderPipelineDescriptor(nVertexBuffers, swapChainFormat);
+        renderPipelineDescriptor = this.createRenderPipelineDescriptor(nVertexBuffers, swapChainFormat, renderPipelineDescriptor);
 
         if(!renderPassDescriptor)
             renderPassDescriptor = this.createRenderPassDescriptor();
 
         this.renderPassDescriptor = renderPassDescriptor;
 
-        this.graphicsPipeline = this.device.createRenderPipeline(renderPipelineDescriptor); 
+        this.graphicsPipeline = this.device.createRenderPipeline(renderPipelineDescriptor as GPURenderPipelineDescriptor); 
             
         // const canvasView = this.device.createTexture({
         //     size: [this.canvas.width, this.canvas.height],

@@ -4,6 +4,7 @@ import { WGSLTranspiler } from "../src/transpiler";
 import { cubeVertices } from "./exampleCube";
 import { mat4 as m4, vec3 as v3 } from 'wgpu-matrix' //they'll transform the dummy functions on the bundle step if not renamed
 
+//dft is an O(n^2) example, plus a bunch of other nonsense just to test the transpiler out, we'll do this proper soon
 function dft(
     inputData = new Float32Array(), 
     outputData = [], 
@@ -267,7 +268,6 @@ const createImageExample = async () => {
         m4.multiply(projectionMatrix, viewMatrix, modelViewProjectionMatrix);
         return modelViewProjectionMatrix;
     } 
-
     let transformationMatrix = getTransformationMatrix();
     console.time('createRenderPipeline and render texture');
     WebGPUjs.createPipeline({
@@ -282,8 +282,9 @@ const createImageExample = async () => {
             ],
             textures:{
                 image:textureData //corresponds to the variable
-            }
+            },
         },
+        renderPipelineDescriptor:{ primitive: {topology:'triangle-list', cullMode:'back'}},
         inputs:[transformationMatrix] //placeholder mat4 projection matrix (copy wgsl-matrix library example from webgpu samples)
     }).then(pipeline => {
         console.timeEnd('createRenderPipeline and render texture');
@@ -292,12 +293,14 @@ const createImageExample = async () => {
 
         let now = performance.now();
         let fps = [];
+        let fpsticker = document.getElementById('ex3fps');
         let anim = () => {
             let time = performance.now();
             let f = 1000/(time-now);
             fps.push(f);
             let frameTimeAvg = fps.reduce((a,b) => a+b)/(fps.length);
             //console.log(frameTimeAvg.toFixed(1));
+            fpsticker.innerText = frameTimeAvg.toFixed(1);
             if(fps.length > 10) fps.shift();
             now = time;
             

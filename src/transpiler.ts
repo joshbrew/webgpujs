@@ -1053,7 +1053,7 @@ fn frag_main(
 
     //combine input bindings and create mappings so input arrays can be shared based on variable names, assuming same types in a continuous pipeline (the normal thing)
     static combineBindings(bindings1str:string, bindings2str:string) {
-        const bindingRegex = /@group\((\d+)\) @binding\((\d+)\)[\s\S]*?var[\s\S]*? (\w+):/g;
+        const bindingRegex = /@group\((\d+)\) @binding\((\d+)\)\s+(var(?:<[^>]+>)?)\s+(\w+)\s*:/g;
         const structRegex = /struct (\w+) \{([\s\S]*?)\}/;
 
         const combinedStructs = new Map();
@@ -1071,22 +1071,22 @@ fn frag_main(
         }
 
         // Adjust bindings in the second shader
-        bindings2str = bindings2str.replace(bindingRegex, (match, group, binding, varName) => {
+        bindings2str = bindings2str.replace(bindingRegex, (match, group, binding, varDecl, varName) => {
             let newBinding = binding;
             while (usedBindings.has(`${group}-${newBinding}`)) {
                 newBinding = (parseInt(newBinding) + 1).toString();
                 changesShader2[varName] = { group: group, binding: newBinding };
             }
             usedBindings.add(`${group}-${newBinding}`);
-            return `@group(${group}) @binding(${newBinding}) var ${varName}:`;
+            return `@group(${group}) @binding(${newBinding}) ${varDecl} ${varName}:`;
         });
 
         const extractBindings = (str, replacements, changes) => {
             let match;
             const regex = new RegExp(bindingRegex);
             while ((match = regex.exec(str)) !== null) {
-                replacements.set(match[3], match[0].slice(0, match[0].indexOf(' var')));
-                changes[match[3]] = {
+                replacements.set(match[4], match[0].slice(0, match[0].indexOf(' var')));
+                changes[match[4]] = {
                     group: match[1],
                     binding: match[2]
                 };

@@ -17,7 +17,7 @@ export type RenderOptions = {
     canvas?:HTMLCanvasElement|OffscreenCanvas,
     context?:GPUCanvasContext,
     contextSettings?:GPUCanvasConfiguration,
-    renderPipelineDescriptor?:GPURenderPipelineDescriptor,
+    renderPipelineDescriptor?:Partial<GPURenderPipelineDescriptor>, //specify partial settings e.g. the primitive topology
     renderPassDescriptor?:GPURenderPassDescriptor,
     renderPipelineSettings?:any,
     nVertexBuffers?:number,

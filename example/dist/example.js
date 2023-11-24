@@ -922,7 +922,7 @@ for (var i: i32 = 0; i < ${size}; i = i + 1) {
     };
     //combine input bindings and create mappings so input arrays can be shared based on variable names, assuming same types in a continuous pipeline (the normal thing)
     static combineBindings(bindings1str, bindings2str) {
-      const bindingRegex = /@group\((\d+)\) @binding\((\d+)\)[\s\S]*?var[\s\S]*? (\w+):/g;
+      const bindingRegex = /@group\((\d+)\) @binding\((\d+)\)\s+(var(?:<[^>]+>)?)\s+(\w+)\s*:/g;
       const structRegex = /struct (\w+) \{([\s\S]*?)\}/;
       const combinedStructs = /* @__PURE__ */ new Map();
       const replacementsOriginal = /* @__PURE__ */ new Map();
@@ -934,21 +934,21 @@ for (var i: i32 = 0; i < ${size}; i = i + 1) {
       while ((bmatch = bindingRegex.exec(bindings1str)) !== null) {
         usedBindings.add(`${bmatch[1]}-${bmatch[2]}`);
       }
-      bindings2str = bindings2str.replace(bindingRegex, (match2, group, binding, varName) => {
+      bindings2str = bindings2str.replace(bindingRegex, (match2, group, binding, varDecl, varName) => {
         let newBinding = binding;
         while (usedBindings.has(`${group}-${newBinding}`)) {
           newBinding = (parseInt(newBinding) + 1).toString();
           changesShader2[varName] = { group, binding: newBinding };
         }
         usedBindings.add(`${group}-${newBinding}`);
-        return `@group(${group}) @binding(${newBinding}) var ${varName}:`;
+        return `@group(${group}) @binding(${newBinding}) ${varDecl} ${varName}:`;
       });
       const extractBindings = (str, replacements2, changes) => {
         let match2;
         const regex = new RegExp(bindingRegex);
         while ((match2 = regex.exec(str)) !== null) {
-          replacements2.set(match2[3], match2[0].slice(0, match2[0].indexOf(" var")));
-          changes[match2[3]] = {
+          replacements2.set(match2[4], match2[0].slice(0, match2[0].indexOf(" var")));
+          changes[match2[4]] = {
             group: match2[1],
             binding: match2[2]
           };
@@ -1760,7 +1760,7 @@ fn frag_main(
           return buffer;
         } else if (node.isSampler) {
           if (!bufferGroup.samplers?.[node.name]) {
-            const sampler = this.device.createSampler(textures[texKeys[texKeyRot]].samplerSettings?.[node.name] ? textures[texKeys[texKeyRot]].samplerSettings[node.name] : {
+            const sampler = this.device.createSampler(texKeys && textures[texKeys[texKeyRot]].samplerSettings?.[node.name] ? textures[texKeys[texKeyRot]].samplerSettings[node.name] : {
               magFilter: "linear",
               minFilter: "linear",
               mipmapFilter: "linear",
@@ -1776,7 +1776,7 @@ fn frag_main(
             resource: bufferGroup.samplers[node.name] || {}
           };
           texKeyRot++;
-          if (texKeyRot >= texKeys.length)
+          if (texKeyRot >= texKeys?.length)
             texKeyRot = 0;
           bufferIncr++;
           return buffer;
@@ -1999,7 +1999,7 @@ fn frag_main(
           bufferGroup.defaultUniformBuffer.unmap();
       }
     };
-    createRenderPipelineDescriptor = (nVertexBuffers = 1, swapChainFormat = navigator.gpu.getPreferredCanvasFormat()) => {
+    createRenderPipelineDescriptor = (nVertexBuffers = 1, swapChainFormat = navigator.gpu.getPreferredCanvasFormat(), renderPipelineDescriptor = {}) => {
       const vertexBuffers = Array.from({ length: nVertexBuffers }, (_, i) => {
         return {
           arrayStride: 52,
@@ -2015,7 +2015,7 @@ fn frag_main(
           ]
         };
       });
-      const renderPipelineDescriptor = {
+      renderPipelineDescriptor = {
         //https://developer.mozilla.org/en-US/docs/Web/API/GPUDevice/createRenderPipeline
         layout: this.pipelineLayout ? this.pipelineLayout : "auto",
         vertex: {
@@ -2034,7 +2034,9 @@ fn frag_main(
           format: "depth24plus",
           depthWriteEnabled: true,
           depthCompare: "less"
-        }
+        },
+        ...renderPipelineDescriptor
+        //just overwrite defaults in this case so we can pass specifics in
       };
       return renderPipelineDescriptor;
     };
@@ -2075,8 +2077,7 @@ fn frag_main(
         //usage: GPUTextureUsage.RENDER_ATTACHMENT,
         alphaMode: "premultiplied"
       });
-      if (!renderPipelineDescriptor)
-        renderPipelineDescriptor = this.createRenderPipelineDescriptor(nVertexBuffers, swapChainFormat);
+      renderPipelineDescriptor = this.createRenderPipelineDescriptor(nVertexBuffers, swapChainFormat, renderPipelineDescriptor);
       if (!renderPassDescriptor)
         renderPassDescriptor = this.createRenderPassDescriptor();
       this.renderPassDescriptor = renderPassDescriptor;
@@ -4838,6 +4839,7 @@ fn frag_main(
           //corresponds to the variable
         }
       },
+      renderPipelineDescriptor: { primitive: { topology: "triangle-list", cullMode: "back" } },
       inputs: [transformationMatrix]
       //placeholder mat4 projection matrix (copy wgsl-matrix library example from webgpu samples)
     }).then((pipeline) => {
@@ -4845,11 +4847,13 @@ fn frag_main(
       console.log(pipeline);
       let now = performance.now();
       let fps = [];
+      let fpsticker = document.getElementById("ex3fps");
       let anim = () => {
         let time = performance.now();
         let f = 1e3 / (time - now);
         fps.push(f);
         let frameTimeAvg = fps.reduce((a, b) => a + b) / fps.length;
+        fpsticker.innerText = frameTimeAvg.toFixed(1);
         if (fps.length > 10)
           fps.shift();
         now = time;
