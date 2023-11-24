@@ -384,7 +384,7 @@ export class ShaderContext {
     vertex?:ShaderContext; //The vertex shader context if this is a fragment shader
     
     code: string;
-    bindings: string;
+    header: string;
     ast: any[];
     params: any[];
     funcStr: string;
@@ -415,6 +415,8 @@ export class ShaderContext {
     builtInUniforms:any;
 
     bufferGroups:any[] = [];
+
+    bindings?:Partial<GPUBindGroupEntry>[];
     bindGroups:GPUBindGroup[]=[];
     bindGroupLayouts:GPUBindGroupLayout[]=[];
     
@@ -469,6 +471,7 @@ export class ShaderContext {
                             type: 'uniform'
                         }
                     };
+                    if(this.bindings?.[node.name]) Object.assign(buffer,this.bindings[node.name]); //overrides
                     return buffer;
                 } else return undefined;
             } else if(node.isTexture || node.isStorageTexture) { //rudimentary storage texture checks since typically they'll share bindings
@@ -478,7 +481,7 @@ export class ShaderContext {
                 } as any;
                 if(node.isDepthTexture) buffer.texture = { sampleType:'depth' };
                 else if(bufferGroup.textures?.[node.name]) {
-                    buffer.texture = {}
+                    buffer.texture = { viewDimension:'2d' };
                     buffer.resource = bufferGroup.textures?.[node.name] ? bufferGroup.textures[node.name].createView() : {} //todo: texture dimensions/format/etc customizable
                 } else if (node.isStorageTexture && !node.isSharedStorageTexture) {
                     buffer.storageTexture = { //placeholder stuff but anyway you can provide your own bindings as the inferencing is a stretch after a point
@@ -489,6 +492,8 @@ export class ShaderContext {
                 } else { //IDK
                     buffer.texture = { sampleType:'unfilterable-float' }
                 }
+                if(this.bindings?.[node.name]) Object.assign(buffer,this.bindings[node.name]); //overrides
+                console.log(buffer);
                 bufferIncr++;
                 return buffer;
             } else if(node.isSampler) { //todo, we may want multiple samplers, need to separate texture and sampler creation
@@ -514,6 +519,8 @@ export class ShaderContext {
                 
                 texKeyRot++; if(texKeyRot >= texKeys?.length) texKeyRot = 0;
                 bufferIncr++;
+                
+                if(this.bindings?.[node.name]) Object.assign(buffer,this.bindings[node.name]); //overrides
                 return buffer;
             } else {
                 const buffer = {
@@ -524,6 +531,8 @@ export class ShaderContext {
                     }
                 };
                 bufferIncr++;
+                
+                if(this.bindings?.[node.name]) Object.assign(buffer,this.bindings[node.name]); //overrides
                 return buffer;
             }
         }).filter((v,i) => { if(v) return true; }) : [];

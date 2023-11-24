@@ -282,7 +282,12 @@ const createImageExample = async () => {
             ],
             textures:{
                 image:textureData //corresponds to the variable
-            },
+            }
+        },
+        bindings:{ //binding overrides (assigned to our custom-generated layout)
+            image:{
+                texture:{viewDimension:'2d'} 
+            }
         },
         renderPipelineDescriptor:{ primitive: {topology:'triangle-list', cullMode:'back'}},
         inputs:[transformationMatrix] //placeholder mat4 projection matrix (copy wgsl-matrix library example from webgpu samples)

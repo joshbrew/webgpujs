@@ -1666,7 +1666,7 @@ fn frag_main(
     vertex;
     //The vertex shader context if this is a fragment shader
     code;
-    bindings;
+    header;
     ast;
     params;
     funcStr;
@@ -1688,6 +1688,7 @@ fn frag_main(
     altBindings;
     builtInUniforms;
     bufferGroups = [];
+    bindings;
     bindGroups = [];
     bindGroupLayouts = [];
     bindGroupNumber;
@@ -1732,6 +1733,8 @@ fn frag_main(
                 type: "uniform"
               }
             };
+            if (this.bindings?.[node.name])
+              Object.assign(buffer, this.bindings[node.name]);
             return buffer;
           } else
             return void 0;
@@ -1743,7 +1746,7 @@ fn frag_main(
           if (node.isDepthTexture)
             buffer.texture = { sampleType: "depth" };
           else if (bufferGroup.textures?.[node.name]) {
-            buffer.texture = {};
+            buffer.texture = { viewDimension: "2d" };
             buffer.resource = bufferGroup.textures?.[node.name] ? bufferGroup.textures[node.name].createView() : {};
           } else if (node.isStorageTexture && !node.isSharedStorageTexture) {
             buffer.storageTexture = {
@@ -1756,6 +1759,9 @@ fn frag_main(
           } else {
             buffer.texture = { sampleType: "unfilterable-float" };
           }
+          if (this.bindings?.[node.name])
+            Object.assign(buffer, this.bindings[node.name]);
+          console.log(buffer);
           bufferIncr++;
           return buffer;
         } else if (node.isSampler) {
@@ -1779,6 +1785,8 @@ fn frag_main(
           if (texKeyRot >= texKeys?.length)
             texKeyRot = 0;
           bufferIncr++;
+          if (this.bindings?.[node.name])
+            Object.assign(buffer, this.bindings[node.name]);
           return buffer;
         } else {
           const buffer = {
@@ -1789,6 +1797,8 @@ fn frag_main(
             }
           };
           bufferIncr++;
+          if (this.bindings?.[node.name])
+            Object.assign(buffer, this.bindings[node.name]);
           return buffer;
         }
       }).filter((v, i) => {
@@ -4837,6 +4847,12 @@ fn frag_main(
         textures: {
           image: textureData
           //corresponds to the variable
+        }
+      },
+      bindings: {
+        //binding overrides (assigned to our custom-generated layout)
+        image: {
+          texture: { viewDimension: "2d" }
         }
       },
       renderPipelineDescriptor: { primitive: { topology: "triangle-list", cullMode: "back" } },
