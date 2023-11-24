@@ -15,8 +15,16 @@ export class ShaderHelper {
     vertex?:ShaderContext;
     fragment?:ShaderContext;
 
-    process = (...inputs:any[]) => { return this.compute?.run(this.compute.computePass, ...inputs)};
-    render = (renderPass?:RenderPassSettings, ...inputs:any[]) => { return this.fragment?.run(renderPass ? renderPass : this.fragment.renderPass ? this.fragment.renderPass : {vertexCount:1}, ...inputs);};
+    process = (...inputs:any[]) => { 
+        const shader = this.compute;
+        if(shader)
+            return this.compute?.run(this.compute.computePass, ...inputs)
+    };
+    render = (renderPass?:RenderPassSettings, ...inputs:any[]) => { 
+        let shader = this.fragment ? this.fragment : this.vertex;
+        if(shader) 
+            return shader.run(renderPass ? renderPass : shader.renderPass ? shader.renderPass : {vertexCount:1}, ...inputs);
+    };
 
     canvas:HTMLCanvasElement | OffscreenCanvas; 
     context:GPUCanvasContext | OffscreenRenderingContext; 
@@ -61,7 +69,7 @@ export class ShaderHelper {
 `)
     if(!options.device) options.device = this.device
 
-        if((shaders.fragment && !shaders.vertex) || (shaders.vertex && !shaders.fragment))
+        if((shaders.fragment && !shaders.vertex)) //todo: this might actually be a bad idea
             shaders = this.generateShaderBoilerplate(shaders,options);
 
         if(!options.skipCombinedBindings) {
@@ -84,9 +92,9 @@ export class ShaderHelper {
                 shaders.vertex.code = combined.code1;
                 shaders.vertex.altBindings = combined.changes1;
                 shaders.fragment.code = combined.code2;
-                shaders.fragment.altBindings = combined.changes2;
+                shaders.fragment.altBindings = combined.changes2;   
             }
-            if(shaders.vertex?.params){
+            if(shaders.vertex?.params && shaders.fragment){
                 if(shaders.fragment.params) shaders.vertex.params.push(...shaders.fragment.params); //make sure the vertex and fragment bindings are combined
                 shaders.fragment.params = shaders.vertex.params;
             }
@@ -100,11 +108,15 @@ export class ShaderHelper {
             Object.assign(this.compute, options);
         }
         if(shaders.fragment && shaders.vertex) {
-            
             WGSLTranspiler.combineShaderParams(shaders.vertex, shaders.fragment);
+        }
+        if(shaders.fragment) {
             this.fragment = new ShaderContext(Object.assign({},shaders.fragment, options));
             this.fragment.helper = this;
+        }
+        if(shaders.vertex) {
             this.vertex = new ShaderContext(Object.assign({},shaders.vertex, options)); //this will just be a dummy context, use fragment
+            this.vertex.helper = this;
         }
         
         //create bind group layouts
@@ -156,15 +168,18 @@ export class ShaderHelper {
 
 
         } 
-        if (this.vertex && this.fragment) { // If both vertex and fragment shaders are provided
-            
+        if(this.vertex) {
             this.vertex.shaderModule = this.device.createShaderModule({
                 code: shaders.vertex.code
             });
-
+        }
+        if(this.fragment) {
             this.fragment.shaderModule = this.device.createShaderModule({
                 code: shaders.fragment.code
             });
+        }
+        //todo: make vertex independent (but not fragment)
+        if (this.vertex && this.fragment) { // If both vertex and fragment shaders are provided
 
             this.fragment.vertex = this.vertex;
 
@@ -180,8 +195,21 @@ export class ShaderHelper {
                 options?.renderPipelineDescriptor,
                 options?.renderPassDescriptor
             );
+        } else if (this.vertex) {
+            
+            if(this.bindGroupLayouts.length > 0) {
+                this.vertex.pipelineLayout = this.device.createPipelineLayout({
+                    bindGroupLayouts:this.bindGroupLayouts.filter(v => {if(v) return true;}) //this should have the combined compute and vertex/fragment (and accumulated) layouts
+                });
+            }
 
-        } 
+            this.vertex.updateGraphicsPipeline(
+                options?.nVertexBuffers,  
+                options?.contextSettings,  
+                options?.renderPipelineDescriptor,
+                options?.renderPassDescriptor
+            );
+        }
         //eof
     }
 
@@ -248,21 +276,23 @@ fn vtx_main(
     return pixel;
 }`
                 } as any; //todo: missing params
-            } else if (shaderContext && shaderType === 'vertex' && !shaders.fragment) {
-                this.fragment = {
-                    code:`
-@fragment
-fn frag_main(
-    pixel: Vertex,
-    @builtin(front_facing) is_front: bool,   //true when current fragment is on front-facing primitive
-    @builtin(sample_index) sampleIndex: u32, //sample index for the current fragment
-    @builtin(sample_mask) sampleMask: u32,   //contains a bitmask indicating which samples in this fragment are covered by the primitive being rendered
-    @builtin(frag_depth) depth: f32          //Updated depth of the fragment, in the viewport depth range.
-) -> @location(0) vec4<f32> {
-    return pixel.color;
-}`
-                } as any; //todo: missing params
-            }
+            } 
+//we don't actually need a fragment shader on a vertex shader (see shadowing example from webgpu samples)
+//             else if (shaderContext && shaderType === 'vertex' && !shaders.fragment) {
+//                 this.fragment = {
+//                     code:`
+// @fragment
+// fn frag_main(
+//     pixel: Vertex,
+//     @builtin(front_facing) is_front: bool,   //true when current fragment is on front-facing primitive
+//     @builtin(sample_index) sampleIndex: u32, //sample index for the current fragment
+//     @builtin(sample_mask) sampleMask: u32,   //contains a bitmask indicating which samples in this fragment are covered by the primitive being rendered
+//     @builtin(frag_depth) depth: f32          //Updated depth of the fragment, in the viewport depth range.
+// ) -> @location(0) vec4<f32> {
+//     return pixel.color;
+// }`
+//                 } as any; //todo: missing params
+//             }
 
             shaderContext.device = this.device;
         }
@@ -481,7 +511,7 @@ export class ShaderContext {
                 } as any;
                 if(node.isDepthTexture) buffer.texture = { sampleType:'depth' };
                 else if(bufferGroup.textures?.[node.name]) {
-                    buffer.texture = { };
+                    buffer.texture = { sampleType:'float' };
                     buffer.resource = bufferGroup.textures?.[node.name] ? bufferGroup.textures[node.name].createView() : {} //todo: texture dimensions/format/etc customizable
                 } else if (node.isStorageTexture && !node.isSharedStorageTexture) {
                     buffer.storageTexture = { //placeholder stuff but anyway you can provide your own bindings as the inferencing is a stretch after a point
@@ -490,7 +520,7 @@ export class ShaderContext {
                         viewDimension:node.name.includes('3d') ? '3d' : node.name.includes('1d') ? '1d' : '2d'
                     };
                 } else { //IDK
-                    buffer.texture = { sampleType:'float' }
+                    buffer.texture = { sampleType:'unfilterable-float' }
                 }
                 if(this.bindings?.[node.name]) Object.assign(buffer,this.bindings[node.name]); //overrides
                 bufferIncr++;
@@ -811,28 +841,34 @@ export class ShaderContext {
             }
         });
         
-        renderPipelineDescriptor = { //https://developer.mozilla.org/en-US/docs/Web/API/GPUDevice/createRenderPipeline
+        let desc = { //https://developer.mozilla.org/en-US/docs/Web/API/GPUDevice/createRenderPipeline
             layout: this.pipelineLayout ? this.pipelineLayout : 'auto',
-            vertex: {
+            vertex: this.vertex ? {
                 module: this.vertex.shaderModule,
                 entryPoint: 'vtx_main',
                 buffers: vertexBuffers
+            } : {
+                module: this.shaderModule,
+                entryPoint: 'vtx_main',
+                targets: [{
+                    format: swapChainFormat
+                }]
             },
-            fragment: {
+            fragment: this.vertex ? {
                 module: this.shaderModule,
                 entryPoint: 'frag_main',
                 targets: [{
                     format: swapChainFormat
                 }]
-            },
+            } : undefined,
             depthStencil: {
                 format: "depth24plus", 
                 depthWriteEnabled: true, 
                 depthCompare: "less"
-            },
-            ...renderPipelineDescriptor //just overwrite defaults in this case so we can pass specifics in
+            }
         } as GPURenderPipelineDescriptor;
-        
+        if(!this.vertex) delete renderPipelineDescriptor.fragment;
+        renderPipelineDescriptor = Object.assign(desc, renderPipelineDescriptor); //just overwrite defaults in this case so we can pass specifics in)
 
         return renderPipelineDescriptor;
     }
@@ -974,7 +1010,7 @@ export class ShaderContext {
 
 
         if(textures) {
-            const entries = this.createBindGroupEntries(textures,bindGroupNumber, this.vertex ? GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT : undefined);
+            const entries = this.createBindGroupEntries(textures,bindGroupNumber, (this.vertex || (!this.vertex && this.graphicsPipeline)) ? GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT : undefined);
             this.bindGroupLayoutEntries = entries;
             bufferGroup.bindGroupLayoutEntries = entries;
             this.setBindGroupLayout(entries, bindGroupNumber); //we need to reset the sampler and texture data on the bindGroup

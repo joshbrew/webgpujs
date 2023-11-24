@@ -1354,10 +1354,14 @@ for (var i: i32 = 0; i < ${size}; i = i + 1) {
     vertex;
     fragment;
     process = (...inputs) => {
-      return this.compute?.run(this.compute.computePass, ...inputs);
+      const shader = this.compute;
+      if (shader)
+        return this.compute?.run(this.compute.computePass, ...inputs);
     };
     render = (renderPass, ...inputs) => {
-      return this.fragment?.run(renderPass ? renderPass : this.fragment.renderPass ? this.fragment.renderPass : { vertexCount: 1 }, ...inputs);
+      let shader = this.fragment ? this.fragment : this.vertex;
+      if (shader)
+        return shader.run(renderPass ? renderPass : shader.renderPass ? shader.renderPass : { vertexCount: 1 }, ...inputs);
     };
     canvas;
     context;
@@ -1385,7 +1389,7 @@ for (var i: i32 = 0; i < ${size}; i = i + 1) {
 `);
       if (!options.device)
         options.device = this.device;
-      if (shaders.fragment && !shaders.vertex || shaders.vertex && !shaders.fragment)
+      if (shaders.fragment && !shaders.vertex)
         shaders = this.generateShaderBoilerplate(shaders, options);
       if (!options.skipCombinedBindings) {
         if (shaders.compute && shaders.vertex) {
@@ -1409,7 +1413,7 @@ for (var i: i32 = 0; i < ${size}; i = i + 1) {
           shaders.fragment.code = combined.code2;
           shaders.fragment.altBindings = combined.changes2;
         }
-        if (shaders.vertex?.params) {
+        if (shaders.vertex?.params && shaders.fragment) {
           if (shaders.fragment.params)
             shaders.vertex.params.push(...shaders.fragment.params);
           shaders.fragment.params = shaders.vertex.params;
@@ -1423,9 +1427,14 @@ for (var i: i32 = 0; i < ${size}; i = i + 1) {
       }
       if (shaders.fragment && shaders.vertex) {
         WGSLTranspiler.combineShaderParams(shaders.vertex, shaders.fragment);
+      }
+      if (shaders.fragment) {
         this.fragment = new ShaderContext(Object.assign({}, shaders.fragment, options));
         this.fragment.helper = this;
+      }
+      if (shaders.vertex) {
         this.vertex = new ShaderContext(Object.assign({}, shaders.vertex, options));
+        this.vertex.helper = this;
       }
       if (this.compute) {
         this.compute.bindGroupLayouts = this.bindGroupLayouts;
@@ -1469,13 +1478,17 @@ for (var i: i32 = 0; i < ${size}; i = i + 1) {
           Object.assign(pipeline, options?.computePipelineSettings);
         this.compute.computePipeline = this.device.createComputePipeline(pipeline);
       }
-      if (this.vertex && this.fragment) {
+      if (this.vertex) {
         this.vertex.shaderModule = this.device.createShaderModule({
           code: shaders.vertex.code
         });
+      }
+      if (this.fragment) {
         this.fragment.shaderModule = this.device.createShaderModule({
           code: shaders.fragment.code
         });
+      }
+      if (this.vertex && this.fragment) {
         this.fragment.vertex = this.vertex;
         if (this.bindGroupLayouts.length > 0) {
           this.fragment.pipelineLayout = this.device.createPipelineLayout({
@@ -1487,6 +1500,22 @@ for (var i: i32 = 0; i < ${size}; i = i + 1) {
           });
         }
         this.fragment.updateGraphicsPipeline(
+          options?.nVertexBuffers,
+          options?.contextSettings,
+          options?.renderPipelineDescriptor,
+          options?.renderPassDescriptor
+        );
+      } else if (this.vertex) {
+        if (this.bindGroupLayouts.length > 0) {
+          this.vertex.pipelineLayout = this.device.createPipelineLayout({
+            bindGroupLayouts: this.bindGroupLayouts.filter((v) => {
+              if (v)
+                return true;
+            })
+            //this should have the combined compute and vertex/fragment (and accumulated) layouts
+          });
+        }
+        this.vertex.updateGraphicsPipeline(
           options?.nVertexBuffers,
           options?.contextSettings,
           options?.renderPipelineDescriptor,
@@ -1551,20 +1580,6 @@ fn vtx_main(
     pixel.color = pixel.position[vertexId];
     pixel.vertex = pixel.position[vertexId];
     return pixel;
-}`
-          };
-        } else if (shaderContext && shaderType === "vertex" && !shaders.fragment) {
-          this.fragment = {
-            code: `
-@fragment
-fn frag_main(
-    pixel: Vertex,
-    @builtin(front_facing) is_front: bool,   //true when current fragment is on front-facing primitive
-    @builtin(sample_index) sampleIndex: u32, //sample index for the current fragment
-    @builtin(sample_mask) sampleMask: u32,   //contains a bitmask indicating which samples in this fragment are covered by the primitive being rendered
-    @builtin(frag_depth) depth: f32          //Updated depth of the fragment, in the viewport depth range.
-) -> @location(0) vec4<f32> {
-    return pixel.color;
 }`
           };
         }
@@ -1746,7 +1761,7 @@ fn frag_main(
           if (node.isDepthTexture)
             buffer.texture = { sampleType: "depth" };
           else if (bufferGroup.textures?.[node.name]) {
-            buffer.texture = {};
+            buffer.texture = { sampleType: "float" };
             buffer.resource = bufferGroup.textures?.[node.name] ? bufferGroup.textures[node.name].createView() : {};
           } else if (node.isStorageTexture && !node.isSharedStorageTexture) {
             buffer.storageTexture = {
@@ -1757,7 +1772,7 @@ fn frag_main(
               viewDimension: node.name.includes("3d") ? "3d" : node.name.includes("1d") ? "1d" : "2d"
             };
           } else {
-            buffer.texture = { sampleType: "float" };
+            buffer.texture = { sampleType: "unfilterable-float" };
           }
           if (this.bindings?.[node.name])
             Object.assign(buffer, this.bindings[node.name]);
@@ -2024,29 +2039,36 @@ fn frag_main(
           ]
         };
       });
-      renderPipelineDescriptor = {
+      let desc = {
         //https://developer.mozilla.org/en-US/docs/Web/API/GPUDevice/createRenderPipeline
         layout: this.pipelineLayout ? this.pipelineLayout : "auto",
-        vertex: {
+        vertex: this.vertex ? {
           module: this.vertex.shaderModule,
           entryPoint: "vtx_main",
           buffers: vertexBuffers
+        } : {
+          module: this.shaderModule,
+          entryPoint: "vtx_main",
+          targets: [{
+            format: swapChainFormat
+          }]
         },
-        fragment: {
+        fragment: this.vertex ? {
           module: this.shaderModule,
           entryPoint: "frag_main",
           targets: [{
             format: swapChainFormat
           }]
-        },
+        } : void 0,
         depthStencil: {
           format: "depth24plus",
           depthWriteEnabled: true,
           depthCompare: "less"
-        },
-        ...renderPipelineDescriptor
-        //just overwrite defaults in this case so we can pass specifics in
+        }
       };
+      if (!this.vertex)
+        delete renderPipelineDescriptor.fragment;
+      renderPipelineDescriptor = Object.assign(desc, renderPipelineDescriptor);
       return renderPipelineDescriptor;
     };
     createRenderPassDescriptor = () => {
@@ -2153,7 +2175,7 @@ fn frag_main(
       } else
         newBindGroupBuffer = true;
       if (textures) {
-        const entries = this.createBindGroupEntries(textures, bindGroupNumber, this.vertex ? GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT : void 0);
+        const entries = this.createBindGroupEntries(textures, bindGroupNumber, this.vertex || !this.vertex && this.graphicsPipeline ? GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT : void 0);
         this.bindGroupLayoutEntries = entries;
         bufferGroup.bindGroupLayoutEntries = entries;
         this.setBindGroupLayout(entries, bindGroupNumber);
