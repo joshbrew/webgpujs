@@ -1281,7 +1281,7 @@ fn frag_main(
             lastBinding
         ); //simply share bindGroups 0 and 1 between compute and render
 
-        const bindings = webGPUCode.code;
+        const header = webGPUCode.code;
         webGPUCode.code += '\n' + this.generateMainFunctionWorkGroup(
             funcStr, 
             ast, 
@@ -1294,7 +1294,7 @@ fn frag_main(
 
         return {
             code:this.indentCode(webGPUCode.code), 
-            bindings, 
+            header, 
             ast, 
             params:webGPUCode.params, 
             funcStr, 
