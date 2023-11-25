@@ -486,9 +486,10 @@ export class ShaderContext {
 
         let texKeys; let texKeyRot = 0;
         if(bufferGroup.textures) texKeys = Object.keys(bufferGroup.textures);
-
+        let assignedEntries = {};
         const entries = bufferGroup.params ? bufferGroup.params.map((node, i) => {
             if(node.group !== bindGroupNumber) return undefined;
+            assignedEntries[node.name] = true;
             let isReturned = (bufferGroup.returnedVars === undefined || bufferGroup.returnedVars?.includes(node.name));
             if (node.isUniform) {
                 if (typeof uniformBufferIdx === 'undefined') {
@@ -511,13 +512,16 @@ export class ShaderContext {
                 } as any;
                 if(node.isDepthTexture) buffer.texture = { sampleType:'depth' };
                 else if(bufferGroup.textures?.[node.name]) {
-                    buffer.texture = { sampleType:'float' };
+                    buffer.texture = { 
+                        sampleType:'float',
+                        viewDimension:node.name.includes('3d') ? '3d' : node.name.includes('1d') ? '1d' : node.name.includes('2darr') ? '2d-array' : '2d'
+                     };
                     buffer.resource = bufferGroup.textures?.[node.name] ? bufferGroup.textures[node.name].createView() : {} //todo: texture dimensions/format/etc customizable
                 } else if (node.isStorageTexture && !node.isSharedStorageTexture) {
                     buffer.storageTexture = { //placeholder stuff but anyway you can provide your own bindings as the inferencing is a stretch after a point
                         access:'write-only', //read-write only in chrome beta, todo: replace this when avaiable in production
                         format:textures[node.name]?.format ? textures[node.name].format : 'rgbaunorm',
-                        viewDimension:node.name.includes('3d') ? '3d' : node.name.includes('1d') ? '1d' : '2d'
+                        viewDimension:node.name.includes('3d') ? '3d' : node.name.includes('1d') ? '1d' : node.name.includes('2darr') ? '2d-array' : '2d'
                     };
                 } else { //IDK
                     buffer.texture = { sampleType:'unfilterable-float' }
@@ -565,6 +569,13 @@ export class ShaderContext {
                 return buffer;
             }
         }).filter((v,i) => { if(v) return true; }) : [];
+
+        if(this.bindings) {
+            for(const key in this.bindings) {
+                if(!assignedEntries[key])
+                    entries.push(this.bindings[key]); //push any extra bindings (e.g. if we're forcing our own bindings, but they must be complete!)
+            }
+        }
 
         //console.trace( entries )
         if(bufferGroup.defaultUniforms) {
@@ -663,7 +674,7 @@ export class ShaderContext {
         bufferGroup.textures[name] = this.device.createTexture(data.texture ? data.texture : {
             label:  data.label ? data.label :`texture_g${bindGroupNumber}_${name}`,
             format: data.format ? data.format : 'rgba8unorm',
-            size: {width: data.width, height: data.height},
+            size: [data.width, data.height, 1],
             usage:  data.usage ? data.usage : 
                 data.source ? 
                     (GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT) : 
@@ -691,10 +702,7 @@ export class ShaderContext {
             this.device.queue.copyExternalImageToTexture(
                 texInfo, //e.g. an ImageBitmap
                 { texture: bufferGroup.textures[name] },
-                { 
-                    width: data.width, 
-                    height: data.height 
-                },
+                [data.width, data.height],
             );
 
         //todo: we need to pass the updated sampler and texture view to the bindGroupLayout
@@ -783,6 +791,7 @@ export class ShaderContext {
                 if(node.isInput) inpIdx++;
             });
 
+            //console.log(inputs, new Float32Array(dataView.buffer)); //check validity
             if(bufferGroup.uniformBuffer.mapState === 'mapped') bufferGroup.uniformBuffer.unmap();
             // else {
             //     this.device.queue.writeBuffer(
@@ -793,6 +802,7 @@ export class ShaderContext {
             //         bufferGroup.uniformBuffer.size/4
             //     )
             // }
+
         }
 
         if(bufferGroup.defaultUniforms) { //update built-in uniforms (you can add whatever you want to the builtInUniforms list)
@@ -834,9 +844,9 @@ export class ShaderContext {
                 arrayStride: 52,
                 attributes: [
                     {format: "float32x4", offset: 0, shaderLocation:  4*i},   //vertex vec4
-                    {format: "float32x4", offset: 16, shaderLocation: 4*i+1},     //color vec4
-                    {format: "float32x2", offset: 32, shaderLocation: 4*i+2},    //uv vec2
-                    {format: "float32x3", offset: 40, shaderLocation: 4*i+3}   //normal vec3
+                    {format: "float32x4", offset: 16, shaderLocation: 4*i+1}, //color vec4
+                    {format: "float32x2", offset: 32, shaderLocation: 4*i+2}, //uv vec2
+                    {format: "float32x3", offset: 40, shaderLocation: 4*i+3}  //normal vec3
                 ]
             }
         });
@@ -875,18 +885,18 @@ export class ShaderContext {
 
     createRenderPassDescriptor = () => {
         
-        const view = (this.context as GPUCanvasContext)?.getCurrentTexture().createView();
+        //const view = (this.context as GPUCanvasContext)?.getCurrentTexture().createView();
         const depthTexture = this.device.createTexture({
             //allows 3D rendering
-            size: {width: this.canvas.width, height: this.canvas.height},
+            size: [this.canvas.width, this.canvas.height],
             format: "depth24plus",
             usage: GPUTextureUsage.RENDER_ATTACHMENT
         });
 
         return { //some assumptions. todo: unassume
             colorAttachments: [{
-                view: view,
-                loadValue: { r: 0.0, g: 0.0, b: 0.0, a: 1.0 },
+                view: undefined,//view,
+                clearValue: { r: 0.0, g: 0.0, b: 0.0, a: 0.0 },
                 loadOp: "clear",
                 storeOp: "store" //discard
             }],

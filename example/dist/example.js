@@ -1078,7 +1078,7 @@ for (var i: i32 = 0; i < ${size}; i = i + 1) {
         variableTypes,
         lastBinding
       );
-      const bindings = webGPUCode.code;
+      const header = webGPUCode.code;
       webGPUCode.code += "\n" + this.generateMainFunctionWorkGroup(
         funcStr,
         ast,
@@ -1090,7 +1090,7 @@ for (var i: i32 = 0; i < ${size}; i = i + 1) {
       );
       return {
         code: this.indentCode(webGPUCode.code),
-        bindings,
+        header,
         ast,
         params: webGPUCode.params,
         funcStr,
@@ -1733,9 +1733,11 @@ fn vtx_main(
       let texKeyRot = 0;
       if (bufferGroup.textures)
         texKeys = Object.keys(bufferGroup.textures);
+      let assignedEntries = {};
       const entries = bufferGroup.params ? bufferGroup.params.map((node, i) => {
         if (node.group !== bindGroupNumber)
           return void 0;
+        assignedEntries[node.name] = true;
         let isReturned = bufferGroup.returnedVars === void 0 || bufferGroup.returnedVars?.includes(node.name);
         if (node.isUniform) {
           if (typeof uniformBufferIdx === "undefined") {
@@ -1761,7 +1763,10 @@ fn vtx_main(
           if (node.isDepthTexture)
             buffer.texture = { sampleType: "depth" };
           else if (bufferGroup.textures?.[node.name]) {
-            buffer.texture = { sampleType: "float" };
+            buffer.texture = {
+              sampleType: "float",
+              viewDimension: node.name.includes("3d") ? "3d" : node.name.includes("1d") ? "1d" : node.name.includes("2darr") ? "2d-array" : "2d"
+            };
             buffer.resource = bufferGroup.textures?.[node.name] ? bufferGroup.textures[node.name].createView() : {};
           } else if (node.isStorageTexture && !node.isSharedStorageTexture) {
             buffer.storageTexture = {
@@ -1769,7 +1774,7 @@ fn vtx_main(
               access: "write-only",
               //read-write only in chrome beta, todo: replace this when avaiable in production
               format: textures[node.name]?.format ? textures[node.name].format : "rgbaunorm",
-              viewDimension: node.name.includes("3d") ? "3d" : node.name.includes("1d") ? "1d" : "2d"
+              viewDimension: node.name.includes("3d") ? "3d" : node.name.includes("1d") ? "1d" : node.name.includes("2darr") ? "2d-array" : "2d"
             };
           } else {
             buffer.texture = { sampleType: "unfilterable-float" };
@@ -1819,6 +1824,12 @@ fn vtx_main(
         if (v)
           return true;
       }) : [];
+      if (this.bindings) {
+        for (const key in this.bindings) {
+          if (!assignedEntries[key])
+            entries.push(this.bindings[key]);
+        }
+      }
       if (bufferGroup.defaultUniforms) {
         entries.push({
           binding: bufferIncr,
@@ -1899,7 +1910,7 @@ fn vtx_main(
       bufferGroup.textures[name] = this.device.createTexture(data.texture ? data.texture : {
         label: data.label ? data.label : `texture_g${bindGroupNumber}_${name}`,
         format: data.format ? data.format : "rgba8unorm",
-        size: { width: data.width, height: data.height },
+        size: [data.width, data.height, 1],
         usage: data.usage ? data.usage : data.source ? GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT : GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST
         //GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.COPY_SRC | 
       });
@@ -1925,10 +1936,7 @@ fn vtx_main(
           texInfo,
           //e.g. an ImageBitmap
           { texture: bufferGroup.textures[name] },
-          {
-            width: data.width,
-            height: data.height
-          }
+          [data.width, data.height]
         );
       return true;
     };
@@ -2072,18 +2080,18 @@ fn vtx_main(
       return renderPipelineDescriptor;
     };
     createRenderPassDescriptor = () => {
-      const view = this.context?.getCurrentTexture().createView();
       const depthTexture = this.device.createTexture({
         //allows 3D rendering
-        size: { width: this.canvas.width, height: this.canvas.height },
+        size: [this.canvas.width, this.canvas.height],
         format: "depth24plus",
         usage: GPUTextureUsage.RENDER_ATTACHMENT
       });
       return {
         //some assumptions. todo: unassume
         colorAttachments: [{
-          view,
-          loadValue: { r: 0, g: 0, b: 0, a: 1 },
+          view: void 0,
+          //view,
+          clearValue: { r: 0, g: 0, b: 0, a: 0 },
           loadOp: "clear",
           storeOp: "store"
           //discard
@@ -4901,7 +4909,6 @@ fn vtx_main(
         }, transformationMatrix);
         requestAnimationFrame(anim);
       };
-      anim();
     });
   };
   createImageExample();
