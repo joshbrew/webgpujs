@@ -233,8 +233,8 @@ function cubeExampleFrag() {
 }
 
 const createImageExample = async () => {
-    const response = await fetch('./knucks.jpg');
-    const imageBitmap = await createImageBitmap(await response.blob());
+    const response = await fetch('./knucks.jpg'); let data = await response.blob();
+    const imageBitmap = await createImageBitmap(data);
     const textureData = {
         source:imageBitmap
     }
@@ -275,7 +275,7 @@ const createImageExample = async () => {
         fragment:cubeExampleFrag
     },{
         canvas:canv2,
-        renderPass:{
+        renderPass:{ //tell it to make an initial render pass with these inputs
             vertexCount:cubeVertices.length/13,
             vbos:[ //we can upload vbos
                 cubeVertices //the shader system will set the draw call count based on the number of rows (assumed to be position4,color4,uv2,normal3 or vertexCount = len/13) in the vertices of the first supplied vbo
@@ -284,12 +284,14 @@ const createImageExample = async () => {
                 image:textureData //corresponds to the variable
             }
         },
-        bindings:{ //binding overrides (assigned to our custom-generated layout)
-            image:{
-                texture:{viewDimension:'2d', sampleType:'float'} 
-            }
-        },
+        // bindings:{ //binding overrides (assigned to our custom-generated layout)
+        //     image:{
+        //         texture:{viewDimension:'2d', sampleType:'float'} 
+        //     }
+        // },
+        //overrides for pipeline descriptor will be assigned so you can add or rewrite what you need over the defaults
         renderPipelineDescriptor:{ primitive: {topology:'triangle-list', cullMode:'back'}},
+        //additional render or compute pass inputs (just the UBO update in this case)
         inputs:[transformationMatrix] //placeholder mat4 projection matrix (copy wgsl-matrix library example from webgpu samples)
     }).then(pipeline => {
         console.timeEnd('createRenderPipeline and render texture');

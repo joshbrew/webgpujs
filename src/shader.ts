@@ -597,7 +597,6 @@ export class ShaderContext {
             this.bindGroupLayout = this.device.createBindGroupLayout({
                 entries
             });
-            
             this.bindGroupLayouts[bindGroupNumber] = this.bindGroupLayout;
 
             this.pipelineLayout = this.device.createPipelineLayout({
@@ -1145,7 +1144,7 @@ export class ShaderContext {
             }
         }
 
-        //run the buffer() call now for each group tied to each shader based on load order
+        //run the buffer() call now for each group tied to each shader based on load order //todo: fix
         bindGroupAlts.forEach((inp,i) => {
             if(inp && i !== bindGroupNumber)
                 this.buffer({bindGroupNumber:i}, ...inp);
@@ -1187,8 +1186,13 @@ export class ShaderContext {
             let bindGroupEntries = [];
             if(bufferGroup.bindGroupLayoutEntries)  {
                 bindGroupEntries.push(...bufferGroup.bindGroupLayoutEntries);
+                let inpBufi = 0;
                 bufferGroup.bindGroupLayoutEntries.forEach((entry,i) => {
-                    if(inputBuffers[i]) entry.resource = { buffer: inputBuffers[i] }
+                    let type = entry.buffer?.type;
+                    if((type && (type.includes('storage') || type.includes('uniform'))) && inputBuffers[inpBufi]) {
+                        entry.resource = { buffer: inputBuffers[inpBufi] }
+                        inpBufi++;
+                    }
                 });
             } else if(inputBuffers) bindGroupEntries.push(...inputBuffers.map((buffer, index) => ({
                 binding: index,

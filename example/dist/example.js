@@ -2326,9 +2326,13 @@ fn vtx_main(
         let bindGroupEntries = [];
         if (bufferGroup.bindGroupLayoutEntries) {
           bindGroupEntries.push(...bufferGroup.bindGroupLayoutEntries);
+          let inpBufi = 0;
           bufferGroup.bindGroupLayoutEntries.forEach((entry, i) => {
-            if (inputBuffers[i])
-              entry.resource = { buffer: inputBuffers[i] };
+            let type = entry.buffer?.type;
+            if (type && (type.includes("storage") || type.includes("uniform")) && inputBuffers[inpBufi]) {
+              entry.resource = { buffer: inputBuffers[inpBufi] };
+              inpBufi++;
+            }
           });
         } else if (inputBuffers)
           bindGroupEntries.push(...inputBuffers.map((buffer, index) => ({
@@ -4828,7 +4832,8 @@ fn vtx_main(
   }
   var createImageExample = async () => {
     const response = await fetch("./knucks.jpg");
-    const imageBitmap = await createImageBitmap(await response.blob());
+    let data = await response.blob();
+    const imageBitmap = await createImageBitmap(data);
     const textureData = {
       source: imageBitmap
     };
@@ -4867,6 +4872,7 @@ fn vtx_main(
     }, {
       canvas: canv2,
       renderPass: {
+        //tell it to make an initial render pass with these inputs
         vertexCount: cubeVertices.length / 13,
         vbos: [
           //we can upload vbos
@@ -4878,13 +4884,14 @@ fn vtx_main(
           //corresponds to the variable
         }
       },
-      bindings: {
-        //binding overrides (assigned to our custom-generated layout)
-        image: {
-          texture: { viewDimension: "2d", sampleType: "float" }
-        }
-      },
+      // bindings:{ //binding overrides (assigned to our custom-generated layout)
+      //     image:{
+      //         texture:{viewDimension:'2d', sampleType:'float'} 
+      //     }
+      // },
+      //overrides for pipeline descriptor will be assigned so you can add or rewrite what you need over the defaults
       renderPipelineDescriptor: { primitive: { topology: "triangle-list", cullMode: "back" } },
+      //additional render or compute pass inputs (just the UBO update in this case)
       inputs: [transformationMatrix]
       //placeholder mat4 projection matrix (copy wgsl-matrix library example from webgpu samples)
     }).then((pipeline) => {
@@ -4909,6 +4916,7 @@ fn vtx_main(
         }, transformationMatrix);
         requestAnimationFrame(anim);
       };
+      anim();
     });
   };
   createImageExample();

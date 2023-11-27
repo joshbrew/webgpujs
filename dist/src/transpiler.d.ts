@@ -51,10 +51,11 @@ export declare class WGSLTranspiler {
         [key: string]: string | {
             binding: string;
         };
-    }): {
+    }, minBinding?: number): {
         code: string;
         params: any[];
         defaultUniforms: any;
+        lastBinding: number;
     };
     static extractAndTransposeInnerFunctions: (body: any, extract: boolean, ast: any, params: any, shaderType: any) => {
         body: any;
@@ -78,7 +79,7 @@ export declare class WGSLTranspiler {
         [key: string]: string | {
             binding: string;
         };
-    }): TranspiledShader;
+    }, lastBinding?: number): TranspiledShader;
 }
 export declare const replacements: {
     'Math.PI': string;

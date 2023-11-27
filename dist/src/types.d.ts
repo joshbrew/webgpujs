@@ -13,6 +13,10 @@ export type ShaderOptions = {
     inputs?: any[];
     bindGroupLayouts?: GPUBindGroupLayout[];
     bindGroups?: GPUBindGroup[];
+    bindings?: {
+        [key: string]: Partial<GPUBindGroupEntry>;
+    };
+    lastBinding?: number;
     bufferGroups?: any;
     skipCombinedBindings?: boolean;
 };
@@ -20,7 +24,7 @@ export type RenderOptions = {
     canvas?: HTMLCanvasElement | OffscreenCanvas;
     context?: GPUCanvasContext;
     contextSettings?: GPUCanvasConfiguration;
-    renderPipelineDescriptor?: GPURenderPipelineDescriptor;
+    renderPipelineDescriptor?: Partial<GPURenderPipelineDescriptor>;
     renderPassDescriptor?: GPURenderPassDescriptor;
     renderPipelineSettings?: any;
     nVertexBuffers?: number;
@@ -57,7 +61,8 @@ export type RenderPassSettings = {
     outputVBOs?: boolean;
     textures?: {
         [key: string]: {
-            data: Uint8Array;
+            source?: ImageBitmap | any;
+            texture?: GPUTextureDescriptor;
             width: number;
             height: number;
             bytesPerRow?: number;
@@ -76,8 +81,9 @@ export type ComputePassSettings = {
 } & ShaderPassSettings;
 export type TranspiledShader = {
     code: string;
-    bindings: string;
+    header: string;
     bindGroupNumber: number;
+    lastBinding: number;
     ast: any[];
     params: any[];
     funcStr: string;

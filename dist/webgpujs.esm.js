@@ -312,7 +312,7 @@ var WGSLTranspiler = class _WGSLTranspiler {
       return acc.concat(callback(value, index, array));
     }, []);
   }
-  static generateDataStructures(funcStr, ast, bindGroup = 0, shaderType, variableTypes) {
+  static generateDataStructures(funcStr, ast, bindGroup = 0, shaderType, variableTypes, minBinding = 0) {
     let code = "//Bindings (data passed to/from CPU) \n";
     const functionRegex = /function (\w+)\(([^()]*|\((?:[^()]*|\([^()]*\))*\))*\) \{([\s\S]*?)\}/g;
     let modifiedStr = funcStr;
@@ -328,8 +328,9 @@ var WGSLTranspiler = class _WGSLTranspiler {
     let hasUniforms = false;
     let defaultUniforms;
     const params = [];
-    let bindingIncr = 0;
+    let bindingIncr = minBinding;
     let names = {};
+    let prevTextureBinding;
     ast.forEach((node, i) => {
       if (names[node.name])
         return;
@@ -353,6 +354,7 @@ var WGSLTranspiler = class _WGSLTranspiler {
           node.isDepthMSAATexture = true;
         node.isTexture = true;
         node.isDepthTexture = true;
+        prevTextureBinding = bindingIncr;
       } else if (new RegExp(`textureSampleCompare\\(\\w+\\s*,\\s*${escapeRegExp(node.name)}`).test(funcStr)) {
         node.isComparisonSampler = true;
         node.isSampler = true;
@@ -367,6 +369,8 @@ var WGSLTranspiler = class _WGSLTranspiler {
         else if (nm.includes("2darr"))
           node.is2dStorageTextureArray = true;
         node.isStorageTexture = true;
+        if (prevTextureBinding !== void 0)
+          node.isSharedStorageTexture = true;
       } else if (new RegExp(`texture.*\\(${escapeRegExp(node.name)},`).test(funcStr)) {
         let nm = node.name.toLowerCase();
         if (nm.includes("deptharr"))
@@ -394,7 +398,10 @@ var WGSLTranspiler = class _WGSLTranspiler {
         if (nm.includes("depth"))
           node.isDepthTexture = true;
         node.isTexture = true;
+        prevTextureBinding = bindingIncr;
       }
+      node.binding = bindingIncr;
+      node.group = bindGroup;
       if (variableTypes?.[node.name]) {
         if (typeof variableTypes[node.name] === "string") {
           code += `@group(${bindGroup}) @binding(${bindingIncr}) var ${node.name}: ${variableTypes[node.name]};
@@ -409,11 +416,7 @@ var WGSLTranspiler = class _WGSLTranspiler {
       }
       if (node.isTexture) {
         params.push(node);
-        let format;
-        if (node.name.includes("_"))
-          format = node.name.split("_").pop();
-        else
-          format = "f32";
+        let format = node.name.includes("i32") ? "i32" : node.name.includes("u32") ? "u32" : "f32";
         let typ;
         if (node.isDepthTextureArray)
           typ = "texture_depth_2d_array";
@@ -440,15 +443,15 @@ var WGSLTranspiler = class _WGSLTranspiler {
         else
           typ = `texture_2d<f32>`;
         code += `@group(${bindGroup}) @binding(${bindingIncr}) var ${node.name}: ${typ};
-
 `;
         bindingIncr++;
       } else if (node.isStorageTexture) {
-        let format;
-        if (node.name.includes("_"))
-          format = node.name.split("_").pop();
-        else
-          format = "rgba16float";
+        let format = textureFormats.find((f) => {
+          if (node.name.includes(f))
+            return true;
+        });
+        if (!format)
+          format = "rgba8unorm";
         let typ;
         if (node.is3dStorageTexture)
           typ = "texture_storage_3d<" + format + ",write>";
@@ -460,9 +463,11 @@ var WGSLTranspiler = class _WGSLTranspiler {
           typ = "texture_storage_2d<" + format + ",write>";
         params.push(node);
         code += `@group(${bindGroup}) @binding(${bindingIncr}) var ${node.name}: ${typ};
-
 `;
-        bindingIncr++;
+        if (typeof prevTextureBinding === "undefined")
+          bindingIncr++;
+        else
+          prevTextureBinding = void 0;
       } else if (node.isSampler) {
         let typ;
         if (node.isComparisonSampler)
@@ -497,8 +502,6 @@ var WGSLTranspiler = class _WGSLTranspiler {
           }
           bindingIncr++;
         } else if (node.isUniform) {
-          if (shaderType === "vertex")
-            console.log(node);
           if (!hasUniforms) {
             uniformsStruct = `struct UniformsStruct {
 `;
@@ -538,7 +541,7 @@ var WGSLTranspiler = class _WGSLTranspiler {
 
 `;
     }
-    return { code, params, defaultUniforms };
+    return { code, params, defaultUniforms, lastBinding: bindingIncr };
   }
   static extractAndTransposeInnerFunctions = (body, extract = true, ast, params, shaderType) => {
     const functionRegex = /function (\w+)\(([^()]*|\((?:[^()]*|\([^()]*\))*\))*\) \{([\s\S]*?)\}/g;
@@ -834,8 +837,10 @@ for (var i: i32 = 0; i < ${size}; i = i + 1) {
       }) : [];
       vertexVars.push("position");
       vertexVars.forEach((varName) => {
-        const regex = new RegExp(`(?<![a-zA-Z0-9_.])${varName}(?![a-zA-Z0-9_.])`, "gm");
-        code = code.replace(regex, `pixel.${varName}`);
+        if (!varName.includes("In")) {
+          const regex = new RegExp(`(?<![a-zA-Z0-9_.])${varName}(?![a-zA-Z0-9_.])`, "gm");
+          code = code.replace(regex, `pixel.${varName}`);
+        }
       });
     }
     code = code.replace(/^(.*[^;\s\{\[\(\,\>\}])(\s*\/\/.*)$/gm, "$1;$2");
@@ -916,26 +921,41 @@ for (var i: i32 = 0; i < ${size}; i = i + 1) {
   };
   //combine input bindings and create mappings so input arrays can be shared based on variable names, assuming same types in a continuous pipeline (the normal thing)
   static combineBindings(bindings1str, bindings2str) {
-    const bindingRegex = /@group\((\d+)\) @binding\((\d+)\)[\s\S]*?var[\s\S]*? (\w+):/g;
+    const bindingRegex = /@group\((\d+)\) @binding\((\d+)\)\s+(var(?:<[^>]+>)?)\s+(\w+)\s*:/g;
     const structRegex = /struct (\w+) \{([\s\S]*?)\}/;
     const combinedStructs = /* @__PURE__ */ new Map();
     const replacementsOriginal = /* @__PURE__ */ new Map();
     const replacementsReplacement = /* @__PURE__ */ new Map();
-    let changesOriginal = {};
-    let changesReplacement = {};
+    let changesShader1 = {};
+    let changesShader2 = {};
+    let usedBindings = /* @__PURE__ */ new Set();
+    let bmatch;
+    while ((bmatch = bindingRegex.exec(bindings1str)) !== null) {
+      usedBindings.add(`${bmatch[1]}-${bmatch[2]}`);
+    }
+    bindings2str = bindings2str.replace(bindingRegex, (match2, group, binding, varDecl, varName) => {
+      let newBinding = binding;
+      while (usedBindings.has(`${group}-${newBinding}`)) {
+        newBinding = (parseInt(newBinding) + 1).toString();
+        changesShader2[varName] = { group, binding: newBinding };
+      }
+      usedBindings.add(`${group}-${newBinding}`);
+      return `@group(${group}) @binding(${newBinding}) ${varDecl} ${varName}:`;
+    });
     const extractBindings = (str, replacements2, changes) => {
       let match2;
       const regex = new RegExp(bindingRegex);
       while ((match2 = regex.exec(str)) !== null) {
-        replacements2.set(match2[3], match2[0].slice(0, match2[0].indexOf(" var")));
-        changes[match2[3]] = {
+        replacements2.set(match2[4], match2[0].slice(0, match2[0].indexOf(" var")));
+        changes[match2[4]] = {
           group: match2[1],
           binding: match2[2]
         };
+        usedBindings.add(`${match2[1]}-${match2[2]}`);
       }
     };
-    extractBindings(bindings1str, replacementsOriginal, changesOriginal);
-    extractBindings(bindings2str, replacementsReplacement, changesReplacement);
+    extractBindings(bindings1str, replacementsOriginal, changesShader1);
+    extractBindings(bindings2str, replacementsReplacement, changesShader2);
     let match = structRegex.exec(bindings1str);
     if (match) {
       const fields = match[2].trim().split(",\n").map((field) => field.trim());
@@ -968,7 +988,7 @@ for (var i: i32 = 0; i < ${size}; i = i + 1) {
         const updated = replacementsOriginal.get(varName) + " " + match2.split(" ").slice(-2).join(" ");
         const newGroup = updated.match(/@group\((\d+)\)/)[1];
         const newBinding = updated.match(/@binding\((\d+)\)/)[1];
-        changesOriginal[varName] = { group: newGroup, binding: newBinding };
+        changesShader1[varName] = { group: newGroup, binding: newBinding };
         return updated;
       }
       return match2;
@@ -979,16 +999,16 @@ for (var i: i32 = 0; i < ${size}; i = i + 1) {
         const updated = replacementsOriginal.get(varName) + " " + match2.split(" ").slice(-2).join(" ");
         const newGroup = updated.match(/@group\((\d+)\)/)[1];
         const newBinding = updated.match(/@binding\((\d+)\)/)[1];
-        changesReplacement[varName] = { group: newGroup, binding: newBinding };
+        changesShader2[varName] = { group: newGroup, binding: newBinding };
         return updated;
       }
       return match2;
     });
     return {
       code1: result1.trim(),
-      changes1: changesOriginal,
+      changes1: changesShader1,
       code2: result2.trim(),
-      changes2: changesReplacement
+      changes2: changesShader2
     };
   }
   static combineShaderParams(shader1Obj, shader2Obj) {
@@ -1044,13 +1064,20 @@ for (var i: i32 = 0; i < ${size}; i = i + 1) {
     shader2Obj.params = combinedParams;
   }
   //this pipeline is set to only use javascript functions so it can generate asts and infer all of the necessary buffering orders and types
-  static convertToWebGPU(func, shaderType = "compute", bindGroupNumber = 0, nVertexBuffers = 1, workGroupSize = 256, gpuFuncs, variableTypes) {
+  static convertToWebGPU(func, shaderType = "compute", bindGroupNumber = 0, nVertexBuffers = 1, workGroupSize = 256, gpuFuncs, variableTypes, lastBinding = 0) {
     let funcStr = typeof func === "string" ? func : func.toString();
     funcStr = funcStr.replace(/(?<!\w)this\./g, "");
     const tokens = this.tokenize(funcStr);
     const ast = this.parse(funcStr, tokens, shaderType);
-    let webGPUCode = this.generateDataStructures(funcStr, ast, bindGroupNumber, shaderType, variableTypes);
-    const bindings = webGPUCode.code;
+    let webGPUCode = this.generateDataStructures(
+      funcStr,
+      ast,
+      bindGroupNumber,
+      shaderType,
+      variableTypes,
+      lastBinding
+    );
+    const header = webGPUCode.code;
     webGPUCode.code += "\n" + this.generateMainFunctionWorkGroup(
       funcStr,
       ast,
@@ -1062,14 +1089,15 @@ for (var i: i32 = 0; i < ${size}; i = i + 1) {
     );
     return {
       code: this.indentCode(webGPUCode.code),
-      bindings,
+      header,
       ast,
       params: webGPUCode.params,
       funcStr,
       defaultUniforms: webGPUCode.defaultUniforms,
       type: shaderType,
       workGroupSize: shaderType === "compute" ? workGroupSize : void 0,
-      bindGroupNumber
+      bindGroupNumber,
+      lastBinding: webGPUCode.lastBinding
     };
   }
 };
@@ -1355,10 +1383,14 @@ var ShaderHelper = class {
   vertex;
   fragment;
   process = (...inputs) => {
-    return this.compute?.run(this.compute.computePass, ...inputs);
+    const shader = this.compute;
+    if (shader)
+      return this.compute?.run(this.compute.computePass, ...inputs);
   };
   render = (renderPass, ...inputs) => {
-    return this.fragment?.run(renderPass ? renderPass : this.fragment.renderPass ? this.fragment.renderPass : { vertexCount: 1 }, ...inputs);
+    let shader = this.fragment ? this.fragment : this.vertex;
+    if (shader)
+      return shader.run(renderPass ? renderPass : shader.renderPass ? shader.renderPass : { vertexCount: 1 }, ...inputs);
   };
   canvas;
   context;
@@ -1386,7 +1418,7 @@ var ShaderHelper = class {
 `);
     if (!options.device)
       options.device = this.device;
-    if (shaders.fragment && !shaders.vertex || shaders.vertex && !shaders.fragment)
+    if (shaders.fragment && !shaders.vertex)
       shaders = this.generateShaderBoilerplate(shaders, options);
     if (!options.skipCombinedBindings) {
       if (shaders.compute && shaders.vertex) {
@@ -1410,6 +1442,11 @@ var ShaderHelper = class {
         shaders.fragment.code = combined.code2;
         shaders.fragment.altBindings = combined.changes2;
       }
+      if (shaders.vertex?.params && shaders.fragment) {
+        if (shaders.fragment.params)
+          shaders.vertex.params.push(...shaders.fragment.params);
+        shaders.fragment.params = shaders.vertex.params;
+      }
     }
     Object.assign(this.prototypes, shaders);
     if (shaders.compute) {
@@ -1418,25 +1455,33 @@ var ShaderHelper = class {
       Object.assign(this.compute, options);
     }
     if (shaders.fragment && shaders.vertex) {
-      WGSLTranspiler.combineShaderParams(shaders.fragment, shaders.vertex);
+      WGSLTranspiler.combineShaderParams(shaders.vertex, shaders.fragment);
+    }
+    if (shaders.fragment) {
       this.fragment = new ShaderContext(Object.assign({}, shaders.fragment, options));
       this.fragment.helper = this;
+    }
+    if (shaders.vertex) {
       this.vertex = new ShaderContext(Object.assign({}, shaders.vertex, options));
+      this.vertex.helper = this;
     }
     if (this.compute) {
       this.compute.bindGroupLayouts = this.bindGroupLayouts;
       this.compute.bindGroups = this.bindGroups;
       this.compute.bufferGroups = this.bufferGroups;
       const entries = this.compute.createBindGroupEntries(options?.renderPass?.textures);
-      this.compute.setBindGroupLayout(entries);
+      this.compute.bindGroupLayoutEntries = entries;
+      this.compute.setBindGroupLayout(entries, options.bindGroupNumber);
     }
     if (this.fragment) {
       this.fragment.bufferGroups = this.bufferGroups;
-      const entries = this.fragment.createBindGroupEntries(options?.renderPass?.textures);
+      this.fragment.bindGroupLayouts = this.bindGroupLayouts;
+      const entries = this.fragment.createBindGroupEntries(options?.renderPass?.textures, void 0, GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT);
+      this.fragment.bindGroupLayoutEntries = entries;
       this.fragment.bindGroupLayout = this.device.createBindGroupLayout({
         entries
       });
-      this.fragment.setBindGroupLayout(entries);
+      this.fragment.setBindGroupLayout(entries, options.bindGroupNumber);
     }
     if (this.compute) {
       this.compute.shaderModule = this.device.createShaderModule({
@@ -1444,7 +1489,10 @@ var ShaderHelper = class {
       });
       if (this.bindGroupLayouts.length > 0) {
         this.compute.pipelineLayout = this.device.createPipelineLayout({
-          bindGroupLayouts: this.bindGroupLayouts
+          bindGroupLayouts: this.bindGroupLayouts.filter((v) => {
+            if (v)
+              return true;
+          })
           //this should have the combined compute and vertex/fragment (and accumulated) layouts
         });
       }
@@ -1459,20 +1507,44 @@ var ShaderHelper = class {
         Object.assign(pipeline, options?.computePipelineSettings);
       this.compute.computePipeline = this.device.createComputePipeline(pipeline);
     }
-    if (this.vertex && this.fragment) {
+    if (this.vertex) {
       this.vertex.shaderModule = this.device.createShaderModule({
         code: shaders.vertex.code
       });
+    }
+    if (this.fragment) {
       this.fragment.shaderModule = this.device.createShaderModule({
         code: shaders.fragment.code
       });
+    }
+    if (this.vertex && this.fragment) {
+      this.fragment.vertex = this.vertex;
       if (this.bindGroupLayouts.length > 0) {
         this.fragment.pipelineLayout = this.device.createPipelineLayout({
-          bindGroupLayouts: this.bindGroupLayouts
+          bindGroupLayouts: this.bindGroupLayouts.filter((v) => {
+            if (v)
+              return true;
+          })
           //this should have the combined compute and vertex/fragment (and accumulated) layouts
         });
       }
-      this.updateGraphicsPipeline(
+      this.fragment.updateGraphicsPipeline(
+        options?.nVertexBuffers,
+        options?.contextSettings,
+        options?.renderPipelineDescriptor,
+        options?.renderPassDescriptor
+      );
+    } else if (this.vertex) {
+      if (this.bindGroupLayouts.length > 0) {
+        this.vertex.pipelineLayout = this.device.createPipelineLayout({
+          bindGroupLayouts: this.bindGroupLayouts.filter((v) => {
+            if (v)
+              return true;
+          })
+          //this should have the combined compute and vertex/fragment (and accumulated) layouts
+        });
+      }
+      this.vertex.updateGraphicsPipeline(
         options?.nVertexBuffers,
         options?.contextSettings,
         options?.renderPipelineDescriptor,
@@ -1539,20 +1611,6 @@ fn vtx_main(
     return pixel;
 }`
         };
-      } else if (shaderContext && shaderType === "vertex" && !shaders.fragment) {
-        this.fragment = {
-          code: `
-@fragment
-fn frag_main(
-    pixel: Vertex,
-    @builtin(front_facing) is_front: bool,   //true when current fragment is on front-facing primitive
-    @builtin(sample_index) sampleIndex: u32, //sample index for the current fragment
-    @builtin(sample_mask) sampleMask: u32,   //contains a bitmask indicating which samples in this fragment are covered by the primitive being rendered
-    @builtin(frag_depth) depth: f32          //Updated depth of the fragment, in the viewport depth range.
-) -> @location(0) vec4<f32> {
-    return pixel.color;
-}`
-        };
       }
       shaderContext.device = this.device;
     }
@@ -1563,94 +1621,6 @@ fn frag_main(
       this.device.destroy();
     if (this.context)
       this.context?.unconfigure();
-  };
-  createRenderPipelineDescriptor = (nVertexBuffers = 1, swapChainFormat = navigator.gpu.getPreferredCanvasFormat()) => {
-    if (!this.fragment || !this.vertex)
-      throw new Error("No Fragment and Vertex ShaderContext defined");
-    const vertexBuffers = Array.from({ length: nVertexBuffers }, (_, i) => {
-      return {
-        arrayStride: 52,
-        attributes: [
-          { format: "float32x4", offset: 0, shaderLocation: 4 * i },
-          //vertex vec4
-          { format: "float32x4", offset: 16, shaderLocation: 4 * i + 1 },
-          //color vec4
-          { format: "float32x2", offset: 32, shaderLocation: 4 * i + 2 },
-          //uv vec2
-          { format: "float32x3", offset: 40, shaderLocation: 4 * i + 3 }
-          //normal vec3
-        ]
-      };
-    });
-    const renderPipelineDescriptor = {
-      //https://developer.mozilla.org/en-US/docs/Web/API/GPUDevice/createRenderPipeline
-      layout: this.fragment.pipelineLayout ? this.fragment.pipelineLayout : "auto",
-      vertex: {
-        module: this.vertex.shaderModule,
-        entryPoint: "vtx_main",
-        buffers: vertexBuffers
-      },
-      fragment: {
-        module: this.fragment.shaderModule,
-        entryPoint: "frag_main",
-        targets: [{
-          format: swapChainFormat
-        }]
-      },
-      depthStencil: {
-        format: "depth24plus",
-        depthWriteEnabled: true,
-        depthCompare: "less"
-      }
-    };
-    return renderPipelineDescriptor;
-  };
-  createRenderPassDescriptor = () => {
-    const view = this.context?.getCurrentTexture().createView();
-    const depthTexture = this.device.createTexture({
-      //allows 3D rendering
-      size: { width: this.canvas.width, height: this.canvas.height },
-      format: "depth24plus",
-      usage: GPUTextureUsage.RENDER_ATTACHMENT
-    });
-    return {
-      //some assumptions. todo: unassume
-      colorAttachments: [{
-        view,
-        loadValue: { r: 0, g: 0, b: 0, a: 1 },
-        loadOp: "clear",
-        storeOp: "store"
-        //discard
-      }],
-      depthStencilAttachment: {
-        view: depthTexture.createView(),
-        depthLoadOp: "clear",
-        depthClearValue: 1,
-        depthStoreOp: "store"
-        //discard
-        // stencilLoadOp: "clear",
-        // stencilClearValue: 0,
-        // stencilStoreOp: "store"
-      }
-    };
-  };
-  //todo: break this down more
-  updateGraphicsPipeline = (nVertexBuffers = 1, contextSettings, renderPipelineDescriptor, renderPassDescriptor) => {
-    if (!this.fragment || !this.vertex)
-      throw new Error("No Fragment and Vertex ShaderContext defined");
-    const swapChainFormat = navigator.gpu.getPreferredCanvasFormat();
-    this.context?.configure(contextSettings ? contextSettings : {
-      device: this.device,
-      format: swapChainFormat,
-      //usage: GPUTextureUsage.RENDER_ATTACHMENT,
-      alphaMode: "premultiplied"
-    });
-    if (!renderPipelineDescriptor)
-      renderPipelineDescriptor = this.createRenderPipelineDescriptor(nVertexBuffers, swapChainFormat);
-    if (!renderPassDescriptor)
-      renderPassDescriptor = this.createRenderPassDescriptor();
-    this.fragment.renderPassDescriptor = renderPassDescriptor;
-    this.fragment.graphicsPipeline = this.device.createRenderPipeline(renderPipelineDescriptor);
   };
   static flattenArray(arr) {
     let result = [];
@@ -1737,8 +1707,10 @@ var ShaderContext = class {
   context;
   device;
   helper;
+  vertex;
+  //The vertex shader context if this is a fragment shader
   code;
-  bindings;
+  header;
   ast;
   params;
   funcStr;
@@ -1760,6 +1732,7 @@ var ShaderContext = class {
   altBindings;
   builtInUniforms;
   bufferGroups = [];
+  bindings;
   bindGroups = [];
   bindGroupLayouts = [];
   bindGroupNumber;
@@ -1781,62 +1754,111 @@ var ShaderContext = class {
     if (!bufferGroup) {
       bufferGroup = this.makeBufferGroup(bindGroupNumber);
     }
-    let samplers = bufferGroup?.samplers ? bufferGroup.samplers : {};
-    for (const key in textures) {
-      this.updateTexture(textures[key], key, textures[key].samplerSettings, bindGroupNumber);
-    }
+    if (textures)
+      for (const key in textures) {
+        this.updateTexture(textures[key], key, bindGroupNumber);
+      }
+    let texKeys;
+    let texKeyRot = 0;
+    if (bufferGroup.textures)
+      texKeys = Object.keys(bufferGroup.textures);
+    let assignedEntries = {};
     const entries = bufferGroup.params ? bufferGroup.params.map((node, i) => {
+      if (node.group !== bindGroupNumber)
+        return void 0;
+      assignedEntries[node.name] = true;
       let isReturned = bufferGroup.returnedVars === void 0 || bufferGroup.returnedVars?.includes(node.name);
       if (node.isUniform) {
         if (typeof uniformBufferIdx === "undefined") {
           uniformBufferIdx = i;
           bufferIncr++;
-          return {
+          const buffer = {
             binding: uniformBufferIdx,
             visibility,
             buffer: {
               type: "uniform"
             }
           };
-        }
-        return void 0;
+          if (this.bindings?.[node.name])
+            Object.assign(buffer, this.bindings[node.name]);
+          return buffer;
+        } else
+          return void 0;
       } else if (node.isTexture || node.isStorageTexture) {
         const buffer = {
-          binding: bufferIncr,
+          binding: node.binding,
           visibility
         };
         if (node.isDepthTexture)
           buffer.texture = { sampleType: "depth" };
-        else if (textures[node.name]) {
-          buffer.resource = {
-            resource: textures[node.name] ? textures[node.name].createView() : {}
-            //todo: texture dimensions/format/etc customizable
+        else if (bufferGroup.textures?.[node.name]) {
+          buffer.texture = {
+            sampleType: "float",
+            viewDimension: node.name.includes("3d") ? "3d" : node.name.includes("1d") ? "1d" : node.name.includes("2darr") ? "2d-array" : "2d"
+          };
+          buffer.resource = bufferGroup.textures?.[node.name] ? bufferGroup.textures[node.name].createView() : {};
+        } else if (node.isStorageTexture && !node.isSharedStorageTexture) {
+          buffer.storageTexture = {
+            //placeholder stuff but anyway you can provide your own bindings as the inferencing is a stretch after a point
+            access: "write-only",
+            //read-write only in chrome beta, todo: replace this when avaiable in production
+            format: textures[node.name]?.format ? textures[node.name].format : "rgbaunorm",
+            viewDimension: node.name.includes("3d") ? "3d" : node.name.includes("1d") ? "1d" : node.name.includes("2darr") ? "2d-array" : "2d"
           };
         } else {
           buffer.texture = { sampleType: "unfilterable-float" };
         }
+        if (this.bindings?.[node.name])
+          Object.assign(buffer, this.bindings[node.name]);
         bufferIncr++;
         return buffer;
       } else if (node.isSampler) {
+        if (!bufferGroup.samplers?.[node.name]) {
+          const sampler = this.device.createSampler(texKeys && textures[texKeys[texKeyRot]].samplerSettings?.[node.name] ? textures[texKeys[texKeyRot]].samplerSettings[node.name] : {
+            magFilter: "linear",
+            minFilter: "linear",
+            mipmapFilter: "linear",
+            addressModeU: "repeat",
+            addressModeV: "repeat"
+          });
+          bufferGroup.samplers[node.name] = sampler;
+        }
         const buffer = {
-          binding: bufferIncr,
+          binding: node.binding,
           visibility,
-          resource: samplers[node.name] ? samplers[node.name] : {}
+          sampler: {},
+          resource: bufferGroup.samplers[node.name] || {}
         };
+        texKeyRot++;
+        if (texKeyRot >= texKeys?.length)
+          texKeyRot = 0;
         bufferIncr++;
+        if (this.bindings?.[node.name])
+          Object.assign(buffer, this.bindings[node.name]);
         return buffer;
       } else {
         const buffer = {
-          binding: bufferIncr,
+          binding: node.binding,
           visibility,
           buffer: {
             type: isReturned || node.isModified ? "storage" : "read-only-storage"
           }
         };
         bufferIncr++;
+        if (this.bindings?.[node.name])
+          Object.assign(buffer, this.bindings[node.name]);
         return buffer;
       }
-    }).filter((v) => v) : [];
+    }).filter((v, i) => {
+      if (v)
+        return true;
+    }) : [];
+    if (this.bindings) {
+      for (const key in this.bindings) {
+        if (!assignedEntries[key])
+          entries.push(this.bindings[key]);
+      }
+    }
     if (bufferGroup.defaultUniforms) {
       entries.push({
         binding: bufferIncr,
@@ -1855,6 +1877,13 @@ var ShaderContext = class {
         entries
       });
       this.bindGroupLayouts[bindGroupNumber] = this.bindGroupLayout;
+      this.pipelineLayout = this.device.createPipelineLayout({
+        bindGroupLayouts: this.bindGroupLayouts.filter((v) => {
+          if (v)
+            return true;
+        })
+        //this should have the combined compute and vertex/fragment (and accumulated) layouts
+      });
     }
     return this.bindGroupLayout;
   };
@@ -1878,7 +1907,8 @@ var ShaderContext = class {
       if (bufferGroup.vertexBuffers?.[index]?.size !== vertices.byteLength) {
         if (!bufferGroup.vertexBuffers)
           bufferGroup.vertexBuffers = [];
-        bufferGroup.vertexCount = vertices.length / 13;
+        if (!bufferGroup.vertexCount)
+          bufferGroup.vertexCount = vertices.length / 13;
         const vertexBuffer = this.device.createBuffer({
           size: vertices.byteLength,
           usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC
@@ -1886,55 +1916,57 @@ var ShaderContext = class {
         });
         bufferGroup.vertexBuffers[index] = vertexBuffer;
       }
-      this.device.queue.writeBuffer(bufferGroup.vertexBuffers[index], bufferOffset, vertices, dataOffset, vertices.length);
+      this.device.queue.writeBuffer(
+        bufferGroup.vertexBuffers[index],
+        bufferOffset,
+        vertices,
+        dataOffset,
+        vertices.length
+      );
     }
   };
-  updateTexture = (texture, name, samplerSettings, bindGroupNumber = this.bindGroupNumber) => {
-    if (!texture)
+  updateTexture = (data, name, bindGroupNumber = this.bindGroupNumber) => {
+    if (!data)
       return;
+    if (!data.width && data.source)
+      data.width = data.source.width;
+    if (!data.height && data.source)
+      data.height = data.source.height;
     let bufferGroup = this.bufferGroups[bindGroupNumber];
     if (!bufferGroup) {
       bufferGroup = this.makeBufferGroup(bindGroupNumber);
     }
-    bufferGroup.textures[name] = this.device.createTexture({
-      label: texture.label ? texture.label : `texture_g${bindGroupNumber}_${name}`,
-      format: texture.format ? texture.format : "rgba8unorm",
-      size: [texture.width, texture.height, 1],
-      usage: texture.usage ? texture.usage : GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUBufferUsage.COPY_SRC
-      //assume read/write (e.g. transforming a texture and returning it)
+    bufferGroup.textures[name] = this.device.createTexture(data.texture ? data.texture : {
+      label: data.label ? data.label : `texture_g${bindGroupNumber}_${name}`,
+      format: data.format ? data.format : "rgba8unorm",
+      size: [data.width, data.height, 1],
+      usage: data.usage ? data.usage : data.source ? GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT : GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST
+      //GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.COPY_SRC | 
     });
     let texInfo = {};
-    if (texture.data)
-      texInfo.texture = texture.data;
+    if (data.source)
+      texInfo.source = data.source;
     else
-      texInfo.source = texture;
+      texInfo.source = data;
     if (texInfo.texture)
       this.device.queue.writeTexture(
         texInfo,
         bufferGroup.textures[name],
         {
-          bytesPerRow: texture.bytesPerRow ? texture.bytesPerRow : texture.width * 4
+          bytesPerRow: data.bytesPerRow ? data.bytesPerRow : data.width * 4
         },
         {
-          width: texture.width,
-          height: texture.height
+          width: data.width,
+          height: data.height
         }
       );
     else if (texInfo.source)
       this.device.queue.copyExternalImageToTexture(
         texInfo,
         //e.g. an ImageBitmap
-        bufferGroup.textures[name],
-        [texture.width, texture.height]
+        { texture: bufferGroup.textures[name] },
+        [data.width, data.height]
       );
-    const sampler = this.device.createSampler(samplerSettings ? samplerSettings : {
-      magFilter: "linear",
-      minFilter: "linear",
-      mipmapFilter: "linear",
-      addressModeU: "repeat",
-      addressModeV: "repeat"
-    });
-    bufferGroup.samplers[name] = sampler;
     return true;
   };
   setUBOposition = (dataView, inputTypes, typeInfo, offset, input, inpIdx) => {
@@ -1962,22 +1994,20 @@ var ShaderContext = class {
             dataView.setInt32(offset, input, true);
             break;
           case "u32":
-            dataView.setUInt32(offset, input, true);
+            dataView.setUint32(offset, input, true);
             break;
-          case "f16":
-            dataView.setFloat16(offset, input, true);
             break;
           case "i16":
             dataView.setInt16(offset, input, true);
             break;
           case "u16":
-            dataView.setUInt16(offset, input, true);
+            dataView.setUint16(offset, input, true);
             break;
           case "i8":
-            dataView.setInt8(offset, input, true);
+            dataView.setInt8(offset, input);
             break;
           case "u8":
-            dataView.setUInt8(offset, input, true);
+            dataView.setUint8(offset, input);
             break;
         }
       }
@@ -1993,7 +2023,7 @@ var ShaderContext = class {
       bufferGroup = this.makeBufferGroup(bindGroupNumber);
     }
     if (bufferGroup.uniformBuffer) {
-      const dataView = new DataView(bufferGroup.uniformBuffer.getMappedRange());
+      const dataView = bufferGroup.uniformBuffer.mapState === "mapped" ? new DataView(bufferGroup.uniformBuffer.getMappedRange()) : new DataView(new Float32Array(bufferGroup.uniformBuffer.size / 4).buffer);
       let offset = 0;
       let inpIdx = 0;
       bufferGroup.params.forEach((node, i) => {
@@ -2015,18 +2045,111 @@ var ShaderContext = class {
         if (node.isInput)
           inpIdx++;
       });
-      bufferGroup.uniformBuffer.unmap();
+      if (bufferGroup.uniformBuffer.mapState === "mapped")
+        bufferGroup.uniformBuffer.unmap();
     }
     if (bufferGroup.defaultUniforms) {
-      const dataView = new DataView(bufferGroup.defaultUniformBuffer.getMappedRange());
+      const dataView = bufferGroup.defaultUniformBuffer.mapState === "mapped" ? new DataView(bufferGroup.defaultUniformBuffer.getMappedRange()) : new DataView(new Float32Array(bufferGroup.defaultUniformBuffer.size).buffer);
       let offset = 0;
       bufferGroup.defaultUniforms.forEach((u, i) => {
         let value = this.builtInUniforms[u]?.callback(this);
         const typeInfo = WGSLTypeSizes[this.builtInUniforms[bufferGroup.defaultUniforms[i]].type];
         offset = this.setUBOposition(dataView, inputTypes, typeInfo, offset, value, i);
       });
-      bufferGroup.defaultUniformBuffer.unmap();
+      if (bufferGroup.defaultUniformBuffer.mapState === "mapped")
+        bufferGroup.defaultUniformBuffer.unmap();
     }
+  };
+  createRenderPipelineDescriptor = (nVertexBuffers = 1, swapChainFormat = navigator.gpu.getPreferredCanvasFormat(), renderPipelineDescriptor = {}) => {
+    const vertexBuffers = Array.from({ length: nVertexBuffers }, (_, i) => {
+      return {
+        arrayStride: 52,
+        attributes: [
+          { format: "float32x4", offset: 0, shaderLocation: 4 * i },
+          //vertex vec4
+          { format: "float32x4", offset: 16, shaderLocation: 4 * i + 1 },
+          //color vec4
+          { format: "float32x2", offset: 32, shaderLocation: 4 * i + 2 },
+          //uv vec2
+          { format: "float32x3", offset: 40, shaderLocation: 4 * i + 3 }
+          //normal vec3
+        ]
+      };
+    });
+    let desc = {
+      //https://developer.mozilla.org/en-US/docs/Web/API/GPUDevice/createRenderPipeline
+      layout: this.pipelineLayout ? this.pipelineLayout : "auto",
+      vertex: this.vertex ? {
+        module: this.vertex.shaderModule,
+        entryPoint: "vtx_main",
+        buffers: vertexBuffers
+      } : {
+        module: this.shaderModule,
+        entryPoint: "vtx_main",
+        targets: [{
+          format: swapChainFormat
+        }]
+      },
+      fragment: this.vertex ? {
+        module: this.shaderModule,
+        entryPoint: "frag_main",
+        targets: [{
+          format: swapChainFormat
+        }]
+      } : void 0,
+      depthStencil: {
+        format: "depth24plus",
+        depthWriteEnabled: true,
+        depthCompare: "less"
+      }
+    };
+    if (!this.vertex)
+      delete renderPipelineDescriptor.fragment;
+    renderPipelineDescriptor = Object.assign(desc, renderPipelineDescriptor);
+    return renderPipelineDescriptor;
+  };
+  createRenderPassDescriptor = () => {
+    const depthTexture = this.device.createTexture({
+      //allows 3D rendering
+      size: [this.canvas.width, this.canvas.height],
+      format: "depth24plus",
+      usage: GPUTextureUsage.RENDER_ATTACHMENT
+    });
+    return {
+      //some assumptions. todo: unassume
+      colorAttachments: [{
+        view: void 0,
+        //view,
+        clearValue: { r: 0, g: 0, b: 0, a: 0 },
+        loadOp: "clear",
+        storeOp: "store"
+        //discard
+      }],
+      depthStencilAttachment: {
+        view: depthTexture.createView(),
+        depthLoadOp: "clear",
+        depthClearValue: 1,
+        depthStoreOp: "store"
+        //discard
+        // stencilLoadOp: "clear",
+        // stencilClearValue: 0,
+        // stencilStoreOp: "store"
+      }
+    };
+  };
+  updateGraphicsPipeline = (nVertexBuffers = 1, contextSettings, renderPipelineDescriptor, renderPassDescriptor) => {
+    const swapChainFormat = navigator.gpu.getPreferredCanvasFormat();
+    this.context?.configure(contextSettings ? contextSettings : {
+      device: this.device,
+      format: swapChainFormat,
+      //usage: GPUTextureUsage.RENDER_ATTACHMENT,
+      alphaMode: "premultiplied"
+    });
+    renderPipelineDescriptor = this.createRenderPipelineDescriptor(nVertexBuffers, swapChainFormat, renderPipelineDescriptor);
+    if (!renderPassDescriptor)
+      renderPassDescriptor = this.createRenderPassDescriptor();
+    this.renderPassDescriptor = renderPassDescriptor;
+    this.graphicsPipeline = this.device.createRenderPipeline(renderPipelineDescriptor);
   };
   makeBufferGroup = (bindGroupNumber = this.bindGroupNumber) => {
     const bufferGroup = {};
@@ -2038,6 +2161,7 @@ var ShaderContext = class {
     bufferGroup.textures = {};
     bufferGroup.samplers = {};
     bufferGroup.uniformBuffer = void 0;
+    bufferGroup.bindGroupLayoutEntries = this.bindGroupLayoutEntries;
     this.bufferGroups[bindGroupNumber] = bufferGroup;
     return bufferGroup;
   };
@@ -2076,7 +2200,7 @@ var ShaderContext = class {
     const outputBuffers = bufferGroup.outputBuffers;
     const params = bufferGroup.params;
     const inputTypes = bufferGroup.inputTypes;
-    let newBindGroupBuffer = false;
+    let newBindGroupBuffer;
     if (inputBuffers?.length > 0) {
       inputs.forEach((inp, index) => {
         if (inp && inp?.length) {
@@ -2088,7 +2212,9 @@ var ShaderContext = class {
     } else
       newBindGroupBuffer = true;
     if (textures) {
-      const entries = this.createBindGroupEntries(textures, bindGroupNumber);
+      const entries = this.createBindGroupEntries(textures, bindGroupNumber, this.vertex || !this.vertex && this.graphicsPipeline ? GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT : void 0);
+      this.bindGroupLayoutEntries = entries;
+      bufferGroup.bindGroupLayoutEntries = entries;
       this.setBindGroupLayout(entries, bindGroupNumber);
       newBindGroupBuffer = true;
     }
@@ -2096,7 +2222,7 @@ var ShaderContext = class {
     let inpBuf_i = 0;
     let inpIdx = 0;
     let hasUniformBuffer = 0;
-    let uBufferCreated = false;
+    let uBufferSet = false;
     let bindGroupAlts = [];
     let uniformValues = [];
     if (params)
@@ -2111,7 +2237,7 @@ var ShaderContext = class {
           if (node.isUniform) {
             if (inputs[inpIdx] !== void 0)
               uniformValues[inpIdx] = inputs[inpIdx];
-            if (!bufferGroup.uniformBuffer || !uBufferCreated && inputs[inpBuf_i] !== void 0) {
+            if (!bufferGroup.uniformBuffer || !uBufferSet && inputs[inpBuf_i] !== void 0) {
               if (!bufferGroup.totalUniformBufferSize) {
                 let totalUniformBufferSize = 0;
                 params.forEach((node2, j) => {
@@ -2144,7 +2270,7 @@ var ShaderContext = class {
               });
               inputBuffers[inpBuf_i] = uniformBuffer;
               bufferGroup.uniformBuffer = uniformBuffer;
-              uBufferCreated = true;
+              uBufferSet = true;
             }
             if (!hasUniformBuffer) {
               hasUniformBuffer = 1;
@@ -2152,16 +2278,28 @@ var ShaderContext = class {
             }
             inpIdx++;
           } else {
-            if (typeof inputs[inpBuf_i] !== "undefined" || !inputBuffers[inpBuf_i]) {
+            if (typeof inputs[inpBuf_i] !== "undefined" || typeof inputs[inpBuf_i] !== "undefined" && !inputBuffers[inpBuf_i]) {
               if (!inputs?.[inpBuf_i]?.byteLength && Array.isArray(inputs[inpBuf_i]?.[0]))
                 inputs[inpBuf_i] = ShaderHelper.flattenArray(inputs[inpBuf_i]);
-              inputBuffers[inpBuf_i] = this.device.createBuffer({
-                size: inputs[inpBuf_i] ? inputs[inpBuf_i].byteLength ? inputs[inpBuf_i].byteLength : inputs[inpBuf_i]?.length ? inputs[inpBuf_i].length * 4 : 8 : 8,
-                usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
-                mappedAtCreation: true
-              });
-              new Float32Array(inputBuffers[inpBuf_i].getMappedRange()).set(inputs[inpBuf_i]);
-              inputBuffers[inpBuf_i].unmap();
+              if (inputBuffers[inpBuf_i] && inputs[inpBuf_i].length === inputBuffers[inpBuf_i].size / 4) {
+                let buf = new Float32Array(inputs[inpBuf_i]);
+                this.device.queue.writeBuffer(
+                  inputBuffers[inpBuf_i],
+                  0,
+                  buf,
+                  buf.byteOffset,
+                  buf.length || 8
+                );
+                inputBuffers[inpBuf_i].unmap();
+              } else {
+                inputBuffers[inpBuf_i] = this.device.createBuffer({
+                  size: inputs[inpBuf_i] ? inputs[inpBuf_i].byteLength ? inputs[inpBuf_i].byteLength : inputs[inpBuf_i]?.length ? inputs[inpBuf_i].length * 4 : 8 : 8,
+                  usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST,
+                  mappedAtCreation: true
+                });
+                new Float32Array(inputBuffers[inpBuf_i].getMappedRange()).set(inputs[inpBuf_i]);
+                inputBuffers[inpBuf_i].unmap();
+              }
             }
             inpBuf_i++;
             inpIdx++;
@@ -2210,12 +2348,22 @@ var ShaderContext = class {
       if (!bufferGroup.defaultUniformBinding) {
         bufferGroup.defaultUniformBinding = inputBuffers.length;
       }
-      bufferGroup.defaultUniformBuffer;
     }
-    this.updateUBO(uniformValues, inputTypes, bindGroupNumber);
+    if (uniformValues.length > 0)
+      this.updateUBO(uniformValues, inputTypes, bindGroupNumber);
     if (this.bindGroupLayouts[bindGroupNumber] && newBindGroupBuffer) {
       let bindGroupEntries = [];
-      if (inputBuffers)
+      if (bufferGroup.bindGroupLayoutEntries) {
+        bindGroupEntries.push(...bufferGroup.bindGroupLayoutEntries);
+        let inpBufi = 0;
+        bufferGroup.bindGroupLayoutEntries.forEach((entry, i) => {
+          let type = entry.buffer?.type;
+          if (type && (type.includes("storage") || type.includes("uniform")) && inputBuffers[inpBufi]) {
+            entry.resource = { buffer: inputBuffers[inpBufi] };
+            inpBufi++;
+          }
+        });
+      } else if (inputBuffers)
         bindGroupEntries.push(...inputBuffers.map((buffer, index) => ({
           binding: index,
           resource: { buffer }
@@ -2347,6 +2495,10 @@ var ShaderContext = class {
           this.renderPassDescriptor.colorAttachments[0].view = view;
           renderPass = commandEncoder.beginRenderPass(this.renderPassDescriptor);
         }
+        if (vertexCount)
+          bufferGroup.vertexCount = vertexCount;
+        else if (!bufferGroup.vertexCount)
+          bufferGroup.vertexCount = 1;
         if (!useRenderBundle || !bufferGroup.renderBundle) {
           renderPass.setPipeline(this.graphicsPipeline);
           const withBindGroup = (group, i) => {
@@ -2354,7 +2506,7 @@ var ShaderContext = class {
           };
           this.bindGroups.forEach(withBindGroup);
           if (!bufferGroup.vertexBuffers)
-            this.updateVBO({ color: [1, 1, 1, 1] }, 0);
+            this.updateVBO({ color: new Array(bufferGroup.vertexCount * 4).fill(0) }, 0);
           if (bufferGroup.vertexBuffers)
             bufferGroup.vertexBuffers.forEach((vbo, i) => {
               renderPass.setVertexBuffer(i, vbo);
@@ -2384,10 +2536,6 @@ var ShaderContext = class {
               );
             }
           }
-          if (vertexCount)
-            bufferGroup.vertexCount = vertexCount;
-          else if (!bufferGroup.vertexCount)
-            bufferGroup.vertexCount = 1;
           if (indexBuffer || bufferGroup.indexBuffer) {
             if (indexBuffer)
               bufferGroup.indexBuffer = indexBuffer;
@@ -2460,7 +2608,8 @@ var WebGPUjs = class _WebGPUjs {
         options.nVertexBuffers,
         options.workGroupSize,
         options.functions,
-        options.variableTypes
+        options.variableTypes,
+        options.lastBinding
       );
       if (options.getPrevShaderBindGroups) {
         let combined = WGSLTranspiler.combineBindings(shader.code, options.getPrevShaderBindGroups);
@@ -2494,7 +2643,8 @@ var WebGPUjs = class _WebGPUjs {
             options.nVertexBuffers,
             options.workGroupSize,
             options.functions,
-            options.variableTypes
+            options.variableTypes,
+            options.lastBinding
           );
         }
         if (options.getPrevShaderBindGroups) {
@@ -2523,7 +2673,8 @@ var WebGPUjs = class _WebGPUjs {
               options.nVertexBuffers,
               options.workGroupSize,
               options.functions,
-              options.variableTypes
+              options.variableTypes,
+              options.lastBinding
             );
           }
         }
@@ -2536,8 +2687,10 @@ var WebGPUjs = class _WebGPUjs {
               options.nVertexBuffers,
               options.workGroupSize,
               options.functions,
-              options.variableTypes
+              options.variableTypes,
+              options.lastBinding
             );
+            options.lastBinding = block.vertex.lastBinding;
           }
         }
         if (block.fragment) {
@@ -2549,7 +2702,8 @@ var WebGPUjs = class _WebGPUjs {
               options.nVertexBuffers,
               options.workGroupSize,
               options.functions,
-              options.variableTypes
+              options.variableTypes,
+              options.lastBinding
             );
           }
         }

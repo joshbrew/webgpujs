@@ -31,9 +31,6 @@ export declare class ShaderHelper {
     addFunction: (func: Function | string) => void;
     generateShaderBoilerplate: (shaders: any, options: any) => any;
     cleanup: () => void;
-    createRenderPipelineDescriptor: (nVertexBuffers?: number, swapChainFormat?: GPUTextureFormat) => GPURenderPipelineDescriptor;
-    createRenderPassDescriptor: () => GPURenderPassDescriptor;
-    updateGraphicsPipeline: (nVertexBuffers?: number, contextSettings?: GPUCanvasConfiguration, renderPipelineDescriptor?: GPURenderPipelineDescriptor, renderPassDescriptor?: GPURenderPassDescriptor) => void;
     static flattenArray(arr: any): any[];
     static combineVertices(vertices: any, //4d vec array
     colors: any, //4d vec array
@@ -51,8 +48,9 @@ export declare class ShaderContext {
     context: GPUCanvasContext | OffscreenRenderingContext;
     device: GPUDevice;
     helper: ShaderHelper;
+    vertex?: ShaderContext;
     code: string;
-    bindings: string;
+    header: string;
     ast: any[];
     params: any[];
     funcStr: string;
@@ -74,20 +72,33 @@ export declare class ShaderContext {
     altBindings: any;
     builtInUniforms: any;
     bufferGroups: any[];
+    bindings?: Partial<GPUBindGroupEntry>[];
     bindGroups: GPUBindGroup[];
     bindGroupLayouts: GPUBindGroupLayout[];
     bindGroupNumber: number;
     bindGroupLayout: GPUBindGroupLayout;
-    bindGroupLayoutEntries: any;
+    bindGroupLayoutEntries: GPUBindGroupLayoutEntry[];
     constructor(props?: any);
     createBindGroupEntries: (textures?: any, bindGroupNumber?: number, visibility?: number) => GPUBindGroupLayoutEntry[];
     setBindGroupLayout: (entries?: any[], bindGroupNumber?: number) => GPUBindGroupLayout;
     updateVBO: (vertices: any, index?: number, bufferOffset?: number, dataOffset?: number, bindGroupNumber?: number) => void;
-    updateTexture: (texture: any, name: string, samplerSettings?: any, bindGroupNumber?: number) => boolean;
-    setUBOposition: (dataView: any, inputTypes: any, typeInfo: any, offset: any, input: any, inpIdx: any) => any;
+    updateTexture: (data: {
+        source?: ImageBitmap | any;
+        texture?: GPUTextureDescriptor;
+        width: number;
+        height: number;
+        bytesPerRow?: number;
+        label?: string;
+        format?: string;
+        usage?: any;
+    } | ImageBitmap | any, name: string, bindGroupNumber?: number) => boolean;
+    setUBOposition: (dataView: DataView, inputTypes: any, typeInfo: any, offset: any, input: any, inpIdx: any) => any;
     updateUBO: (inputs: any, inputTypes: any, bindGroupNumber?: number) => void;
+    createRenderPipelineDescriptor: (nVertexBuffers?: number, swapChainFormat?: GPUTextureFormat, renderPipelineDescriptor?: Partial<GPURenderPipelineDescriptor>) => Partial<GPURenderPipelineDescriptor>;
+    createRenderPassDescriptor: () => GPURenderPassDescriptor;
+    updateGraphicsPipeline: (nVertexBuffers?: number, contextSettings?: GPUCanvasConfiguration, renderPipelineDescriptor?: Partial<GPURenderPipelineDescriptor>, renderPassDescriptor?: GPURenderPassDescriptor) => void;
     makeBufferGroup: (bindGroupNumber?: number) => any;
-    buffer: ({ vbos, textures, skipOutputDef, bindGroupNumber, outputVBOs, outputTextures }?: any, ...inputs: any[]) => boolean;
+    buffer: ({ vbos, textures, skipOutputDef, bindGroupNumber, outputVBOs, outputTextures }?: any, ...inputs: any[]) => any;
     getOutputData: (commandEncoder: GPUCommandEncoder, outputBuffers?: any) => any;
     run: ({ vertexCount, instanceCount, firstVertex, firstInstance, vbos, outputVBOs, textures, outputTextures, bufferOnly, skipOutputDef, bindGroupNumber, viewport, scissorRect, blendConstant, indexBuffer, firstIndex, indexFormat, useRenderBundle, workgroupsX, workgroupsY, workgroupsZ }?: {
         vertexCount?: number;
@@ -109,8 +120,9 @@ export declare class ShaderContext {
         })[];
         outputVBOs?: boolean;
         textures?: {
-            [key: string]: {
-                data: Uint8Array;
+            [key: string]: ImageBitmap | {
+                source?: any;
+                texture?: GPUTextureDescriptor;
                 width: number;
                 height: number;
                 bytesPerRow?: number;
@@ -118,7 +130,7 @@ export declare class ShaderContext {
                 format?: string;
                 usage?: any;
                 samplerSettings?: any;
-            } | ImageBitmap;
+            };
         };
         outputTextures?: boolean;
     } & import("./types").ShaderPassSettings & {
