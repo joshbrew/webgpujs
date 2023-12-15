@@ -46,7 +46,7 @@ export type RenderPassSettings = {
     scissorRect?:any,
     blendConstant?:any,
     indexBuffer?:any,
-    indexFormat?:any, //uint16 or uint32
+    indexFormat?:'uint16'|'uint32', //uint16 or uint32
     firstIndex?:number,
     useRenderBundle?:any,
     vbos?:(Float32Array|{
@@ -69,7 +69,8 @@ export type RenderPassSettings = {
             samplerSettings?:any
         }|ImageBitmap
     },
-    outputTextures?:boolean
+    outputTextures?:boolean,
+    newBindings?:boolean
 } & ShaderPassSettings;
 
 export type ComputePassSettings = {

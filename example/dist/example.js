@@ -1731,6 +1731,7 @@ fn vtx_main(
         }
       let texKeys;
       let texKeyRot = 0;
+      let baseMipLevel = 0;
       if (bufferGroup.textures)
         texKeys = Object.keys(bufferGroup.textures);
       let assignedEntries = {};
@@ -1767,13 +1768,23 @@ fn vtx_main(
               sampleType: "float",
               viewDimension: node.name.includes("3d") ? "3d" : node.name.includes("1d") ? "1d" : node.name.includes("2darr") ? "2d-array" : "2d"
             };
-            buffer.resource = bufferGroup.textures?.[node.name] ? bufferGroup.textures[node.name].createView() : {};
+            let viewSettings = void 0;
+            if (bufferGroup.textures[node.name]) {
+              if (bufferGroup.textures[node.name].mipLevelCount) {
+                if (!viewSettings)
+                  viewSettings = {};
+                viewSettings.baseMipLevel = baseMipLevel;
+                viewSettings.mipLevelCount = bufferGroup.textures[node.name].mipLevelCount;
+                baseMipLevel++;
+              }
+            }
+            buffer.resource = bufferGroup.textures?.[node.name] ? bufferGroup.textures[node.name].createView(viewSettings) : {};
           } else if (node.isStorageTexture && !node.isSharedStorageTexture) {
             buffer.storageTexture = {
               //placeholder stuff but anyway you can provide your own bindings as the inferencing is a stretch after a point
               access: "write-only",
               //read-write only in chrome beta, todo: replace this when avaiable in production
-              format: textures[node.name]?.format ? textures[node.name].format : "rgbaunorm",
+              format: bufferGroup.textures[node.name]?.format ? bufferGroup.textures[node.name].format : "rgbaunorm",
               viewDimension: node.name.includes("3d") ? "3d" : node.name.includes("1d") ? "1d" : node.name.includes("2darr") ? "2d-array" : "2d"
             };
           } else {
@@ -1785,13 +1796,15 @@ fn vtx_main(
           return buffer;
         } else if (node.isSampler) {
           if (!bufferGroup.samplers?.[node.name]) {
-            const sampler = this.device.createSampler(texKeys && textures[texKeys[texKeyRot]].samplerSettings?.[node.name] ? textures[texKeys[texKeyRot]].samplerSettings[node.name] : {
-              magFilter: "linear",
-              minFilter: "linear",
-              mipmapFilter: "linear",
-              addressModeU: "repeat",
-              addressModeV: "repeat"
-            });
+            const sampler = this.device.createSampler(
+              texKeys && bufferGroup.textures[texKeys[texKeyRot]]?.samplerSettings?.[node.name] ? bufferGroup.textures[texKeys[texKeyRot]]?.samplerSettings[node.name] : {
+                magFilter: "linear",
+                minFilter: "linear",
+                mipmapFilter: "linear"
+                // addressModeU: "repeat",
+                // addressModeV: "repeat"
+              }
+            );
             bufferGroup.samplers[node.name] = sampler;
           }
           const buffer = {
@@ -1858,7 +1871,7 @@ fn vtx_main(
       }
       return this.bindGroupLayout;
     };
-    updateVBO = (vertices, index = 0, bufferOffset = 0, dataOffset = 0, bindGroupNumber = this.bindGroupNumber) => {
+    updateVBO = (vertices, index = 0, bufferOffset = 0, dataOffset = 0, bindGroupNumber = this.bindGroupNumber, indexBuffer, indexFormat) => {
       let bufferGroup = this.bufferGroups[bindGroupNumber];
       if (!bufferGroup) {
         bufferGroup = this.makeBufferGroup(bindGroupNumber);
@@ -1875,25 +1888,49 @@ fn vtx_main(
           } else
             vertices = new Float32Array(typeof vertices === "object" ? ShaderHelper.flattenArray(vertices) : vertices);
         }
-        if (bufferGroup.vertexBuffers?.[index]?.size !== vertices.byteLength) {
-          if (!bufferGroup.vertexBuffers)
-            bufferGroup.vertexBuffers = [];
-          if (!bufferGroup.vertexCount)
-            bufferGroup.vertexCount = vertices.length / 13;
-          const vertexBuffer = this.device.createBuffer({
-            size: vertices.byteLength,
-            usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC
-            //assume read/write
-          });
-          bufferGroup.vertexBuffers[index] = vertexBuffer;
+        if (indexBuffer || bufferGroup.vertexBuffers?.[index]?.size !== vertices.byteLength) {
+          if (indexBuffer) {
+            if (!bufferGroup.indexCount)
+              bufferGroup.indexCount = vertices.length;
+          } else {
+            if (!bufferGroup.vertexBuffers)
+              bufferGroup.vertexBuffers = [];
+            if (!bufferGroup.vertexCount)
+              bufferGroup.vertexCount = vertices.length / 13;
+          }
+          if (indexBuffer) {
+            const vertexBuffer = this.device.createBuffer({
+              size: vertices.byteLength,
+              usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC | GPUBufferUsage.INDEX
+              //assume read/write
+            });
+            bufferGroup.indexBuffer = vertexBuffer;
+          } else {
+            const vertexBuffer = this.device.createBuffer({
+              size: vertices.byteLength,
+              usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC
+              //assume read/write
+            });
+            bufferGroup.vertexBuffers[index] = vertexBuffer;
+          }
         }
-        this.device.queue.writeBuffer(
-          bufferGroup.vertexBuffers[index],
-          bufferOffset,
-          vertices,
-          dataOffset,
-          vertices.length
-        );
+        if (indexBuffer) {
+          this.device.queue.writeBuffer(
+            bufferGroup.indexBuffer,
+            bufferOffset,
+            vertices,
+            dataOffset,
+            vertices.length
+          );
+        } else {
+          this.device.queue.writeBuffer(
+            bufferGroup.vertexBuffers[index],
+            bufferOffset,
+            vertices,
+            dataOffset,
+            vertices.length
+          );
+        }
       }
     };
     updateTexture = (data, name, bindGroupNumber = this.bindGroupNumber) => {
@@ -1907,22 +1944,31 @@ fn vtx_main(
       if (!bufferGroup) {
         bufferGroup = this.makeBufferGroup(bindGroupNumber);
       }
-      bufferGroup.textures[name] = this.device.createTexture(data.texture ? data.texture : {
+      const defaultDescriptor = {
         label: data.label ? data.label : `texture_g${bindGroupNumber}_${name}`,
         format: data.format ? data.format : "rgba8unorm",
         size: [data.width, data.height, 1],
         usage: data.usage ? data.usage : data.source ? GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT : GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST
         //GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.COPY_SRC | 
-      });
+      };
+      const texture = this.device.createTexture(
+        data.texture ? Object.assign(defaultDescriptor, data.texture) : defaultDescriptor
+      );
+      if (bufferGroup.textures[name])
+        bufferGroup.textures[name].destroy();
+      bufferGroup.textures[name] = texture;
+      console.log(texture);
       let texInfo = {};
       if (data.source)
         texInfo.source = data.source;
       else
         texInfo.source = data;
+      if (data.layout)
+        Object.assign(texInfo, data.layout);
       if (texInfo.texture)
         this.device.queue.writeTexture(
           texInfo,
-          bufferGroup.textures[name],
+          texture,
           {
             bytesPerRow: data.bytesPerRow ? data.bytesPerRow : data.width * 4
           },
@@ -1935,7 +1981,7 @@ fn vtx_main(
         this.device.queue.copyExternalImageToTexture(
           texInfo,
           //e.g. an ImageBitmap
-          { texture: bufferGroup.textures[name] },
+          { texture },
           [data.width, data.height]
         );
       return true;
@@ -2086,6 +2132,9 @@ fn vtx_main(
         format: "depth24plus",
         usage: GPUTextureUsage.RENDER_ATTACHMENT
       });
+      if (this.depthTexture)
+        this.depthTexture.destroy();
+      this.depthTexture = depthTexture;
       return {
         //some assumptions. todo: unassume
         colorAttachments: [{
@@ -2097,7 +2146,7 @@ fn vtx_main(
           //discard
         }],
         depthStencilAttachment: {
-          view: depthTexture.createView(),
+          view: void 0,
           depthLoadOp: "clear",
           depthClearValue: 1,
           depthStoreOp: "store"
@@ -2136,16 +2185,20 @@ fn vtx_main(
       this.bufferGroups[bindGroupNumber] = bufferGroup;
       return bufferGroup;
     };
+    firstRun = true;
     buffer = ({
       vbos,
       //[{vertices:[]}]
       textures,
       //{tex0:{data:Uint8Array([]), width:800, height:600, format:'rgba8unorm' (default), bytesPerRow: width*4 (default rgba) }}, //all required
+      indexBuffer,
+      indexFormat,
       skipOutputDef,
       bindGroupNumber,
       outputVBOs,
       //we can read out the VBO e.g. to receive pixel data
-      outputTextures
+      outputTextures,
+      newBindings
     } = {}, ...inputs) => {
       if (!bindGroupNumber)
         bindGroupNumber = this.bindGroupNumber;
@@ -2157,6 +2210,9 @@ fn vtx_main(
         vbos.forEach((vertices, i) => {
           this.updateVBO(vertices, i, void 0, void 0, bindGroupNumber);
         });
+      }
+      if (indexBuffer) {
+        this.updateVBO(indexBuffer, 0, void 0, void 0, bindGroupNumber, true, indexFormat);
       }
       if (!bufferGroup.inputTypes && bufferGroup.params)
         bufferGroup.inputTypes = bufferGroup.params.map((p) => {
@@ -2171,7 +2227,7 @@ fn vtx_main(
       const outputBuffers = bufferGroup.outputBuffers;
       const params = bufferGroup.params;
       const inputTypes = bufferGroup.inputTypes;
-      let newBindGroupBuffer;
+      let newBindGroupBuffer = newBindings;
       if (inputBuffers?.length > 0) {
         inputs.forEach((inp, index) => {
           if (inp && inp?.length) {
@@ -2183,11 +2239,18 @@ fn vtx_main(
       } else
         newBindGroupBuffer = true;
       if (textures) {
-        const entries = this.createBindGroupEntries(textures, bindGroupNumber, this.vertex || !this.vertex && this.graphicsPipeline ? GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT : void 0);
+        const entries = this.createBindGroupEntries(
+          textures,
+          bindGroupNumber,
+          this.vertex || !this.vertex && this.graphicsPipeline ? GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT : void 0
+        );
         this.bindGroupLayoutEntries = entries;
         bufferGroup.bindGroupLayoutEntries = entries;
         this.setBindGroupLayout(entries, bindGroupNumber);
         newBindGroupBuffer = true;
+      }
+      if (newBindGroupBuffer && bindGroupNumber === this.bindGroupNumber) {
+        bufferGroup.bindGroupLayoutEntries = this.bindGroupLayoutEntries;
       }
       let uBufferPushed = false;
       let inpBuf_i = 0;
@@ -2334,16 +2397,19 @@ fn vtx_main(
               inpBufi++;
             }
           });
-        } else if (inputBuffers)
+          if (bufferGroup.defaultUniformBuffer)
+            bindGroupEntries[bindGroupEntries.length - 1].resource = { buffer: bufferGroup.defaultUniformBuffer };
+        } else if (inputBuffers) {
           bindGroupEntries.push(...inputBuffers.map((buffer, index) => ({
             binding: index,
             resource: { buffer }
           })));
-        if (bufferGroup.defaultUniformBuffer)
-          bindGroupEntries.push({
-            binding: bufferGroup.defaultUniformBinding,
-            resource: { buffer: bufferGroup.defaultUniformBuffer }
-          });
+          if (bufferGroup.defaultUniformBuffer)
+            bindGroupEntries.push({
+              binding: bufferGroup.defaultUniformBinding,
+              resource: { buffer: bufferGroup.defaultUniformBuffer }
+            });
+        }
         const bindGroup = this.device.createBindGroup({
           layout: this.bindGroupLayouts[bindGroupNumber],
           entries: bindGroupEntries
@@ -2414,13 +2480,14 @@ fn vtx_main(
       scissorRect,
       blendConstant,
       indexBuffer,
-      firstIndex,
       indexFormat,
       //uint16 or uint32
+      firstIndex,
       useRenderBundle,
       workgroupsX,
       workgroupsY,
-      workgroupsZ
+      workgroupsZ,
+      newBindings
     } = {}, ...inputs) => {
       if (!bindGroupNumber)
         bindGroupNumber = this.bindGroupNumber;
@@ -2430,10 +2497,13 @@ fn vtx_main(
           //[{vertices:[]}]
           textures,
           //[{data:Uint8Array([]), width:800, height:600, format:'rgba8unorm' (default), bytesPerRow: width*4 (default rgba) }], //all required
+          indexBuffer,
+          indexFormat,
           skipOutputDef,
           bindGroupNumber,
           outputVBOs,
-          outputTextures
+          outputTextures,
+          newBindings
         },
         ...inputs
       );
@@ -2456,14 +2526,26 @@ fn vtx_main(
         if (this.graphicsPipeline) {
           let renderPass;
           if (useRenderBundle && (newInputBuffer || !bufferGroup.renderBundle)) {
+            if (!this.renderPassDescriptor.colorAttachments[0].view) {
+              const curTex = this.context.getCurrentTexture();
+              const view = curTex.createView();
+              this.renderPassDescriptor.colorAttachments[0].view = view;
+            }
+            if (!this.renderPassDescriptor.depthStencilAttachment.view) {
+              const view = this.depthTexture.createView();
+              this.renderPassDescriptor.depthStencilAttachment.view = view;
+            }
             renderPass = this.device.createRenderBundleEncoder({
               colorFormats: [navigator.gpu.getPreferredCanvasFormat()]
               //depthStencilFormat: "depth24plus" //etc...
             });
             bufferGroup.firstPass = true;
           } else {
-            const view = this.context.getCurrentTexture().createView();
+            const curTex = this.context.getCurrentTexture();
+            const view = curTex.createView();
             this.renderPassDescriptor.colorAttachments[0].view = view;
+            const depthView = this.depthTexture.createView();
+            this.renderPassDescriptor.depthStencilAttachment.view = depthView;
             renderPass = commandEncoder.beginRenderPass(this.renderPassDescriptor);
           }
           if (vertexCount)
@@ -2507,14 +2589,12 @@ fn vtx_main(
                 );
               }
             }
-            if (indexBuffer || bufferGroup.indexBuffer) {
-              if (indexBuffer)
-                bufferGroup.indexBuffer = indexBuffer;
+            if (bufferGroup.indexBuffer) {
               if (!bufferGroup.indexFormat)
                 bufferGroup.indexFormat = indexFormat ? indexFormat : "uint32";
               renderPass.setIndexBuffer(bufferGroup.indexBuffer, bufferGroup.indexFormat);
               renderPass.drawIndexed(
-                bufferGroup.vertexCount,
+                bufferGroup.indexCount,
                 instanceCount,
                 firstIndex,
                 0,
@@ -2692,7 +2772,12 @@ fn vtx_main(
               shaderPipeline.process(...inps);
             }
             if (shaderPipeline["fragment"]) {
-              shaderPipeline.render(options.renderPass, ...inps);
+              let opts;
+              if (options.renderPass) {
+                opts = { ...options.renderPass, newBindings: true };
+                delete opts.textures;
+              }
+              shaderPipeline.render(opts, ...inps);
             }
           }
           return shaderPipeline;
@@ -3199,6 +3284,50 @@ fn vtx_main(
     0,
     0,
     0
+  ]);
+  var cubeIndices = new Uint16Array([
+    0,
+    1,
+    2,
+    2,
+    1,
+    3,
+    // front
+    4,
+    5,
+    6,
+    6,
+    5,
+    7,
+    // right
+    8,
+    9,
+    10,
+    10,
+    9,
+    11,
+    // back
+    12,
+    13,
+    14,
+    14,
+    13,
+    15,
+    // left
+    16,
+    17,
+    18,
+    18,
+    17,
+    19,
+    // bottom
+    20,
+    21,
+    22,
+    22,
+    21,
+    23
+    // top
   ]);
 
   // node_modules/wgpu-matrix/dist/2.x/wgpu-matrix.module.js
@@ -4831,11 +4960,18 @@ fn vtx_main(
     return textureSample(image, imgSampler, uv) * vertex;
   }
   var createImageExample = async () => {
-    const response = await fetch("./knucks.jpg");
+    const response = await fetch("./compute.PNG");
     let data = await response.blob();
     const imageBitmap = await createImageBitmap(data);
+    const numMipLevels = (...sizes) => {
+      const maxSize = Math.max(...sizes);
+      return 1 + Math.log2(maxSize) | 0;
+    };
     const textureData = {
-      source: imageBitmap
+      source: imageBitmap,
+      texture: { mipLevelCount: numMipLevels(imageBitmap.width, imageBitmap.height) },
+      //overrides to texture settings
+      layout: { flipY: true }
     };
     let canv2 = document.createElement("canvas");
     canv2.width = 800;
@@ -4881,8 +5017,10 @@ fn vtx_main(
         ],
         textures: {
           image: textureData
-          //corresponds to the variable
-        }
+          //corresponds to the variable which is defined implicitly by usage with texture calls
+        },
+        indexBuffer: cubeIndices,
+        indexFormat: "uint16"
       },
       // bindings:{ //binding overrides (assigned to our custom-generated layout)
       //     image:{

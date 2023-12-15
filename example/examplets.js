@@ -1,7 +1,7 @@
 import { WebGPUjs } from "../src/pipeline";
 import { WGSLTranspiler } from "../src/transpiler";
 
-import { cubeVertices } from "./exampleCube";
+import { cubeVertices, cubeIndices } from "./exampleCube";
 import { mat4 as m4, vec3 as v3 } from 'wgpu-matrix' //they'll transform the dummy functions on the bundle step if not renamed
 
 //dft is an O(n^2) example, plus a bunch of other nonsense just to test the transpiler out, we'll do this proper soon
@@ -233,10 +233,20 @@ function cubeExampleFrag() {
 }
 
 const createImageExample = async () => {
-    const response = await fetch('./knucks.jpg'); let data = await response.blob();
+    const response = await fetch('./compute.PNG'); let data = await response.blob();
     const imageBitmap = await createImageBitmap(data);
+    
+    
+    const numMipLevels = (...sizes) => {
+        const maxSize = Math.max(...sizes);
+        return 1 + Math.log2(maxSize) | 0;
+    };
+    
+    
     const textureData = {
-        source:imageBitmap
+        source:imageBitmap,
+        texture:{mipLevelCount:numMipLevels(imageBitmap.width, imageBitmap.height)}, //overrides to texture settings
+        layout:{flipY:true}
     }
 
     let canv2 = document.createElement('canvas'); 
@@ -281,8 +291,10 @@ const createImageExample = async () => {
                 cubeVertices //the shader system will set the draw call count based on the number of rows (assumed to be position4,color4,uv2,normal3 or vertexCount = len/13) in the vertices of the first supplied vbo
             ],
             textures:{
-                image:textureData //corresponds to the variable
-            }
+                image:textureData //corresponds to the variable which is defined implicitly by usage with texture calls
+            },
+            indexBuffer:cubeIndices,
+            indexFormat:'uint16'
         },
         // bindings:{ //binding overrides (assigned to our custom-generated layout)
         //     image:{

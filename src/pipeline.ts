@@ -226,7 +226,12 @@ export class WebGPUjs {
                         shaderPipeline.process(...inps as any[]);
                     }
                     if(shaderPipeline['fragment']) {
-                        shaderPipeline.render(options.renderPass, ...inps);
+                        let opts; 
+                        if(options.renderPass) {
+                            opts = {...options.renderPass, newBindings:true}; 
+                            delete opts.textures; //prevent rewriting textures
+                        }
+                        shaderPipeline.render(opts, ...inps);
                     }
                 }
         
