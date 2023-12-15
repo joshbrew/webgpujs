@@ -130,6 +130,7 @@ export declare class ShaderContext {
                 format?: string;
                 usage?: any;
                 samplerSettings?: any;
+                layout?: GPUImageDataLayout | GPUImageCopyExternalImage;
             };
         };
         outputTextures?: boolean;
@@ -170,6 +171,7 @@ export declare class ShaderContext {
                 format?: string;
                 usage?: any;
                 samplerSettings?: any;
+                layout?: GPUImageDataLayout | GPUImageCopyExternalImage;
             };
         };
         outputTextures?: boolean;
