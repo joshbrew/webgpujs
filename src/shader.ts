@@ -744,7 +744,7 @@ export class ShaderContext {
         if(bufferGroup.textures[name]) bufferGroup.textures[name].destroy();
         bufferGroup.textures[name] = texture;
 
-        console.log(texture);
+        //console.log(texture);
 
         let texInfo = {} as any;
         if(data.source) texInfo.source = data.source;

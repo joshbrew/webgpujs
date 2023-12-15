@@ -66,7 +66,8 @@ export type RenderPassSettings = {
             label?:string, 
             format?:string, //default: 'rgba8unorm' 
             usage?:any,
-            samplerSettings?:any
+            samplerSettings?:any,
+            layout?:GPUImageDataLayout|GPUImageCopyExternalImage //customize the layout that gets created for an image source e.g. flipY
         }|ImageBitmap
     },
     outputTextures?:boolean,

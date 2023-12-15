@@ -2007,7 +2007,6 @@ fn vtx_main(
       if (bufferGroup.textures[name])
         bufferGroup.textures[name].destroy();
       bufferGroup.textures[name] = texture;
-      console.log(texture);
       let texInfo = {};
       if (data.source)
         texInfo.source = data.source;
