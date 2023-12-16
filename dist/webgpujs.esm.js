@@ -1725,6 +1725,7 @@ var ShaderContext = class {
   renderPass;
   computePipeline;
   graphicsPipeline;
+  depthTexture;
   renderPassDescriptor;
   indexBuffer;
   indexFormat;
@@ -1993,10 +1994,10 @@ var ShaderContext = class {
       texInfo.source = data;
     if (data.layout)
       Object.assign(texInfo, data.layout);
-    if (texInfo.texture)
+    if (texInfo.buffer)
       this.device.queue.writeTexture(
         texInfo,
-        texture,
+        texInfo.buffer,
         {
           bytesPerRow: data.bytesPerRow ? data.bytesPerRow : data.width * 4
         },

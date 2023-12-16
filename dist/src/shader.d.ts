@@ -65,6 +65,7 @@ export declare class ShaderContext {
     renderPass?: RenderPassSettings;
     computePipeline?: GPUComputePipeline;
     graphicsPipeline?: GPURenderPipeline;
+    depthTexture: GPUTexture;
     renderPassDescriptor: GPURenderPassDescriptor;
     indexBuffer: GPUBuffer;
     indexFormat: string;
@@ -85,6 +86,7 @@ export declare class ShaderContext {
     updateTexture: (data: {
         source?: ImageBitmap | any;
         texture?: GPUTextureDescriptor;
+        buffer?: BufferSource | SharedArrayBuffer;
         width: number;
         height: number;
         bytesPerRow?: number;
@@ -123,6 +125,7 @@ export declare class ShaderContext {
             [key: string]: ImageBitmap | {
                 source?: any;
                 texture?: GPUTextureDescriptor;
+                buffer?: BufferSource | SharedArrayBuffer;
                 width: number;
                 height: number;
                 bytesPerRow?: number;
@@ -164,6 +167,7 @@ export declare class ShaderContext {
             [key: string]: ImageBitmap | {
                 source?: any;
                 texture?: GPUTextureDescriptor;
+                buffer?: BufferSource | SharedArrayBuffer;
                 width: number;
                 height: number;
                 bytesPerRow?: number;

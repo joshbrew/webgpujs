@@ -63,6 +63,7 @@ export type RenderPassSettings = {
         [key: string]: {
             source?: ImageBitmap | any;
             texture?: GPUTextureDescriptor;
+            buffer?: BufferSource | SharedArrayBuffer;
             width: number;
             height: number;
             bytesPerRow?: number;

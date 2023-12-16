@@ -436,7 +436,8 @@ export class ShaderContext {
     
     computePipeline?:GPUComputePipeline;
     graphicsPipeline?:GPURenderPipeline;
-
+    depthTexture:GPUTexture;
+    
     renderPassDescriptor:GPURenderPassDescriptor;
 
     indexBuffer:GPUBuffer;
@@ -709,6 +710,7 @@ export class ShaderContext {
     updateTexture = (data:{
         source?:ImageBitmap|any,
         texture?:GPUTextureDescriptor,
+        buffer?:BufferSource | SharedArrayBuffer,
         width:number, 
         height:number, 
         bytesPerRow?:number,
@@ -752,10 +754,10 @@ export class ShaderContext {
 
         if(data.layout) Object.assign(texInfo,data.layout);
         //todo: more texture settings and stuff
-        if(texInfo.texture)
+        if(texInfo.buffer)
             this.device.queue.writeTexture(
                 texInfo,
-                texture,
+                texInfo.buffer,
                 { 
                     bytesPerRow: data.bytesPerRow ? data.bytesPerRow : data.width * 4 
                 },
