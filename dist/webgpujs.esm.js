@@ -1994,10 +1994,10 @@ var ShaderContext = class {
       texInfo.source = data;
     if (data.layout)
       Object.assign(texInfo, data.layout);
-    if (texInfo.buffer)
+    if (data.buffer)
       this.device.queue.writeTexture(
         texInfo,
-        texInfo.buffer,
+        data.buffer,
         {
           bytesPerRow: data.bytesPerRow ? data.bytesPerRow : data.width * 4
         },
