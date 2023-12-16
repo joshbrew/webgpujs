@@ -754,10 +754,10 @@ export class ShaderContext {
 
         if(data.layout) Object.assign(texInfo,data.layout);
         //todo: more texture settings and stuff
-        if(texInfo.buffer)
+        if(data.buffer)
             this.device.queue.writeTexture(
                 texInfo,
-                texInfo.buffer,
+                data.buffer,
                 { 
                     bytesPerRow: data.bytesPerRow ? data.bytesPerRow : data.width * 4 
                 },
