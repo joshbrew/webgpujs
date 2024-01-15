@@ -229,11 +229,13 @@ function cubeExampleVert(
 }
 
 function cubeExampleFrag() {
-    return textureSample(image, imgSampler, uv) * position;
+    return textureSample(image, imgSampler, uv);
 }
 
 const createImageExample = async () => {
-    const response = await fetch('./knucks.jpg'); let data = await response.blob();
+    const response = await fetch('./knucks.jpg');
+    let data = await response.blob();
+    console.log(data);
     const imageBitmap = await createImageBitmap(data);
     
     
