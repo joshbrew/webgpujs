@@ -1965,10 +1965,10 @@ fn vtx_main(
         texInfo.source = data;
       if (data.layout)
         Object.assign(texInfo, data.layout);
-      if (texInfo.buffer)
+      if (data.buffer)
         this.device.queue.writeTexture(
           texInfo,
-          texInfo.buffer,
+          data.buffer,
           {
             bytesPerRow: data.bytesPerRow ? data.bytesPerRow : data.width * 4
           },
@@ -4952,12 +4952,12 @@ fn vtx_main(
     });
   }, 500);
   function cubeExampleVert(modelViewProjectionMatrix = "mat4x4<f32>") {
-    position = modelViewProjectionMatrix * position;
+    position = modelViewProjectionMatrix * vertexIn;
     uv = uvIn;
-    vertex = 0.5 * (position + vec4f(1, 1, 1, 1));
+    vertex = 0.5 * (vertexIn + vec4f(1, 1, 1, 1));
   }
   function cubeExampleFrag() {
-    return textureSample(image, imgSampler, uv) * vertex;
+    return textureSample(image, imgSampler, uv) * position;
   }
   var createImageExample = async () => {
     const response = await fetch("./compute.PNG");

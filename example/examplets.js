@@ -223,13 +223,13 @@ setTimeout(() => {
 function cubeExampleVert( 
     modelViewProjectionMatrix='mat4x4<f32>'
 ) {
-    position = modelViewProjectionMatrix * position; //alternatively we could use a builtInUniform to transform the projection matrix with the timestamp increment
+    position = modelViewProjectionMatrix * vertexIn; //alternatively we could use a builtInUniform to transform the projection matrix with the timestamp increment
     uv = uvIn;
-    vertex = 0.5 * (position + vec4f(1,1,1,1));
+    vertex = 0.5 * (vertexIn + vec4f(1,1,1,1));
 }
 
 function cubeExampleFrag() {
-    return textureSample(image, imgSampler, uv) * vertex;
+    return textureSample(image, imgSampler, uv) * position;
 }
 
 const createImageExample = async () => {
