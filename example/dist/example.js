@@ -4955,9 +4955,10 @@ fn vtx_main(
     position = modelViewProjectionMatrix * vertexIn;
     uv = uvIn;
     vertex = 0.5 * (vertexIn + vec4f(1, 1, 1, 1));
+    color = colorIn;
   }
   function cubeExampleFrag() {
-    return textureSample(image, imgSampler, uv);
+    return textureSample(image, imgSampler, uv) * color;
   }
   var createImageExample = async () => {
     const response = await fetch("./knucks.jpg");

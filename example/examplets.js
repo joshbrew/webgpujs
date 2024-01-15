@@ -226,10 +226,11 @@ function cubeExampleVert(
     position = modelViewProjectionMatrix * vertexIn; //alternatively we could use a builtInUniform to transform the projection matrix with the timestamp increment
     uv = uvIn;
     vertex = 0.5 * (vertexIn + vec4f(1,1,1,1));
+    color = colorIn;
 }
 
 function cubeExampleFrag() {
-    return textureSample(image, imgSampler, uv);
+    return textureSample(image, imgSampler, uv) * color;
 }
 
 const createImageExample = async () => {
