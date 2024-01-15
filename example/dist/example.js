@@ -5019,7 +5019,7 @@ fn vtx_main(
           image: textureData
           //corresponds to the variable which is defined implicitly by usage with texture calls
         },
-        indexBuffer: cubeIndices,
+        // indexBuffer:cubeIndices,
         indexFormat: "uint16"
       },
       // bindings:{ //binding overrides (assigned to our custom-generated layout)
