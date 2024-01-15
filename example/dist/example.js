@@ -4960,7 +4960,7 @@ fn vtx_main(
     return textureSample(image, imgSampler, uv) * position;
   }
   var createImageExample = async () => {
-    const response = await fetch("./compute.PNG");
+    const response = await fetch("./knucks.jpg");
     let data = await response.blob();
     const imageBitmap = await createImageBitmap(data);
     const numMipLevels = (...sizes) => {

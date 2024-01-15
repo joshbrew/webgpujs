@@ -233,7 +233,7 @@ function cubeExampleFrag() {
 }
 
 const createImageExample = async () => {
-    const response = await fetch('./compute.PNG'); let data = await response.blob();
+    const response = await fetch('./knucks.jpg'); let data = await response.blob();
     const imageBitmap = await createImageBitmap(data);
     
     
