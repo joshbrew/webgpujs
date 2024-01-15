@@ -229,11 +229,13 @@ function cubeExampleVert(
 }
 
 function cubeExampleFrag() {
-    return textureSample(image, imgSampler, uv) * position;
+    return textureSample(image, imgSampler, uv);
 }
 
 const createImageExample = async () => {
-    const response = await fetch('./knucks.jpg'); let data = await response.blob();
+    const response = await fetch('./knucks.jpg');
+    let data = await response.blob();
+    console.log(data);
     const imageBitmap = await createImageBitmap(data);
     
     
@@ -293,7 +295,7 @@ const createImageExample = async () => {
             textures:{
                 image:textureData //corresponds to the variable which is defined implicitly by usage with texture calls
             },
-            indexBuffer:cubeIndices,
+            // indexBuffer:cubeIndices,
             indexFormat:'uint16'
         },
         // bindings:{ //binding overrides (assigned to our custom-generated layout)
