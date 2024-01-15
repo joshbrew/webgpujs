@@ -485,6 +485,10 @@ export class ShaderContext {
         }
 
         if(textures) for(const key in textures) {
+            let isStorage = bufferGroup.params.find((node, i) => { 
+                if(node.name === key && node.isStorageTexture) return true;
+            }); //assign storage texture primitives
+            if(isStorage) textures[key].isStorage = true;
             this.updateTexture(textures[key], key, bindGroupNumber); //generate texture buffers and samplers
         }
 
@@ -520,7 +524,7 @@ export class ShaderContext {
                     buffer.texture = { 
                         sampleType:'float',
                         viewDimension:node.name.includes('3d') ? '3d' : node.name.includes('1d') ? '1d' : node.name.includes('2darr') ? '2d-array' : '2d'
-                     };
+                    };
 
                     let viewSettings = undefined;
                     if(bufferGroup.textures[node.name]) {
@@ -717,7 +721,8 @@ export class ShaderContext {
         label?:string, 
         format?:string, //default: 'rgba8unorm' 
         usage?:any,
-        layout?:GPUImageDataLayout|GPUImageCopyExternalImage //customize the layout that gets created for an image source e.g. flipY
+        layout?:GPUImageDataLayout|GPUImageCopyExternalImage, //customize the layout that gets created for an image source e.g. flipY
+        isStorage?:boolean, //something to help with identifying in the bindgroup automation
     }|ImageBitmap|any, 
     name:string, bindGroupNumber=this.bindGroupNumber) => {
         if(!data) return;
@@ -735,8 +740,8 @@ export class ShaderContext {
             size: [data.width, data.height, 1],
             usage:  data.usage ? data.usage : 
                 data.source ? 
-                    (GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT) : 
-                    (GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST) //GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.COPY_SRC | 
+                    (GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | (data.isStorage ? GPUTextureUsage.STORAGE_BINDING : GPUTextureUsage.RENDER_ATTACHMENT)) : 
+                    data.isStorage ? (GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.STORAGE_BINDING) : (GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST) //GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.COPY_SRC | 
         } as GPUTextureDescriptor;
 
         const texture = this.device.createTexture(
@@ -773,7 +778,9 @@ export class ShaderContext {
                 [ data.width, data.height ],
             );
         //console.log(texInfo,data);
-        //todo: we need to pass the updated sampler and texture view to the bindGroupLayout
+        
+        
+
         return true; //textures/samplers updated
     }
 

@@ -425,7 +425,7 @@
             typ = "texture_depth_cube_array";
           else if (node.isDepthMSAATexture)
             typ = "texture_depth_multisampled_2d";
-          else if (node.isDepthCuneTexture)
+          else if (node.isDepthCubeTexture)
             typ = "texture_depth_cube";
           else if (node.isDepthTexture2d)
             typ = "texture_depth_2d";
@@ -1728,6 +1728,12 @@ fn vtx_main(
       }
       if (textures)
         for (const key in textures) {
+          let isStorage = bufferGroup.params.find((node, i) => {
+            if (node.name === key && node.isStorageTexture)
+              return true;
+          });
+          if (isStorage)
+            textures[key].isStorage = true;
           this.updateTexture(textures[key], key, bindGroupNumber);
         }
       let texKeys;
@@ -1949,7 +1955,7 @@ fn vtx_main(
         label: data.label ? data.label : `texture_g${bindGroupNumber}_${name}`,
         format: data.format ? data.format : "rgba8unorm",
         size: [data.width, data.height, 1],
-        usage: data.usage ? data.usage : data.source ? GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT : GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST
+        usage: data.usage ? data.usage : data.source ? GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | (data.isStorage ? GPUTextureUsage.STORAGE_BINDING : GPUTextureUsage.RENDER_ATTACHMENT) : data.isStorage ? GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.STORAGE_BINDING : GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST
         //GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.COPY_SRC | 
       };
       const texture = this.device.createTexture(
@@ -3289,45 +3295,45 @@ fn vtx_main(
     0,
     1,
     2,
-    2,
-    1,
     3,
-    // front
     4,
     5,
+    // Bottom face
     6,
-    6,
-    5,
     7,
-    // right
     8,
     9,
     10,
-    10,
-    9,
     11,
-    // back
+    // Right face
     12,
     13,
     14,
-    14,
-    13,
     15,
-    // left
     16,
     17,
+    // Top face
     18,
-    18,
-    17,
     19,
-    // bottom
     20,
     21,
     22,
-    22,
-    21,
-    23
-    // top
+    23,
+    // Left face
+    24,
+    25,
+    26,
+    27,
+    28,
+    29,
+    // Front face
+    30,
+    31,
+    32,
+    33,
+    34,
+    35
+    // Back face
   ]);
 
   // node_modules/wgpu-matrix/dist/2.x/wgpu-matrix.module.js
@@ -4799,7 +4805,7 @@ fn vtx_main(
     uniformScale
   });
 
-  // examplets.js
+  // example.js
   function dft(inputData = new Float32Array(), outputData = [], outp3 = mat2x2(vec2(1, 1), vec2(1, 1)), outp4 = "i32", outp5 = vec3(1, 2, 3), outp6 = [vec2(1, 1)]) {
     function add(a = vec2f(0, 0), b2 = vec2f(0, 0)) {
       return a + b2;
@@ -5017,7 +5023,7 @@ fn vtx_main(
           image: textureData
           //corresponds to the variable which is defined implicitly by usage with texture calls
         },
-        // indexBuffer:cubeIndices,
+        indexBuffer: cubeIndices,
         indexFormat: "uint16"
       },
       // bindings:{ //binding overrides (assigned to our custom-generated layout)

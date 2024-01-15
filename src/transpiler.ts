@@ -393,6 +393,7 @@ export class WGSLTranspiler {
             //todo: texture types - texture_1d, texture_2d, texture_2d_array, texture_3d
             //methods for parsing texture types, we didn't really have a choice but to use variable names for implicit texture typing, but it should work in general
             if (new RegExp(`textureSampleCompare\\(${escapeRegExp(node.name)},`).test(funcStr)) { 
+                
                 let nm = node.name.toLowerCase();
                 if(nm.includes('deptharr')) node.isDepthTextureArray = true;
                 else if(nm.includes('depth')) node.isDepthTexture2d = true;
@@ -403,12 +404,18 @@ export class WGSLTranspiler {
                 node.isTexture = true;
                 node.isDepthTexture = true;
                 prevTextureBinding = bindingIncr; //the output texture should share the binding (this is rudimentary, we can't really anticipate better than this)
+            
             } else if(new RegExp(`textureSampleCompare\\(\\w+\\s*,\\s*${escapeRegExp(node.name)}`).test(funcStr)) {
+                
                 node.isComparisonSampler = true;
                 node.isSampler = true;
+            
             } else if (new RegExp(`textureSample\\(\\w+\\s*,\\s*${escapeRegExp(node.name)}`).test(funcStr)) { 
+                
                 node.isSampler = true;
+            
             } else if(new RegExp(`textureStore\\(${escapeRegExp(node.name)},`).test(funcStr)) {
+                
                 let nm = node.name.toLowerCase();
                 if(nm.includes('3d')) node.is3dStorageTexture = true;
                 else if(nm.includes('1d')) node.is1dStorageTexture = true;
@@ -416,8 +423,11 @@ export class WGSLTranspiler {
                 
                 node.isStorageTexture = true;
                 if(prevTextureBinding !== undefined) node.isSharedStorageTexture = true; //shares a binding with a texture (assumed if following a texture)
+            
             } else if (new RegExp(`texture.*\\(${escapeRegExp(node.name)},`).test(funcStr)) { //todo: we could infer texture dimensions from the second input type
+                
                 let nm = node.name.toLowerCase();
+
                 //rudimentary way to dynamically type textures since we can't predict based on texture function calls
                 if(nm.includes('deptharr')) node.isDepthTextureArray = true;
                 else if(nm.includes('depthcubearr')) node.isDepthCubeArrayTexture = true;
@@ -462,7 +472,7 @@ export class WGSLTranspiler {
                 if(node.isDepthTextureArray) typ = 'texture_depth_2d_array';
                 else if(node.isDepthCubeArrayTexture) typ = 'texture_depth_cube_array';
                 else if(node.isDepthMSAATexture) typ = 'texture_depth_multisampled_2d';
-                else if(node.isDepthCuneTexture) typ = 'texture_depth_cube';
+                else if(node.isDepthCubeTexture) typ = 'texture_depth_cube';
                 else if(node.isDepthTexture2d) typ = 'texture_depth_2d';
                 else if(node.isCubeArrayTexture) typ = 'texture_cube_array<'+format+'>';
                 else if(node.isCubeTexture) typ = 'texture_cube<'+format+'>';
@@ -475,6 +485,7 @@ export class WGSLTranspiler {
                 code += `@group(${bindGroup}) @binding(${bindingIncr}) var ${node.name}: ${typ};\n`;
                 //else  code += `@group(${bindGroup}) @binding(${bindingIncr}) var ${node.name}: texture_storage_2d<${storageTextureType}, write>;\n\n`; //todo: rgba8unorm type should be customizable
                 bindingIncr++;
+
             } else if (node.isStorageTexture) { 
 
                 let format = textureFormats.find((f) => {if(node.name.includes(f)) return true;});
@@ -492,14 +503,17 @@ export class WGSLTranspiler {
                 if(typeof prevTextureBinding === 'undefined') //e.g. texture_2d in the vertex on binding 0 is written to on the compute on the storage texture on binding 0
                     bindingIncr++; 
                 else prevTextureBinding = undefined; //reset, we're just assuming if a texture input is followed by a storage texture, we'll give them the same binding
+            
             } else if (node.isSampler) {
                 let typ;
+                
                 if(node.isComparisonSampler) typ = 'sampler_comparison';
                 else typ = 'sampler';
 
                 params.push(node);
                 code += `@group(${bindGroup}) @binding(${bindingIncr}) var ${node.name}: ${typ};\n\n`;
                 bindingIncr++;
+            
             } else if(node.isInput && !this.builtInUniforms[node.name]) {
                 if (node.type === 'array') {
                     const elementType = this.inferTypeFromValue(node.value.split(',')[0], funcStr, ast);
@@ -514,15 +528,19 @@ export class WGSLTranspiler {
                     } else {
                         code += `var<storage, read> ${node.name}: ${capitalizeFirstLetter(node.name)}Struct;\n\n`;
                     }
+
                     bindingIncr++;
+
                 }
                 else if (node.isUniform) {
                     //if(shaderType === 'vertex') console.log(node);
+                    
                     if(!hasUniforms) {
                         uniformsStruct = `struct UniformsStruct {\n`;
                         hasUniforms = bindingIncr; // Set the flag to the index
                         bindingIncr++;
                     }
+                    
                     const uniformType = this.inferTypeFromValue(node.value, funcStr, ast);
                     node.type = uniformType;
                     params.push(node);
@@ -530,27 +548,34 @@ export class WGSLTranspiler {
                     
                 }
             } else if(this.builtInUniforms[node.name]) {
+                
                 if(!defaultUniforms) {
                     defaultUniforms = [] as any[];
                     defaultsStruct = `struct DefaultUniforms {\n`;
                 }
+
                 const uniformType = this.builtInUniforms[node.name].type;
                 defaultsStruct += `    ${node.name}: ${uniformType},\n`; // Add the uniform to the UniformsStruct
                 defaultUniforms.push(node.name);
+            
             }
         });
 
         if(defaultUniforms) {
+        
             defaultsStruct += '};\n\n';
             code += defaultsStruct;
             code += `@group(${bindGroup}) @binding(${bindingIncr}) var<uniform> defaults: DefaultUniforms;\n\n`; //the last binding will always be default uniforms in this case
             bindingIncr++;
+        
         }
 
         if (hasUniforms !== false) { // If there are any uniforms, add the UniformsStruct and its binding to the code
+        
             uniformsStruct += '};\n\n'; // Close the UniformsStruct
             code += uniformsStruct;
             code += `@group(${bindGroup}) @binding(${hasUniforms}) var<uniform> uniforms: UniformsStruct;\n\n`;
+        
         }
 
         return {code, params, defaultUniforms, lastBinding:bindingIncr};
