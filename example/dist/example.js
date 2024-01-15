@@ -4965,10 +4965,6 @@ fn vtx_main(
     let data = await response.blob();
     console.log(data);
     const imageBitmap = await createImageBitmap(data);
-    const numMipLevels = (...sizes) => {
-      const maxSize = Math.max(...sizes);
-      return 1 + Math.log2(maxSize) | 0;
-    };
     const textureData = {
       source: imageBitmap,
       texture: {},

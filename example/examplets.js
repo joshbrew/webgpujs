@@ -240,10 +240,10 @@ const createImageExample = async () => {
     const imageBitmap = await createImageBitmap(data);
     
     
-    const numMipLevels = (...sizes) => {
-        const maxSize = Math.max(...sizes);
-        return 1 + Math.log2(maxSize) | 0;
-    };
+    // const numMipLevels = (...sizes) => {
+    //     const maxSize = Math.max(...sizes);
+    //     return 1 + Math.log2(maxSize) | 0;
+    // };
     
     
     const textureData = {
