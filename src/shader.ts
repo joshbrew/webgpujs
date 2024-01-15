@@ -911,10 +911,10 @@ export class ShaderContext {
             return {
                 arrayStride: 52,
                 attributes: [
-                    {format: "float32x4", offset: 0, shaderLocation:  4*i},   //vertex vec4
-                    {format: "float32x4", offset: 16, shaderLocation: 4*i+1}, //color vec4
-                    {format: "float32x2", offset: 32, shaderLocation: 4*i+2}, //uv vec2
-                    {format: "float32x3", offset: 40, shaderLocation: 4*i+3}  //normal vec3
+                    {format: "float32x4", offset: 0,  shaderLocation:  4*i},   //vertex vec4
+                    {format: "float32x4", offset: 16, shaderLocation:  4*i+1}, //color vec4
+                    {format: "float32x2", offset: 32, shaderLocation:  4*i+2}, //uv vec2
+                    {format: "float32x3", offset: 40, shaderLocation:  4*i+3}  //normal vec3
                 ]
             }
         });

@@ -245,7 +245,7 @@ const createImageExample = async () => {
     
     const textureData = {
         source:imageBitmap,
-        texture:{mipLevelCount:numMipLevels(imageBitmap.width, imageBitmap.height)}, //overrides to texture settings
+        texture:{}, //overrides to texture settings //mipLevelCount:numMipLevels(imageBitmap.width, imageBitmap.height)
         layout:{flipY:true}
     }
 
