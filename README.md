@@ -21,7 +21,7 @@ WebGPU does not have a wide variety of data structures and functions so it's not
 
 ## Compute Shader example: Discrete Fourier Transform (DFT)
 
-Say I want to implement this compute shader for a discrete fourier transform which is an n^2 scaling problem without optimizations like nyquist limits and divide-and-conquer. This means it will take several seconds to execute a moderately sized sample set on a linear 
+Say I want to implement this compute shader for a discrete fourier transform which is an n^2 scaling problem without optimizations like nyquist limits and divide-and-conquer. This means it will take several seconds to execute a moderately sized sample set on a linear CPU
 
 ```wgsl
 
