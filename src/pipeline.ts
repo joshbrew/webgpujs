@@ -60,6 +60,7 @@ import {ShaderOptions, RenderOptions, ComputeOptions, RenderPassSettings, Comput
 
 export class WebGPUjs {
     static device:GPUDevice;
+    
     static createPipeline = async (
         shaders: Function | {
                 code:Function|string, 

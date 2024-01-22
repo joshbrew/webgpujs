@@ -100,7 +100,7 @@
     static tokenize(funcStr) {
       let head = this.getFunctionHead(funcStr);
       let paramString = head.substring(head.indexOf("(") + 1, head.lastIndexOf(")"));
-      let params = this.splitIgnoringBrackets(paramString).map((param) => ({
+      let params2 = this.splitIgnoringBrackets(paramString).map((param) => ({
         token: param,
         isInput: true
       }));
@@ -126,10 +126,10 @@
           return { token: arg, isInput: false };
         }).filter((arg) => arg !== null);
       });
-      params = params.concat(assignmentTokens);
-      params = params.concat(builtInUniformsTokens);
-      params = params.concat(textureCallTokens);
-      return params;
+      params2 = params2.concat(assignmentTokens);
+      params2 = params2.concat(builtInUniformsTokens);
+      params2 = params2.concat(textureCallTokens);
+      return params2;
     }
     static excludedNames = {
       "color": true,
@@ -162,23 +162,23 @@
         if (token.includes("=")) {
           const variableMatch = token.match(/(const|let|var)?\s*(\w+)\s*=\s*(.+)/);
           if (variableMatch && (variableMatch[3].startsWith("new") || variableMatch[3].startsWith("["))) {
-            let length;
+            let length2;
             if (variableMatch[3].startsWith("new Array(")) {
               const arrayLengthMatch = variableMatch[3].match(/new Array\((\d+)\)/);
-              length = arrayLengthMatch ? parseInt(arrayLengthMatch[1]) : void 0;
+              length2 = arrayLengthMatch ? parseInt(arrayLengthMatch[1]) : void 0;
             } else if (variableMatch[3].startsWith("new")) {
               const typedArrayLengthMatch = variableMatch[3].match(/new \w+Array\(\[([^\]]+)\]\)/);
-              length = typedArrayLengthMatch ? typedArrayLengthMatch[1].split(",").length : void 0;
+              length2 = typedArrayLengthMatch ? typedArrayLengthMatch[1].split(",").length : void 0;
             } else {
               const directArrayLengthMatch = variableMatch[3].match(/\[([^\]]+)\]/);
-              length = directArrayLengthMatch ? directArrayLengthMatch[1].split(",").length : void 0;
+              length2 = directArrayLengthMatch ? directArrayLengthMatch[1].split(",").length : void 0;
             }
             ast.push({
               type: "array",
               name: variableMatch[2],
               value: variableMatch[3],
               isInput,
-              length,
+              length: length2,
               // Added this line to set the extracted length
               isReturned: returnedVars ? returnedVars?.includes(variableMatch[2]) : isInput ? true : false,
               isModified
@@ -328,7 +328,7 @@
       let defaultsStruct = "";
       let hasUniforms = false;
       let defaultUniforms;
-      const params = [];
+      const params2 = [];
       let bindingIncr = minBinding;
       let names = {};
       let prevTextureBinding;
@@ -412,11 +412,11 @@
             code += variableTypes[node.name].binding;
           }
           bindingIncr++;
-          params.push(node);
+          params2.push(node);
           return;
         }
         if (node.isTexture) {
-          params.push(node);
+          params2.push(node);
           let format = node.name.includes("i32") ? "i32" : node.name.includes("u32") ? "u32" : "f32";
           let typ;
           if (node.isDepthTextureArray)
@@ -462,7 +462,7 @@
             typ = "texture_storage_2d_array<" + format + ",write>";
           else
             typ = "texture_storage_2d<" + format + ",write>";
-          params.push(node);
+          params2.push(node);
           code += `@group(${bindGroup}) @binding(${bindingIncr}) var ${node.name}: ${typ};
 `;
           if (typeof prevTextureBinding === "undefined")
@@ -475,7 +475,7 @@
             typ = "sampler_comparison";
           else
             typ = "sampler";
-          params.push(node);
+          params2.push(node);
           code += `@group(${bindGroup}) @binding(${bindingIncr}) var ${node.name}: ${typ};
 
 `;
@@ -484,7 +484,7 @@
           if (node.type === "array") {
             const elementType = this.inferTypeFromValue(node.value.split(",")[0], funcStr, ast);
             node.type = elementType;
-            params.push(node);
+            params2.push(node);
             code += `struct ${capitalizeFirstLetter(node.name)}Struct {
     values: ${elementType}
 };
@@ -492,7 +492,7 @@
 `;
             code += `@group(${bindGroup}) @binding(${bindingIncr})
 `;
-            if (!returnedVars || returnedVars?.includes(node.name)) {
+            if (!returnedVars || returnedVars?.includes(node.name) || node.isModified) {
               code += `var<storage, read_write> ${node.name}: ${capitalizeFirstLetter(node.name)}Struct;
 
 `;
@@ -511,7 +511,7 @@
             }
             const uniformType = this.inferTypeFromValue(node.value, funcStr, ast);
             node.type = uniformType;
-            params.push(node);
+            params2.push(node);
             uniformsStruct += `    ${node.name}: ${uniformType},
 `;
           }
@@ -542,9 +542,9 @@
 
 `;
       }
-      return { code, params, defaultUniforms, lastBinding: bindingIncr };
+      return { code, params: params2, defaultUniforms, lastBinding: bindingIncr };
     }
-    static extractAndTransposeInnerFunctions = (body, extract = true, ast, params, shaderType) => {
+    static extractAndTransposeInnerFunctions = (body, extract = true, ast, params2, shaderType) => {
       const functionRegex = /function (\w+)\(([^()]*|\((?:[^()]*|\([^()]*\))*\))*\) \{([\s\S]*?)\}/g;
       let match;
       let extractedFunctions = "";
@@ -562,7 +562,7 @@
             outputParam = inferredType;
           }
         }
-        let params2 = this.splitIgnoringBrackets(paramString).map((p) => {
+        let params3 = this.splitIgnoringBrackets(paramString).map((p) => {
           let split = p.split("=");
           let vname = split[0];
           let inferredType = this.inferTypeFromValue(split[1], body, ast);
@@ -570,8 +570,8 @@
             outputParam = inferredType;
           return vname + ": " + inferredType;
         });
-        const transposedBody = this.transposeBody(funcBody, funcBody, params2, shaderType, true, void 0, false).code;
-        extractedFunctions += `fn ${funcName}(${params2}) -> ${outputParam} {${transposedBody}}
+        const transposedBody = this.transposeBody(funcBody, funcBody, params3, shaderType, true, void 0, false).code;
+        extractedFunctions += `fn ${funcName}(${params3}) -> ${outputParam} {${transposedBody}}
 
 `;
       }
@@ -579,16 +579,16 @@
         body = body.replace(functionRegex, "");
       return { body, extractedFunctions };
     };
-    static generateMainFunctionWorkGroup(funcStr, ast, params, shaderType = "compute", nVertexBuffers = 1, workGroupSize = 256, gpuFuncs) {
+    static generateMainFunctionWorkGroup(funcStr, ast, params2, shaderType = "compute", nVertexBuffers = 1, workGroupSize = 256, gpuFuncs) {
       let code = "";
       if (gpuFuncs) {
         gpuFuncs.forEach((f) => {
-          let result = this.extractAndTransposeInnerFunctions(typeof f === "function" ? f.toString() : f, false, ast, params, shaderType);
+          let result = this.extractAndTransposeInnerFunctions(typeof f === "function" ? f.toString() : f, false, ast, params2, shaderType);
           if (result.extractedFunctions)
             code += result.extractedFunctions;
         });
       }
-      const { body: mainBody, extractedFunctions } = this.extractAndTransposeInnerFunctions(funcStr.match(/{([\s\S]+)}/)[1], true, ast, params, shaderType);
+      const { body: mainBody, extractedFunctions } = this.extractAndTransposeInnerFunctions(funcStr.match(/{([\s\S]+)}/)[1], true, ast, params2, shaderType);
       code += extractedFunctions;
       let vtxInps;
       let vboInputStrings = [];
@@ -650,7 +650,7 @@ fn frag_main(
 `;
       }
       let shaderHead = code;
-      let transposed = this.transposeBody(mainBody, funcStr, params, shaderType, shaderType === "fragment", shaderHead, true);
+      let transposed = this.transposeBody(mainBody, funcStr, params2, shaderType, shaderType === "fragment", shaderHead, true);
       code += transposed.code;
       if (transposed.consts?.length > 0)
         code = transposed.consts.join("\n") + "\n\n" + code;
@@ -661,7 +661,7 @@ fn frag_main(
       code += "\n}\n";
       return code;
     }
-    static transposeBody = (body, funcStr, params, shaderType, returns = false, shaderHead = "", extractConsts = false) => {
+    static transposeBody = (body, funcStr, params2, shaderType, returns = false, shaderHead = "", extractConsts = false) => {
       let code = "";
       const commentPlaceholders = {};
       let placeholderIndex = 0;
@@ -814,7 +814,7 @@ for (var i: i32 = 0; i < ${size}; i = i + 1) {
           return `${type}<${inferredType}>(${argArray.join(", ")})`;
         }
       });
-      params.forEach((param) => {
+      params2.forEach((param) => {
         if (param.isUniform) {
           const regex = new RegExp(`(?<![a-zA-Z0-9])${param.name}(?![a-zA-Z0-9])`, "gm");
           code = code.replace(regex, `uniforms.${param.name}`);
@@ -1606,16 +1606,16 @@ fn vtx_main(
     }
     //we're just assuming that for the default frag/vertex we may want colors, positions, normals, or uvs. If you define your entire own shader pipeline then this can be ignored
     static combineVertices(vertices, colors, uvs, normals) {
-      let length = 0;
+      let length2 = 0;
       if (colors)
-        length = colors.length / 4;
-      if (vertices?.length / 4 > length)
-        length = vertices.length / 4;
-      if (normals?.length / 3 > length)
-        length = normals.length / 3;
-      if (uvs?.length / 2 > length)
-        length = uvs.length / 2;
-      const vertexCount = length;
+        length2 = colors.length / 4;
+      if (vertices?.length / 4 > length2)
+        length2 = vertices.length / 4;
+      if (normals?.length / 3 > length2)
+        length2 = normals.length / 3;
+      if (uvs?.length / 2 > length2)
+        length2 = uvs.length / 2;
+      const vertexCount = length2;
       const interleavedVertices = new Float32Array(vertexCount * 13);
       for (let i = 0; i < vertexCount; i++) {
         const posOffset = i * 4;
@@ -2231,7 +2231,7 @@ fn vtx_main(
       const inputBuffers = bufferGroup.inputBuffers;
       let uniformBuffer = bufferGroup.uniformBuffer;
       const outputBuffers = bufferGroup.outputBuffers;
-      const params = bufferGroup.params;
+      const params2 = bufferGroup.params;
       const inputTypes = bufferGroup.inputTypes;
       let newBindGroupBuffer = newBindings;
       if (inputBuffers?.length > 0) {
@@ -2265,9 +2265,9 @@ fn vtx_main(
       let uBufferSet = false;
       let bindGroupAlts = [];
       let uniformValues = [];
-      if (params)
-        for (let i = 0; i < params.length; i++) {
-          const node = params[i];
+      if (params2)
+        for (let i = 0; i < params2.length; i++) {
+          const node = params2[i];
           if (typeof inputs[inpBuf_i] !== "undefined" && this.altBindings?.[node.name] && this.altBindings?.[node.name].group !== bindGroupNumber) {
             if (!bindGroupAlts[this.altBindings?.[node.name].group]) {
               bindGroupAlts[this.altBindings?.[node.name].group] = [];
@@ -2280,7 +2280,7 @@ fn vtx_main(
               if (!bufferGroup.uniformBuffer || !uBufferSet && inputs[inpBuf_i] !== void 0) {
                 if (!bufferGroup.totalUniformBufferSize) {
                   let totalUniformBufferSize = 0;
-                  params.forEach((node2, j) => {
+                  params2.forEach((node2, j) => {
                     if (node2.isInput && node2.isUniform) {
                       if (inputTypes[j]) {
                         let size;

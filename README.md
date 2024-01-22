@@ -474,6 +474,120 @@ createImageExample();
 
 ```
 
+Which transpiles to
+
+```wgsl
+
+//Bindings (data passed to/from CPU) 
+struct InputDataStruct {
+    values: array<f32>
+};
+
+@group(0) @binding(0)
+var<storage, read_write> inputData: InputDataStruct;
+
+struct OutputDataStruct {
+    values: array<f32>
+};
+
+@group(0) @binding(1)
+var<storage, read_write> outputData: OutputDataStruct;
+
+struct Outp6Struct {
+    values: array<vec2<i32>>
+};
+
+@group(0) @binding(3)
+var<storage, read> outp6: Outp6Struct;
+
+struct DefaultUniforms {
+    resX: f32,
+};
+
+@group(0) @binding(4) var<uniform> defaults: DefaultUniforms;
+
+struct UniformsStruct {
+    outp3: mat2x2<f32>,
+    outp4: i32,
+    outp5: vec3<i32>,
+};
+
+@group(0) @binding(2) var<uniform> uniforms: UniformsStruct;
+
+
+const x3 : array<i32, 3> = array<i32, 3>(
+    1, 2, 3
+);
+const bb : array<f32, 5> = array(1,2,3,4,5);
+
+fn mul(a : vec2f, b : vec2f) -> vec2f {
+    return a * b;
+}
+
+fn add(a : vec2f, b2 : vec2f) -> vec2f {
+    return a + b2;
+}
+
+
+//Main function call
+//threadId tells us what x,y,z thread we are on
+
+@compute @workgroup_size(256)
+fn compute_main(  
+    @builtin(global_invocation_id) threadId: vec3<u32>, //shader grid position
+    @builtin(local_invocation_id) localId: vec3<u32>,   //workgroup grid position
+    @builtin(local_invocation_index) localIndex: u32,   //linear index within workgroup grid
+    @builtin(num_workgroups) workgroups: vec3<u32>,     //dispatch size (x,y,z) group count
+    @builtin(workgroup_id) workgroupId: vec3<u32>       //position of workgroup in compute shader grid
+) {
+    var x : array<f32, 32>;
+    var x2 : array<f32, 32>;
+    for (var i: i32 = 0; i < 32; i = i + 1) {
+        	x2[i] = inputData.values[0];
+    }
+
+    var x4 : array<vec3<i32>, 100>;
+    for (var i: i32 = 0; i < 100; i = i + 1) {
+        	x4[i] = vec3<i32>(0, 0, 0);
+    }
+    var x5 : array<mat2x2<f32>, 100>;
+    for (var i: i32 = 0; i < 100; i = i + 1) {
+        	x5[i] = mat2x2(vec2<f32>(1, 1), vec2<f32>(1, 1));
+    }
+    let N = i32(arrayLength(&inputData.values));
+    let k = threadId.x;
+    var sum = vec2f(0, 0);
+    var sum2 = add(sum, sum);
+    let width = defaults.resX;
+    let b = 3 + uniforms.outp4;
+
+    var M = mat4x4(
+        vec4f(1, 0, 0, 0),
+        vec4f(0, 1, 0, 0),
+        vec4f(0, 0, 1, 0),
+        vec4f(0, 0, 0, 1)
+    );
+    let D = M + M;
+    var Z = uniforms.outp3 * mat2x2(vec2f(4, -1), vec2f(3, 2));
+    var Zz = uniforms.outp5 + vec3<i32>(4, 5, 6);
+    for (var n = 0; n < N; n++) {
+        let phase = 2 * 3.141592653589793 * f32(k) * f32(n) / f32(N);
+        sum = sum + vec2f(
+            inputData.values[n] * cos(phase),
+            -inputData.values[n] * sin(phase)
+        );
+    }
+    let outputIndex = k * 2;
+    if (outputIndex + 1 < arrayLength(&outputData.values)) {
+        outputData.values[outputIndex] = sum.x;
+        outputData.values[outputIndex + 1] = sum.y;
+    }
+    //return [inputData, outputData];
+}
+
+```
+
+There's some default uniforms that are supported too, the idea being we can include things like shadertoy uniforms, but it's all rough cut. Check out the top of [transpiler.ts](./src/transpiler.ts) for supported variables.
 
 ## Customizing the pipeline manually
 
@@ -481,6 +595,66 @@ See [`./src/types.ts`](./src/types.ts) for input options, this is all rough cut 
 
 You can do everything to pass all of your own shader text and pipeline settings etc to the shader helper, without touching our transpiler, the point will be to make it easier to hybridize code and otherwise not handicap ourselves with this little framework. It all needs to be documented and expanded on as things solidify. There is plenty missing especially for rendering.
 
+
+The `WebGPU.createPipeline()` call is like this:
+
+```ts
+
+createPipeline = async (
+        shaders: Function | {
+                code:Function|string, 
+                transpileString?:boolean //functions are auto-transpiled
+            } | {
+                compute:string|Function,
+                vertex:string|Function,
+                fragment:string|Function,
+                transpileString?:boolean
+            },
+        options:ShaderOptions & ComputeOptions & RenderOptions = {}
+):Promise<ShaderHelper>
+
+```
+
+The options are as follows, see the types.ts file for the rest:
+
+```ts
+type ShaderOptions = {
+    device?:GPUDevice
+    prependCode?:string, //prepend any code to your shaders e.g. custom bindings
+    bindGroupNumber?:number,
+    getPrevShaderBindGroups?:string,
+    functions?:Function[], //can transpile functions into utilities
+    variableTypes?:{[key:string]:string|{binding:string}}, //we can skip the implicit typing of the bindings and set them ourselves e.g. tex1:'texture_2d' or tex1:{binding:'@group(0) @binding(1) var x: texture_2d;'} etc.
+    inputs?:any[],
+    bindGroupLayouts?:GPUBindGroupLayout[],
+    bindGroups?:GPUBindGroup[],
+    bindings?:{[key:string]:Partial<GPUBindGroupEntry>}
+    lastBinding?:number, 
+    bufferGroups?:any,
+    skipCombinedBindings?:boolean //don't scan for shared bindings in grouped shaders with common variable names
+}
+
+type ComputeOptions = {
+    workGroupSize?:number,
+    computePipelineSettings?:GPUComputePipelineDescriptor,
+    computePass?:ComputePassSettings
+};
+
+type RenderOptions = {
+    canvas?:HTMLCanvasElement|OffscreenCanvas,
+    context?:GPUCanvasContext,
+    contextSettings?:GPUCanvasConfiguration,
+    renderPipelineDescriptor?:Partial<GPURenderPipelineDescriptor>, //specify partial settings e.g. the primitive topology
+    renderPassDescriptor?:GPURenderPassDescriptor,
+    renderPipelineSettings?:any,
+    nVertexBuffers?:number, //set to allow multiple vbos 
+    renderPass?:RenderPassSettings
+};
+
+
+```
+
+Lots to improve!!!
 
 ### Contribute!
 
