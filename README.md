@@ -540,7 +540,7 @@ function dft(
 
 ```
 
-Several things to notice are array allocations all will be transpiled implicitly based on obvious patterns. Math calls will be replaced or filled implicitly. Array.fill calls will be transpiled. Also you can just flat out write a template string in a line and it will assume it is plain shader code. Right now the default values don't mean anything just the types, which we'll figure out.
+Several things to notice are array allocations all will be transpiled implicitly based on obvious patterns. Math calls will be replaced or filled implicitly. Array.fill calls will be transpiled. Also you can just flat out write a multi line template string in and it will assume it is plain shader code. That can be nice for adding more complex utility functions and structs than our transpiler recognizes. Right now the default values don't mean anything just the types, which we'll figure out.
 
 Which transpiles to
 
