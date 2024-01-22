@@ -657,10 +657,17 @@ fn compute_main(
 
 There's some default uniforms that are supported too, the idea being we can include things like shadertoy uniforms, but it's all rough cut. Check out the top of [transpiler.ts](./src/transpiler.ts) for supported variables.
 
-
 We're working on testing shader chaining and so on so you can run multiple processes on the GPU without copying buffers an unnecessary number of times for large processes.
 
 Lots to improve!!!
+
+Main things to improve are:
+
+- input and output types, better implicit texture and buffer typing (there are placeholder methods to specify texture types)
+- utility function types
+- vertex buffer namings/types/allocations
+- maybe some automatic worker allocation toggles
+- and obviously docs and examples.
 
 ### Contribute!
 
