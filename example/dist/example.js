@@ -1878,7 +1878,7 @@ fn vtx_main(
       }
       return this.bindGroupLayout;
     };
-    updateVBO = (vertices, index = 0, bufferOffset = 0, dataOffset = 0, bindGroupNumber = this.bindGroupNumber, indexBuffer, indexFormat) => {
+    updateVBO = (vertices, index = 0, bufferOffset = 0, dataOffset = 0, bindGroupNumber = this.bindGroupNumber, indexBuffer2, indexFormat) => {
       let bufferGroup = this.bufferGroups[bindGroupNumber];
       if (!bufferGroup) {
         bufferGroup = this.makeBufferGroup(bindGroupNumber);
@@ -1895,8 +1895,8 @@ fn vtx_main(
           } else
             vertices = new Float32Array(typeof vertices === "object" ? ShaderHelper.flattenArray(vertices) : vertices);
         }
-        if (indexBuffer || bufferGroup.vertexBuffers?.[index]?.size !== vertices.byteLength) {
-          if (indexBuffer) {
+        if (indexBuffer2 || bufferGroup.vertexBuffers?.[index]?.size !== vertices.byteLength) {
+          if (indexBuffer2) {
             if (!bufferGroup.indexCount)
               bufferGroup.indexCount = vertices.length;
           } else {
@@ -1905,7 +1905,7 @@ fn vtx_main(
             if (!bufferGroup.vertexCount)
               bufferGroup.vertexCount = vertices.length / 13;
           }
-          if (indexBuffer) {
+          if (indexBuffer2) {
             const vertexBuffer = this.device.createBuffer({
               size: vertices.byteLength,
               usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC | GPUBufferUsage.INDEX
@@ -1921,7 +1921,7 @@ fn vtx_main(
             bufferGroup.vertexBuffers[index] = vertexBuffer;
           }
         }
-        if (indexBuffer) {
+        if (indexBuffer2) {
           this.device.queue.writeBuffer(
             bufferGroup.indexBuffer,
             bufferOffset,
@@ -2197,7 +2197,7 @@ fn vtx_main(
       //[{vertices:[]}]
       textures,
       //{tex0:{data:Uint8Array([]), width:800, height:600, format:'rgba8unorm' (default), bytesPerRow: width*4 (default rgba) }}, //all required
-      indexBuffer,
+      indexBuffer: indexBuffer2,
       indexFormat,
       skipOutputDef,
       bindGroupNumber,
@@ -2217,8 +2217,8 @@ fn vtx_main(
           this.updateVBO(vertices, i, void 0, void 0, bindGroupNumber);
         });
       }
-      if (indexBuffer) {
-        this.updateVBO(indexBuffer, 0, void 0, void 0, bindGroupNumber, true, indexFormat);
+      if (indexBuffer2) {
+        this.updateVBO(indexBuffer2, 0, void 0, void 0, bindGroupNumber, true, indexFormat);
       }
       if (!bufferGroup.inputTypes && bufferGroup.params)
         bufferGroup.inputTypes = bufferGroup.params.map((p) => {
@@ -2485,7 +2485,7 @@ fn vtx_main(
       viewport,
       scissorRect,
       blendConstant,
-      indexBuffer,
+      indexBuffer: indexBuffer2,
       indexFormat,
       //uint16 or uint32
       firstIndex,
@@ -2503,7 +2503,7 @@ fn vtx_main(
           //[{vertices:[]}]
           textures,
           //[{data:Uint8Array([]), width:800, height:600, format:'rgba8unorm' (default), bytesPerRow: width*4 (default rgba) }], //all required
-          indexBuffer,
+          indexBuffer: indexBuffer2,
           indexFormat,
           skipOutputDef,
           bindGroupNumber,
@@ -3334,6 +3334,179 @@ fn vtx_main(
     34,
     35
     // Back face
+  ]);
+  var cubeVertexIndexData = new Float32Array([
+    //  position   |  texture coordinate
+    //-------------+----------------------
+    -1,
+    1,
+    1,
+    0,
+    1,
+    -1,
+    -1,
+    1,
+    0,
+    0,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    -1,
+    1,
+    1,
+    0,
+    // right face
+    1,
+    1,
+    -1,
+    0,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    -1,
+    -1,
+    0,
+    0,
+    1,
+    -1,
+    1,
+    1,
+    0,
+    // back face
+    1,
+    1,
+    -1,
+    1,
+    1,
+    1,
+    -1,
+    -1,
+    1,
+    0,
+    -1,
+    1,
+    -1,
+    0,
+    1,
+    -1,
+    -1,
+    -1,
+    0,
+    0,
+    // left face
+    -1,
+    1,
+    1,
+    1,
+    1,
+    -1,
+    1,
+    -1,
+    0,
+    1,
+    -1,
+    -1,
+    1,
+    1,
+    0,
+    -1,
+    -1,
+    -1,
+    0,
+    0,
+    // bottom face
+    1,
+    -1,
+    1,
+    1,
+    0,
+    -1,
+    -1,
+    1,
+    0,
+    0,
+    1,
+    -1,
+    -1,
+    1,
+    1,
+    -1,
+    -1,
+    -1,
+    0,
+    1,
+    // top face
+    -1,
+    1,
+    1,
+    0,
+    0,
+    1,
+    1,
+    1,
+    1,
+    0,
+    -1,
+    1,
+    -1,
+    0,
+    1,
+    1,
+    1,
+    -1,
+    1,
+    1
+  ]);
+  var indexBuffer = new Uint16Array([
+    0,
+    1,
+    2,
+    2,
+    1,
+    3,
+    // front
+    4,
+    5,
+    6,
+    6,
+    5,
+    7,
+    // right
+    8,
+    9,
+    10,
+    10,
+    9,
+    11,
+    // back
+    12,
+    13,
+    14,
+    14,
+    13,
+    15,
+    // left
+    16,
+    17,
+    18,
+    18,
+    17,
+    19,
+    // bottom
+    20,
+    21,
+    22,
+    22,
+    21,
+    23
+    // top
   ]);
 
   // node_modules/wgpu-matrix/dist/2.x/wgpu-matrix.module.js

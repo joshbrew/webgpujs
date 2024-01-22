@@ -1,5 +1,7 @@
 import { TranspiledShader } from "./types";
 
+//todo: handle custom structs from classes
+
 //transpile js(ish) functions to webgpu and generate/combine bindings
 export class WGSLTranspiler {
 
@@ -523,7 +525,7 @@ export class WGSLTranspiler {
                     code += `struct ${capitalizeFirstLetter(node.name)}Struct {\n    values: ${elementType}\n};\n\n`;
                     code += `@group(${bindGroup}) @binding(${bindingIncr})\n`;
                     
-                    if (!returnedVars || returnedVars?.includes(node.name)) {
+                    if (!returnedVars || returnedVars?.includes(node.name) || node.isModified) { //assume arrays are read_write?
                         code += `var<storage, read_write> ${node.name}: ${capitalizeFirstLetter(node.name)}Struct;\n\n`;
                     } else {
                         code += `var<storage, read> ${node.name}: ${capitalizeFirstLetter(node.name)}Struct;\n\n`;

@@ -344,6 +344,98 @@ createImageExample();
 //set cubeVertices as the vbo
 
 
+//https://webgpu.github.io/webgpu-samples/samples/computeBoids adaptation
+
+function boidsCompute(
+    //array buffers
+    particlesA = 'array<vec2f>', //float32array with x,y,vx,vy
+    particlesB = 'array<vec2f>', //float32array with x,y,vx,vy per position
+    //uniforms
+    deltaT = 0.04,
+    rule1Distance = 0.1,
+    rule2Distance = 0.025,
+    rule3Distance = 0.025,
+    rule1Scale = 0.02,
+    rule2Scale = 0.05,
+    rule3Scale = 0.005
+) {
+    const index = threadId.x*2;
+    var vPos = particlesA[index];
+    var vVel = particlesA[index+1];
+    let len = particlesA.length * 0.5; //should be counted as a vec2 array
+    var cMass = vec2f(0,0);
+    var cVel = vec2f(0,0);
+    var cMassCount = 0;
+    var cVelCount = 0;
+
+
+    for(var i = 0; i < len; i++) {
+        if(i == index) {
+            continue;
+        }
+        let j = i * 2;
+
+        var pos = particlesA(j);
+        var vel = particlesB(j+1);
+
+        if(distance(pos, vPos) < rule1Distance) {
+            cMass += pos;
+            cMassCount++;
+        }
+        if (distance(pos, vPos) < params.rule2Distance) {
+            colVel -= pos - vPos;
+        }
+        if (distance(pos, vPos) < params.rule3Distance) {
+            cVel += vel;
+            cVelCount++;
+        }
+    }
+    if (cMassCount > 0) {
+        cMass = (cMass / vec2(f32(cMassCount))) - vPos;
+    }
+    if (cVelCount > 0) {
+        cVel /= f32(cVelCount);
+    }
+
+    vVel += (cMass * rule1Scale) + (colVel * rule2Scale) + (cVel * rule3Scale);
+
+    vVel = normalize(vVel) * clamp(length(vVel), 0.0, 0.1);
+    vPos = vPos + (vVel * deltaT);
+
+    if(vPos.x < -1.0) {
+        vPos.x = 1.0;
+    }
+    if(vPos.x > 1.0) {
+        vPos.x = -1.0;
+    }
+    if (vPos.y < -1.0) {
+        vPos.y = 1.0;
+      }
+    if (vPos.y > 1.0) {
+        vPos.y = -1.0;
+    }
+
+    particlesB[index] = vPos;
+    particlesB[index+1] = vVel;
+
+}
+
+function boidsVertex(
+    particlesB = 'array<vec2f>'
+) {
+    const sprite = [
+        vec2f(-0.01, -0.02), 
+        vec2f(0.01,  -0.02),
+        vec2f(0.0,    0.02), 
+    ];
+
+    
+
+}
+
+function boidsFragment() {
+    return color;
+}
 
 
 

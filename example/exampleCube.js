@@ -43,7 +43,6 @@ export const cubeVertices = new Float32Array([
   -1, 1, -1, 1,  0, 1, 0, 1,  1, 0, 0,0,0
 ]);
 
-
 export const cubeIndices = new Uint16Array([
   0, 1, 2, 3, 4, 5,       // Bottom face
   6, 7, 8, 9, 10, 11,     // Right face
@@ -51,4 +50,49 @@ export const cubeIndices = new Uint16Array([
   18, 19, 20, 21, 22, 23, // Left face
   24, 25, 26, 27, 28, 29, // Front face
   30, 31, 32, 33, 34, 35  // Back face
+]);
+
+
+//index buffer version
+export const cubeVertexIndexData = new Float32Array([
+  //  position   |  texture coordinate
+  //-------------+----------------------
+  -1, 1, 1, 0, 1,
+  -1, -1, 1, 0, 0,
+  1, 1, 1, 1, 1,
+  1, -1, 1, 1, 0,
+  // right face
+  1, 1, -1, 0, 1,
+  1, 1, 1, 1, 1,
+  1, -1, -1, 0, 0,
+  1, -1, 1, 1, 0,
+  // back face
+  1, 1, -1, 1, 1,
+  1, -1, -1, 1, 0,
+  -1, 1, -1, 0, 1,
+  -1, -1, -1, 0, 0,
+  // left face
+  -1, 1, 1, 1, 1,
+  -1, 1, -1, 0, 1,
+  -1, -1, 1, 1, 0,
+  -1, -1, -1, 0, 0,
+  // bottom face
+  1, -1, 1, 1, 0,
+  -1, -1, 1, 0, 0,
+  1, -1, -1, 1, 1,
+  -1, -1, -1, 0, 1,
+  // top face
+  -1, 1, 1, 0, 0,
+  1, 1, 1, 1, 0,
+  -1, 1, -1, 0, 1,
+  1, 1, -1, 1, 1,
+]);
+
+export const indexBuffer = new Uint16Array([
+  0, 1, 2, 2, 1, 3,  // front
+  4, 5, 6, 6, 5, 7,  // right
+  8, 9, 10, 10, 9, 11,  // back
+  12, 13, 14, 14, 13, 15,  // left
+  16, 17, 18, 18, 17, 19,  // bottom
+  20, 21, 22, 22, 21, 23,  // top
 ]);

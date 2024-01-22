@@ -94,6 +94,7 @@ export declare class ShaderContext {
         format?: string;
         usage?: any;
         layout?: GPUImageDataLayout | GPUImageCopyExternalImage;
+        isStorage?: boolean;
     } | ImageBitmap | any, name: string, bindGroupNumber?: number) => boolean;
     setUBOposition: (dataView: DataView, inputTypes: any, typeInfo: any, offset: any, input: any, inpIdx: any) => any;
     updateUBO: (inputs: any, inputTypes: any, bindGroupNumber?: number) => void;
@@ -134,6 +135,7 @@ export declare class ShaderContext {
                 usage?: any;
                 samplerSettings?: any;
                 layout?: GPUImageDataLayout | GPUImageCopyExternalImage;
+                isStorage?: boolean;
             };
         };
         outputTextures?: boolean;
@@ -176,6 +178,7 @@ export declare class ShaderContext {
                 usage?: any;
                 samplerSettings?: any;
                 layout?: GPUImageDataLayout | GPUImageCopyExternalImage;
+                isStorage?: boolean;
             };
         };
         outputTextures?: boolean;

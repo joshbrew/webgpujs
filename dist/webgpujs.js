@@ -445,7 +445,7 @@
             typ = "texture_depth_cube_array";
           else if (node.isDepthMSAATexture)
             typ = "texture_depth_multisampled_2d";
-          else if (node.isDepthCuneTexture)
+          else if (node.isDepthCubeTexture)
             typ = "texture_depth_cube";
           else if (node.isDepthTexture2d)
             typ = "texture_depth_2d";
@@ -512,7 +512,7 @@
 `;
             code += `@group(${bindGroup}) @binding(${bindingIncr})
 `;
-            if (!returnedVars || returnedVars?.includes(node.name)) {
+            if (!returnedVars || returnedVars?.includes(node.name) || node.isModified) {
               code += `var<storage, read_write> ${node.name}: ${capitalizeFirstLetter(node.name)}Struct;
 
 `;
@@ -1778,6 +1778,12 @@ fn vtx_main(
       }
       if (textures)
         for (const key in textures) {
+          let isStorage = bufferGroup.params.find((node, i) => {
+            if (node.name === key && node.isStorageTexture)
+              return true;
+          });
+          if (isStorage)
+            textures[key].isStorage = true;
           this.updateTexture(textures[key], key, bindGroupNumber);
         }
       let texKeys;
@@ -1999,7 +2005,7 @@ fn vtx_main(
         label: data.label ? data.label : `texture_g${bindGroupNumber}_${name}`,
         format: data.format ? data.format : "rgba8unorm",
         size: [data.width, data.height, 1],
-        usage: data.usage ? data.usage : data.source ? GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT : GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST
+        usage: data.usage ? data.usage : data.source ? GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | (data.isStorage ? GPUTextureUsage.STORAGE_BINDING : GPUTextureUsage.RENDER_ATTACHMENT) : data.isStorage ? GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.STORAGE_BINDING : GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST
         //GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.COPY_SRC | 
       };
       const texture = this.device.createTexture(

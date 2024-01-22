@@ -72,6 +72,7 @@ export type RenderPassSettings = {
             usage?: any;
             samplerSettings?: any;
             layout?: GPUImageDataLayout | GPUImageCopyExternalImage;
+            isStorage?: boolean;
         } | ImageBitmap;
     };
     outputTextures?: boolean;

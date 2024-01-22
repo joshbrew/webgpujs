@@ -21,7 +21,7 @@ export type RenderOptions = {
     renderPipelineDescriptor?:Partial<GPURenderPipelineDescriptor>, //specify partial settings e.g. the primitive topology
     renderPassDescriptor?:GPURenderPassDescriptor,
     renderPipelineSettings?:any,
-    nVertexBuffers?:number,
+    nVertexBuffers?:number, //set to allow multiple vbos 
     renderPass?:RenderPassSettings
 };
 
@@ -69,6 +69,7 @@ export type RenderPassSettings = {
             usage?:any,
             samplerSettings?:any,
             layout?:GPUImageDataLayout|GPUImageCopyExternalImage //customize the layout that gets created for an image source e.g. flipY
+            isStorage?:boolean
         }|ImageBitmap
     },
     outputTextures?:boolean,
