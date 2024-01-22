@@ -105,7 +105,9 @@ function dft(
 
 ```
 
-Right now input types are interpreted through default values which can be implicit like using arrays or typed arrays, or numbers or fake `vec2f()` or `mat2x2()` etc calls, or you can just use strings like `mat2x2<f32>` or `array<vec2f>` and so on for more explicit control. We'd like to make this specifiable with options too when you set up the pipeline so it's not dependent on defaults since that's a bit jank. 
+Right now input types are interpreted through default values which can be implicit like using arrays or typed arrays, or numbers or fake `vec2f()` or `mat2x2()` etc calls, or you can just use strings like `mat2x2<f32>` or `array<vec2f>` and so on for more explicit control. We'd like to make this specifiable with options too when you set up the pipeline so it's not dependent on defaults since that's a bit jank. All non-array buffer values will be lumped into a uniform buffer.
+
+Outputs are specified by return statements, which are not native to wgsl but we just use it to imply what to use for output storage buffers. You can return the uniform buffer too by returning any uniform values.
 
 And we can compile and run this instantly with:
 
@@ -227,7 +229,6 @@ function dft(
 
 Several things to notice are array allocations all will be transpiled implicitly based on obvious patterns. Math calls will be replaced or filled implicitly. Array.fill calls will be transpiled. Also you can just flat out write a template string in a line and it will assume it is plain shader code. Right now the default values don't mean anything just the types, which we'll figure out.
 
-
 We're working on testing shader chaining and so on so you can run multiple processes on the GPU without copying buffers an unnecessary number of times for large processes.
 
 ### Rendering 
@@ -295,8 +296,7 @@ setTimeout(() => {
 
 ```
  
-Note our transpiler will move the consts out 
-
+Note our transpiler will move the consts out and a few other things to optimize the code a bit.
 
 #### Textured cube
 
@@ -479,7 +479,7 @@ createImageExample();
 
 See [`./src/types.ts`](./src/types.ts) for input options, this is all rough cut as we need to make things like vertex buffers and variable typing more explicit to open up more options for rendering.
 
-You can do everything to pass all of your own shader text and pipeline settings etc to the shader helper, without touching our transpiler, the point will be to make it easier to hybridize code and otherwise not handicap ourselves with this little framework. It all needs to be documented and expanded on as things solidify.
+You can do everything to pass all of your own shader text and pipeline settings etc to the shader helper, without touching our transpiler, the point will be to make it easier to hybridize code and otherwise not handicap ourselves with this little framework. It all needs to be documented and expanded on as things solidify. There is plenty missing especially for rendering.
 
 
 ### Contribute!
