@@ -345,7 +345,7 @@ createImageExample();
 
 
 //https://webgpu.github.io/webgpu-samples/samples/computeBoids adaptation
-
+//we need to add some stuff to our transpiler to make this more doable methinks.
 function boidsCompute(
     //array buffers
     particlesA = 'array<vec2f>', //float32array with x,y,vx,vy

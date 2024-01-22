@@ -9,7 +9,7 @@ We are using some boilerplate conventions but things like vertex buffer allocati
 To run the example: `npm i -g tinybuild` then `npm run example`
 
 
-![cap](./example/compute.PNG)
+![cap](./example/compute_.PNG)
 ![code](./example/workflow.PNG)
 ![render](./example/render.PNG)
 
