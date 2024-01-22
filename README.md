@@ -75,7 +75,8 @@ import { WebGPUjs } from "../src/pipeline";
 //dft is an O(n^2) example, plus a bunch of other nonsense just to test the transpiler out, we'll do this proper soon
 function dft(
     inputData = [], 
-    outputData = [], 
+    outputData = [],
+    //scalar = 1.0 //e.g. a uniform
 ) {
 
     let sum = vec2f(0.0, 0.0);
@@ -97,15 +98,17 @@ function dft(
     }
 
     
-    return [inputData, outputData]; //Returning an inputs lets us allocate several storage buffers implicitly. If you return uniforms 
+    return [inputData, outputData]; //Returning an inputs lets us allocate several storage buffers implicitly. Uniforms are immutable.
     //return outputData;
-    //return outp4; //we can also return the uniform buffer though it is immutable so it's pointless
+    //return scalar; //we can also return the uniform buffer though it is immutable so it's pointless
 }
 
 
 ```
 
-Right now input types are interpreted through default values which can be implicit like using arrays or typed arrays, or numbers or fake `vec2f()` or `mat2x2()` etc calls, or you can just use strings like `mat2x2<f32>` or `array<vec2f>` and so on for more explicit control. We'd like to make this specifiable with options too when you set up the pipeline so it's not dependent on defaults since that's a bit jank. All non-array buffer values will be lumped into a uniform buffer.
+Right now input types are interpreted through default values which can be implicit like using arrays or typed arrays, or numbers or fake `vec2f()` or `mat2x2()` etc calls, or you can just use strings like `mat2x2<f32>` or `array<vec2f>` and so on for more explicit control. Right now you can only output what you input, but later we can identify whether to have an arbitrary output buffer. The issue just comes with estimating the size of the data structure needed so inputs are the easiest to match and simply mutate with read_write definitions. We are also working on testing storage texture use which can be written to and outputted for 2D or 3D and so on datasets.
+
+We'd like to make this specifiable with options too when you set up the pipeline so it's not dependent on defaults since that's a bit jank. All non-array buffer values will be lumped into a uniform buffer.
 
 Outputs are specified by return statements, which are not native to wgsl but we just use it to imply what to use for output storage buffers. You can return the uniform buffer too by returning any uniform values.
 
@@ -155,7 +158,7 @@ pipeline.process(inputData3, outputData3).then((r3) => {
 
 ## Rendering 
 
-This is the most underdeveloped but right now you can chain compute, vertex, and fragment shaders together to do rendering. When it's finished we should have no trouble replicating any samples, but there is more flexibility to add to the system.
+This is the most underdeveloped but right now you can chain compute, vertex, and fragment shaders together to do rendering. When it's finished we should have no trouble replicating any samples, but there is more flexibility to add to the system. 
 
 #### Triangle
 
@@ -219,6 +222,73 @@ setTimeout(() => {
 ```
  
 Note our transpiler will move the consts out and a few other things to optimize the code a bit.
+
+So basically, we have some boilerplate for vbo inputs and outputs typical to a vertex/fragment pipeline.
+
+The result is for vertex shader vbos (you can specify multiple):
+
+```wgsl
+
+struct Vertex {
+    
+    @builtin(position) position: vec4<f32>, //pixel location
+    //uploaded vertices from CPU, in interleaved format
+
+    @location(0) vertex: vec4<f32>,
+    @location(1) color: vec4<f32>, 
+    @location(2) uv: vec2<f32>,
+    @location(3) normal: vec3<f32>
+};
+
+@vertex
+fn vtx_main(
+    @builtin(vertex_index) vertexIndex : u32,   //current vertex
+    @builtin(instance_index) instanceIndex: u32, //current instance
+    @location(0) vertexIn: vec4<f32>, 
+    @location(1) colorIn: vec4<f32>,
+    @location(2) uvIn: vec2<f32>,
+    @location(3) normalIn: vec3<f32>
+) -> Vertex {
+    var pixel: Vertex;
+    pixel.color = cols[vertexIndex];
+    pixel.position = vec4f(tri[vertexIndex], 0, 1);
+    return pixel; 
+
+}
+
+
+```
+
+Note you can use e.g. color, or you could write in pixel.color or this.color all the same since this won't execute to make it look a little cleaner. The pixel is declared for you and returned in the vertex shader since that is typical use for a vertex shader, however we need to look at the shadow mapping samples for a different use case to adapt for and probably do away with this current boilerplate system, but for now it works. We also give you the builtin variables available for each shader.
+
+Here is the fragment shader:
+
+```wgsl
+
+struct Vertex {
+    
+    @builtin(position) position: vec4<f32>, //pixel location
+    //uploaded vertices from CPU, in interleaved format
+
+    @location(0) vertex: vec4<f32>,
+    @location(1) color: vec4<f32>, 
+    @location(2) uv: vec2<f32>,
+    @location(3) normal: vec3<f32>
+};
+
+@fragment
+fn frag_main(
+    pixel: Vertex,
+    @builtin(front_facing) is_front: bool,   //true when current fragment is on front-facing primitive
+    @builtin(sample_index) sampleIndex: u32, //sample index for the current fragment
+    @builtin(sample_mask) sampleMask: u32   //contains a bitmask indicating which samples in this fragment are covered by the primitive being rendered
+) -> @location(0) vec4<f32> {
+    return pixel.color;
+}
+
+```
+
+Again you get the boilerplate vbo values (which can be multiplied e.g. as vertex1, color1, vertex2, color2, etc based on the upload order of your vbos) and then can do fragment operations. This is a bit more complex in the texture example but we think it's still a bit too convoluted since this should probably be something specified by options instead so variables are explicitly set and we can generate arbitrary vbo descriptors that way. We'll get there or someone else can give it a shot :P
 
 #### Textured cube
 
