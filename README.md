@@ -257,7 +257,7 @@ fn vtx_main(
 
 ```
 
-Note you can use e.g. color, or you could write in pixel.color or this.color all the same since this won't execute to make it look a little cleaner. The pixel is declared for you and returned in the vertex shader since that is typical use for a vertex shader, however we need to look at the shadow mapping samples for a different use case to adapt for and probably do away with this current boilerplate system, but for now it works. We also give you the builtin variables available for each shader.
+Note you can use e.g. color, or you could write in pixel.color or this.color all the same since this won't execute, to make it look a little cleaner. The pixel struct is declared for you and returned in the vertex shader since that is typical use for a vertex shader, however we need to look at the shadow mapping samples for a different use case to adapt for and probably do away with this current boilerplate system, but for now it works. We also give you the builtin variables available for each shader.
 
 Here is the fragment shader:
 
@@ -733,6 +733,7 @@ Main things to improve are:
 
 - input and output types, better implicit texture and buffer typing (there are placeholder methods to specify texture types)
 - utility function types
+- custom structs (just map from objects)
 - vertex buffer namings/types/allocations
 - maybe some automatic worker allocation toggles
 - and obviously docs and examples.
