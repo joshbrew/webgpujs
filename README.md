@@ -10,8 +10,6 @@ To run the example: `npm i -g tinybuild` then `npm run example`
 
 
 ![cap](./example/compute_.PNG)
-![code](./example/workflow.PNG)
-![render](./example/render.PNG)
 
 Webgpujs is trying to capture webgpu's API in a procedural pipeline framework. It lets you specify the shaders to the degree of specificity you need without all of the boilerplate of a straight implementation of the API. 
 
