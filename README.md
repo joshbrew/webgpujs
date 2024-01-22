@@ -152,86 +152,8 @@ pipeline.process(inputData3, outputData3).then((r3) => {
 
 ```
 
-The rest is a work in progress, you can see how we're trying different things with this random code that all transpiles correctly:
 
-```js
-
-//dft is an O(n^2) example, plus a bunch of other nonsense just to test the transpiler out, we'll do this proper soon
-function dft(
-    inputData = new Float32Array(), 
-    outputData = [], 
-    //dummy inputs
-    outp3 = mat2x2(vec2(1.0,1.0),vec2(1.0,1.0)), //approximate data structure wrappers will infer float or int from decimal usage
-    outp4 = "i32",
-    outp5 = vec3(1,2,3),
-    outp6 = [vec2(1.0,1.0)]
-) {
-
-    function add(a=vec2f(0.0,0.0),b=vec2f(0.0,0.0)) { //transpiled out of main body
-        return a + b;
-    }
-
-    let x = new Float32Array(32); //float32 array<f32, 32> (default)
-    let x2 = new Array(32).fill(inputData[0]); //array<i32, 32> array (no decimal)
-    const x3 = [1,2,3]; // array<i32, 3>
-    let x4 = new Array(100).fill(vec3(0,0,0)) //array<vec3<i32>, 100>
-    let x5 = new Array(100).fill(mat2x2(vec2(1,1),vec2(1,1)));
-    //let x6 = new Array(inputData.length).fill(0.0) //cannot dynamically size const arrays
-
-    const N = i32(inputData.length);
-    const k = threadId.x;
-    let sum = vec2f(0.0, 0.0); //will be replaced with var
-
-    var sum2 = add(sum,sum);
-
-    let width = resX;
-
-    const b = 3 + outp4;
-
-    `const bb : array<f32, 5> = array(1,2,3,4,5)`; //write-in
-
-    var M = mat4x4(
-        vec4f(1.0,0.0,0.0,0.0),
-        vec4f(0.0,1.0,0.0,0.0),
-        vec4f(0.0,0.0,1.0,0.0),
-        vec4f(0.0,0.0,0.0,1.0)
-    ); //identity matrix
-
-    let D = M + M;
-
-    var Z = outp3 * mat2x2(vec2f(4.0,-1.0),vec2f(3.0,2.0));
-
-    var Zz = outp5 + vec3(4,5,6);
-
-    for (let n = 0; n < N; n++) {
-        const phase = 2.0 * Math.PI * f32(k) * f32(n) / f32(N);
-        sum = sum + vec2f(
-            inputData[n] * Math.cos(phase),
-            -inputData[n] * Math.sin(phase)
-        );
-    }
-
-    //you should always add semicolons to be in-spec with compute shaders but we will try to add them for you
-
-    const outputIndex = k * 2 //use strict
-    if (outputIndex + 1 < outputData.length) {
-        outputData[outputIndex] = sum.x;
-        outputData[outputIndex + 1] = sum.y;
-    }
-
-    
-    return [inputData, outputData]; //returning an array of inputs lets us return several buffer promises
-    //return outputData;
-    //return outp4; //we can also return the uniform buffer though it is immutable so it's pointless
-}
-
-```
-
-Several things to notice are array allocations all will be transpiled implicitly based on obvious patterns. Math calls will be replaced or filled implicitly. Array.fill calls will be transpiled. Also you can just flat out write a template string in a line and it will assume it is plain shader code. Right now the default values don't mean anything just the types, which we'll figure out.
-
-We're working on testing shader chaining and so on so you can run multiple processes on the GPU without copying buffers an unnecessary number of times for large processes.
-
-### Rendering 
+## Rendering 
 
 This is the most underdeveloped but right now you can chain compute, vertex, and fragment shaders together to do rendering. When it's finished we should have no trouble replicating any samples, but there is more flexibility to add to the system.
 
@@ -474,6 +396,152 @@ createImageExample();
 
 ```
 
+![tex](./example/texture.PNG)
+
+
+## Customizing the pipeline manually
+
+See [`./src/types.ts`](./src/types.ts) for input options, this is all rough cut as we need to make things like vertex buffers and variable typing more explicit to open up more options for rendering.
+
+You can do everything to pass all of your own shader text and pipeline settings etc to the shader helper, without touching our transpiler, the point will be to make it easier to hybridize code and otherwise not handicap ourselves with this little framework. It all needs to be documented and expanded on as things solidify. There is plenty missing especially for rendering.
+
+
+The `WebGPU.createPipeline()` call is like this:
+
+```ts
+
+createPipeline = async (
+        shaders: Function | {
+                code:Function|string, 
+                transpileString?:boolean //functions are auto-transpiled
+            } | {
+                compute:string|Function,
+                vertex:string|Function,
+                fragment:string|Function,
+                transpileString?:boolean
+            },
+        options:ShaderOptions & ComputeOptions & RenderOptions = {}
+):Promise<ShaderHelper>
+
+```
+
+The options are as follows, see the types.ts file for the rest:
+
+```ts
+type ShaderOptions = {
+    device?:GPUDevice
+    prependCode?:string, //prepend any code to your shaders e.g. custom bindings
+    bindGroupNumber?:number,
+    getPrevShaderBindGroups?:string,
+    functions?:Function[], //can transpile functions into utilities
+    variableTypes?:{[key:string]:string|{binding:string}}, //we can skip the implicit typing of the bindings and set them ourselves e.g. tex1:'texture_2d' or tex1:{binding:'@group(0) @binding(1) var x: texture_2d;'} etc.
+    inputs?:any[],
+    bindGroupLayouts?:GPUBindGroupLayout[],
+    bindGroups?:GPUBindGroup[],
+    bindings?:{[key:string]:Partial<GPUBindGroupEntry>}
+    lastBinding?:number, 
+    bufferGroups?:any,
+    skipCombinedBindings?:boolean //don't scan for shared bindings in grouped shaders with common variable names
+}
+
+type ComputeOptions = {
+    workGroupSize?:number,
+    computePipelineSettings?:GPUComputePipelineDescriptor,
+    computePass?:ComputePassSettings
+};
+
+type RenderOptions = {
+    canvas?:HTMLCanvasElement|OffscreenCanvas,
+    context?:GPUCanvasContext,
+    contextSettings?:GPUCanvasConfiguration,
+    renderPipelineDescriptor?:Partial<GPURenderPipelineDescriptor>, //specify partial settings e.g. the primitive topology
+    renderPassDescriptor?:GPURenderPassDescriptor,
+    renderPipelineSettings?:any,
+    nVertexBuffers?:number, //set to allow multiple vbos 
+    renderPass?:RenderPassSettings
+};
+
+
+```
+
+
+The rest is a work in progress, you can see how we're trying different things with this random code that all transpiles correctly:
+
+```js
+
+//dft is an O(n^2) example, plus a bunch of other nonsense just to test the transpiler out, we'll do this proper soon
+function dft(
+    inputData = new Float32Array(), 
+    outputData = [], 
+    //dummy inputs
+    outp3 = mat2x2(vec2(1.0,1.0),vec2(1.0,1.0)), //approximate data structure wrappers will infer float or int from decimal usage
+    outp4 = "i32",
+    outp5 = vec3(1,2,3),
+    outp6 = [vec2(1.0,1.0)]
+) {
+
+    function add(a=vec2f(0.0,0.0),b=vec2f(0.0,0.0)) { //transpiled out of main body
+        return a + b;
+    }
+
+    let x = new Float32Array(32); //float32 array<f32, 32> (default)
+    let x2 = new Array(32).fill(inputData[0]); //array<i32, 32> array (no decimal)
+    const x3 = [1,2,3]; // array<i32, 3>
+    let x4 = new Array(100).fill(vec3(0,0,0)) //array<vec3<i32>, 100>
+    let x5 = new Array(100).fill(mat2x2(vec2(1,1),vec2(1,1)));
+    //let x6 = new Array(inputData.length).fill(0.0) //cannot dynamically size const arrays
+
+    const N = i32(inputData.length);
+    const k = threadId.x;
+    let sum = vec2f(0.0, 0.0); //will be replaced with var
+
+    var sum2 = add(sum,sum);
+
+    let width = resX;
+
+    const b = 3 + outp4;
+
+    `const bb : array<f32, 5> = array(1,2,3,4,5)`; //write-in
+
+    var M = mat4x4(
+        vec4f(1.0,0.0,0.0,0.0),
+        vec4f(0.0,1.0,0.0,0.0),
+        vec4f(0.0,0.0,1.0,0.0),
+        vec4f(0.0,0.0,0.0,1.0)
+    ); //identity matrix
+
+    let D = M + M;
+
+    var Z = outp3 * mat2x2(vec2f(4.0,-1.0),vec2f(3.0,2.0));
+
+    var Zz = outp5 + vec3(4,5,6);
+
+    for (let n = 0; n < N; n++) {
+        const phase = 2.0 * Math.PI * f32(k) * f32(n) / f32(N);
+        sum = sum + vec2f(
+            inputData[n] * Math.cos(phase),
+            -inputData[n] * Math.sin(phase)
+        );
+    }
+
+    //you should always add semicolons to be in-spec with compute shaders but we will try to add them for you
+
+    const outputIndex = k * 2 //use strict
+    if (outputIndex + 1 < outputData.length) {
+        outputData[outputIndex] = sum.x;
+        outputData[outputIndex + 1] = sum.y;
+    }
+
+    
+    return [inputData, outputData]; //returning an array of inputs lets us return several buffer promises
+    //return outputData;
+    //return outp4; //we can also return the uniform buffer though it is immutable so it's pointless
+}
+
+```
+
+Several things to notice are array allocations all will be transpiled implicitly based on obvious patterns. Math calls will be replaced or filled implicitly. Array.fill calls will be transpiled. Also you can just flat out write a template string in a line and it will assume it is plain shader code. Right now the default values don't mean anything just the types, which we'll figure out.
+
 Which transpiles to
 
 ```wgsl
@@ -589,70 +657,8 @@ fn compute_main(
 
 There's some default uniforms that are supported too, the idea being we can include things like shadertoy uniforms, but it's all rough cut. Check out the top of [transpiler.ts](./src/transpiler.ts) for supported variables.
 
-## Customizing the pipeline manually
 
-See [`./src/types.ts`](./src/types.ts) for input options, this is all rough cut as we need to make things like vertex buffers and variable typing more explicit to open up more options for rendering.
-
-You can do everything to pass all of your own shader text and pipeline settings etc to the shader helper, without touching our transpiler, the point will be to make it easier to hybridize code and otherwise not handicap ourselves with this little framework. It all needs to be documented and expanded on as things solidify. There is plenty missing especially for rendering.
-
-
-The `WebGPU.createPipeline()` call is like this:
-
-```ts
-
-createPipeline = async (
-        shaders: Function | {
-                code:Function|string, 
-                transpileString?:boolean //functions are auto-transpiled
-            } | {
-                compute:string|Function,
-                vertex:string|Function,
-                fragment:string|Function,
-                transpileString?:boolean
-            },
-        options:ShaderOptions & ComputeOptions & RenderOptions = {}
-):Promise<ShaderHelper>
-
-```
-
-The options are as follows, see the types.ts file for the rest:
-
-```ts
-type ShaderOptions = {
-    device?:GPUDevice
-    prependCode?:string, //prepend any code to your shaders e.g. custom bindings
-    bindGroupNumber?:number,
-    getPrevShaderBindGroups?:string,
-    functions?:Function[], //can transpile functions into utilities
-    variableTypes?:{[key:string]:string|{binding:string}}, //we can skip the implicit typing of the bindings and set them ourselves e.g. tex1:'texture_2d' or tex1:{binding:'@group(0) @binding(1) var x: texture_2d;'} etc.
-    inputs?:any[],
-    bindGroupLayouts?:GPUBindGroupLayout[],
-    bindGroups?:GPUBindGroup[],
-    bindings?:{[key:string]:Partial<GPUBindGroupEntry>}
-    lastBinding?:number, 
-    bufferGroups?:any,
-    skipCombinedBindings?:boolean //don't scan for shared bindings in grouped shaders with common variable names
-}
-
-type ComputeOptions = {
-    workGroupSize?:number,
-    computePipelineSettings?:GPUComputePipelineDescriptor,
-    computePass?:ComputePassSettings
-};
-
-type RenderOptions = {
-    canvas?:HTMLCanvasElement|OffscreenCanvas,
-    context?:GPUCanvasContext,
-    contextSettings?:GPUCanvasConfiguration,
-    renderPipelineDescriptor?:Partial<GPURenderPipelineDescriptor>, //specify partial settings e.g. the primitive topology
-    renderPassDescriptor?:GPURenderPassDescriptor,
-    renderPipelineSettings?:any,
-    nVertexBuffers?:number, //set to allow multiple vbos 
-    renderPass?:RenderPassSettings
-};
-
-
-```
+We're working on testing shader chaining and so on so you can run multiple processes on the GPU without copying buffers an unnecessary number of times for large processes.
 
 Lots to improve!!!
 
