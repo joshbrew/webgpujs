@@ -731,12 +731,13 @@ Lots to improve!!!
 
 Main things to improve are:
 
-- input and output types, better implicit texture and buffer typing (there are placeholder methods to specify texture types)
+- input and output types, default values, better implicit texture and buffer typing (there are placeholder methods to specify texture types)
 - utility function types
 - custom structs (just map from objects)
 - vertex buffer namings/types/allocations
 - maybe some automatic worker allocation toggles
 - and obviously docs and examples.
+
 
 ### Contribute!
 

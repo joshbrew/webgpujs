@@ -102,6 +102,7 @@ export class WebGPUjs {
                 options.workGroupSize, 
                 options.functions,
                 options.variableTypes,
+                options.vboTypes,
                 options.lastBinding
             );
 
@@ -142,6 +143,7 @@ export class WebGPUjs {
                         options.workGroupSize, 
                         options.functions,
                         options.variableTypes,
+                        options.vboTypes,
                         options.lastBinding
                     );
                 }
@@ -176,6 +178,7 @@ export class WebGPUjs {
                             options.workGroupSize, 
                             options.functions,
                             options.variableTypes,
+                            options.vboTypes,
                             options.lastBinding
                         );
                     }
@@ -190,6 +193,7 @@ export class WebGPUjs {
                             options.workGroupSize, 
                             options.functions,
                             options.variableTypes,
+                            options.vboTypes,
                             options.lastBinding
                         );
                         options.lastBinding = block.vertex.lastBinding;
@@ -205,6 +209,7 @@ export class WebGPUjs {
                             options.workGroupSize, 
                             options.functions,
                             options.variableTypes,
+                            options.vboTypes,
                             options.lastBinding
                         );
                     }

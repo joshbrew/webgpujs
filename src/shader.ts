@@ -243,21 +243,27 @@ export class ShaderHelper {
             if(shaderContext && shaderType === 'fragment' && !shaders.vertex) {
                 let vboInputStrings = [] as any[];
 
-                let vboStrings = Array.from({length: options.nVertexBuffers}, (_, i) => {
-                    vboInputStrings.push(
+                let vboStrings;
+                if(options.vboTypes) {
+                   
+                } else {
+                    vboStrings = Array.from({length: options.nVertexBuffers}, (_, i) => {
+                        vboInputStrings.push(
+                    
+    `@location(${4*i}) vertex${i>0 ? i+1 : ''}In: vec4<f32>,
+        @location(${4*i+1}) color${i>0 ? i+1 : ''}In: vec4<f32>, 
+        @location(${4*i+3}) uv${i>0 ? i+1 : ''}In: vec2<f32>,
+        @location(${4*i+2}) normal${i>0 ? i+1 : ''}In: vec3<f32>${i===options.nVertexBuffers-1 ? '' : ','}`
+                        );
+                    return `
+        
+        @location(${4*i}) vertex${i>0 ? i+1 : ''}In: vec4<f32>, 
+        @location(${4*i+1}) color${i>0 ? i+1 : ''}In: vec4<f32>,
+        @location(${4*i+2}) uv${i>0 ? i+1 : ''}In: vec2<f32>,
+        @location(${4*i+3}) normal${i>0 ? i+1 : ''}In: vec3<f32>${i===options.nVertexBuffers-1 ? '' : ','}`;
+                });
+                }
                 
-`@location(${4*i}) vertex${i>0 ? i+1 : ''}In: vec4<f32>,
-    @location(${4*i+1}) color${i>0 ? i+1 : ''}In: vec4<f32>, 
-    @location(${4*i+3}) uv${i>0 ? i+1 : ''}In: vec2<f32>,
-    @location(${4*i+2}) normal${i>0 ? i+1 : ''}In: vec3<f32>${i===options.nVertexBuffers-1 ? '' : ','}`
-                    );
-                return `
-    
-    @location(${4*i}) vertex${i>0 ? i+1 : ''}: vec4<f32>, 
-    @location(${4*i+1}) color${i>0 ? i+1 : ''}: vec4<f32>,
-    @location(${4*i+2}) uv${i>0 ? i+1 : ''}: vec2<f32>,
-    @location(${4*i+3}) normal${i>0 ? i+1 : ''}: vec3<f32>${i===options.nVertexBuffers-1 ? '' : ','}`;
-            });
 
                 this.vertex = {
                     code:`

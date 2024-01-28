@@ -251,9 +251,9 @@ export class WGSLTranspiler {
         if(value === 'true' || value === 'false') return 'bool';
         else if(value.startsWith('"') || value.startsWith("'") || value.startsWith('`')) return value.substring(1,value.length-1); //should extract string types
         else if (value.startsWith('vec')) {
-            const floatVecMatch = value.match(/vec(\d)f/);
-            if (floatVecMatch) {
-                return floatVecMatch[0]; // Returns vec(n)f as-is
+            const VecMatch = value.match(/vec(\d)(f|h|i|u)/);
+            if (VecMatch) {
+                return VecMatch[0]; // Returns vec(n)f as-is
             }
             const vecTypeMatch = value.match(/vec(\d)\(/); // Check if the value starts with vec(n) pattern
             if (vecTypeMatch) {
@@ -348,7 +348,7 @@ export class WGSLTranspiler {
         ast, 
         bindGroup=0, 
         shaderType?:'compute'|'fragment'|'vertex',
-        variableTypes?:{[key:string]:string|{binding:string}},
+        variableTypes?:{[key:string]:string|{prefix:string, type:string}},
         minBinding=0
     ) {
         let code = '//Bindings (data passed to/from CPU) \n';
@@ -453,23 +453,22 @@ export class WGSLTranspiler {
             node.binding = bindingIncr;
             node.group = bindGroup;
 
-            if(variableTypes?.[node.name]) {
+
+            if(variableTypes && (variableTypes[node.name])) {
                 if(typeof variableTypes[node.name] === 'string') {
                     code += `@group(${bindGroup}) @binding(${bindingIncr}) var ${node.name}: ${variableTypes[node.name]};\n\n`;
+                    node.type = variableTypes[node.name];
+                    bindingIncr++;
+                    params.push(node);
+                } else if (typeof variableTypes[node.name] === 'object') {
+                    code += `@group(${bindGroup}) @binding(${bindingIncr}) ${(variableTypes[node.name] as any).prefix} ${node.name}: ${(variableTypes[node.name] as any).type};\n\n`;
+                    node.type = (variableTypes[node.name] as any).type;
+                    bindingIncr++;
+                    params.push(node);
                 }
-                else if ('binding' in (variableTypes[node.name] as any)) {
-                    code += (variableTypes[node.name] as any).binding;
-                }
-                bindingIncr++;
+            } else if (node.isTexture) {
                 params.push(node);
-                return;
-            } 
-
-            if (node.isTexture) {
-                params.push(node);
-
                 let format = node.name.includes('i32') ? 'i32' : node.name.includes('u32') ? 'u32' : 'f32';
-            
                 let typ;
                 if(node.isDepthTextureArray) typ = 'texture_depth_2d_array';
                 else if(node.isDepthCubeArrayTexture) typ = 'texture_depth_cube_array';
@@ -487,7 +486,6 @@ export class WGSLTranspiler {
                 code += `@group(${bindGroup}) @binding(${bindingIncr}) var ${node.name}: ${typ};\n`;
                 //else  code += `@group(${bindGroup}) @binding(${bindingIncr}) var ${node.name}: texture_storage_2d<${storageTextureType}, write>;\n\n`; //todo: rgba8unorm type should be customizable
                 bindingIncr++;
-
             } else if (node.isStorageTexture) { 
 
                 let format = textureFormats.find((f) => {if(node.name.includes(f)) return true;});
@@ -636,7 +634,8 @@ export class WGSLTranspiler {
         shaderType ='compute', 
         nVertexBuffers=1, 
         workGroupSize=256, 
-        gpuFuncs:(Function|string)[]
+        gpuFuncs:(Function|string)[],
+        vbos
     ) {
         let code = '';
         
@@ -656,21 +655,26 @@ export class WGSLTranspiler {
         let vtxInps;
         let vboInputStrings = [] as any[];
         if(shaderType === 'vertex' || shaderType === 'fragment') {
-
-            let vboStrings = Array.from({length: nVertexBuffers}, (_, i) => {
-                if(shaderType === 'vertex') vboInputStrings.push(
-                    
-`@location(${4*i}) vertex${i>0 ? i+1 : ''}In: vec4<f32>, 
-    @location(${4*i+1}) color${i>0 ? i+1 : ''}In: vec4<f32>,
-    @location(${4*i+2}) uv${i>0 ? i+1 : ''}In: vec2<f32>,
-    @location(${4*i+3}) normal${i>0 ? i+1 : ''}In: vec3<f32>${i===nVertexBuffers-1 ? '' : ','}`
-                );
-                return `
-    @location(${4*i}) vertex${i>0 ? i+1 : ''}: vec4<f32>,
-    @location(${4*i+1}) color${i>0 ? i+1 : ''}: vec4<f32>, 
-    @location(${4*i+2}) uv${i>0 ? i+1 : ''}: vec2<f32>,
-    @location(${4*i+3}) normal${i>0 ? i+1 : ''}: vec3<f32>${i===nVertexBuffers-1 ? '' : ','}`;
-            });
+            let vboStrings;
+            if(vbos) {
+                
+            } else { //default vbos
+                vboStrings = Array.from({length: nVertexBuffers}, (_, i) => {
+                    if(shaderType === 'vertex') vboInputStrings.push(
+                        
+    `@location(${4*i}) vertex${i>0 ? i+1 : ''}In: vec4<f32>, 
+        @location(${4*i+1}) color${i>0 ? i+1 : ''}In: vec4<f32>,
+        @location(${4*i+2}) uv${i>0 ? i+1 : ''}In: vec2<f32>,
+        @location(${4*i+3}) normal${i>0 ? i+1 : ''}In: vec3<f32>${i===nVertexBuffers-1 ? '' : ','}`
+                    );
+                    return `
+        @location(${4*i}) vertex${i>0 ? i+1 : ''}In: vec4<f32>,
+        @location(${4*i+1}) color${i>0 ? i+1 : ''}In: vec4<f32>, 
+        @location(${4*i+2}) uv${i>0 ? i+1 : ''}In: vec2<f32>,
+        @location(${4*i+3}) normal${i>0 ? i+1 : ''}In: vec3<f32>${i===nVertexBuffers-1 ? '' : ','}`;
+                });
+    
+            }
 
             vtxInps = `
     @builtin(position) position: vec4<f32>, //pixel location
@@ -897,7 +901,7 @@ fn frag_main(
                     typeChar = 'u';
                     break;
                 default: 
-                    typeChar = 'f'; // defaulting to int
+                    typeChar = 'f'; // defaulting to float
             }
             return `var ${varName} : array<${typeChar}${bitSize}, ${arraySize}>;`;
         });
@@ -1291,7 +1295,8 @@ fn frag_main(
         nVertexBuffers=1, 
         workGroupSize=256, 
         gpuFuncs?:(Function|string)[],
-        variableTypes?:{[key:string]:string|{binding:string}},
+        variableTypes?:{[key:string]:string|{ prefix: string; type: string; }},
+        vboTypes?:{[key:string]:string}, //e.g. 'vertexIn:"float32x4"
         lastBinding=0
     ) { //use compute shaders for geometry shaders
         let funcStr = typeof func === 'string' ? func : func.toString();
@@ -1304,7 +1309,7 @@ fn frag_main(
             ast, 
             bindGroupNumber, 
             shaderType, 
-            variableTypes, 
+            variableTypes,
             lastBinding
         ); //simply share bindGroups 0 and 1 between compute and render
 
@@ -1316,7 +1321,8 @@ fn frag_main(
             shaderType, 
             nVertexBuffers, 
             workGroupSize, 
-            gpuFuncs
+            gpuFuncs,
+            vboTypes
         ); // Pass funcStr as the first argument
 
         return {
@@ -1375,6 +1381,8 @@ export const replacements = {
 };
 
 const wgslTypeSizes32 = {
+    'u': { alignment: 4, size: 4 }, // shorthand for u32 appended like 16u (we can't do this in JS)
+    'i': { alignment: 4, size: 4 }, // shorthand for i32 appended like 16i (we can't do this in JS)
     'bool':{ alignment: 1, size: 1 },
     'u8':  { alignment: 1, size: 1 },
     'i8':  { alignment: 1, size: 1 },
@@ -1385,6 +1393,12 @@ const wgslTypeSizes32 = {
     'u64': { alignment: 8, size: 8 },
     'f64': { alignment: 8, size: 8 },
     'atomic': { alignment: 4, size: 4 },
+    'vec2u': { alignment: 8, size: 8 }, // shorthand for vec2<u32>
+    'vec2i': { alignment: 8, size: 8 }, // shorthand for vec2<i32>
+    'vec3u': { alignment: 16, size: 12 }, // shorthand for vec3<u32>
+    'vec3i': { alignment: 16, size: 12 }, // shorthand for vec3<i32>
+    'vec4u': { alignment: 16, size: 16 }, // shorthand for vec4<u32>
+    'vec4i': { alignment: 16, size: 16 },  // shorthand for vec4<i32>
     'vec2<f32>': { alignment: 8, size: 8 },
     'vec2f': { alignment: 8, size: 8 },
     'vec2<i32>': { alignment: 8, size: 8 },
@@ -1423,13 +1437,17 @@ const wgslTypeSizes32 = {
     'mat3x4<u32>': { alignment: 16, size: 48 },
     'mat4x4<f32>': { alignment: 16, size: 64 },
     'mat4x4<i32>': { alignment: 16, size: 64 },
-    'mat4x4<u32>': { alignment: 16, size: 64 }
+    'mat4x4<u32>': { alignment: 16, size: 64 },
 };
 
 const wgslTypeSizes16 = {
+    'h': { alignment: 2, size: 2 }, // shorthand for f16 appended like 16h (we can't do this in JS)
     'i16': { alignment: 2, size: 2 }, //and we can do these
     'u16': { alignment: 2, size: 2 }, //we can do these in javascript
     'f16': { alignment: 2, size: 2 },
+    'vec2h': { alignment: 4, size: 4 }, // shorthand for vec2<f16>
+    'vec3h': { alignment: 8, size: 6 }, // shorthand for vec3<f16>
+    'vec4h': { alignment: 8, size: 8 },  // shorthand for vec4<f16>
     'vec2<f16>': { alignment: 4, size: 4 },
     'vec2<i16>': { alignment: 4, size: 4 },
     'vec2<u16>': { alignment: 4, size: 4 },
@@ -1468,6 +1486,38 @@ const wgslTypeSizes16 = {
     'mat4x4<u16>': { alignment: 8, size: 32 }
 };
 
+export const vertexFormats = {
+    "uint8x2": { byteSize: 2, wgslTypes: ["vec2<u32>", "vec2u"] },
+    "uint8x4": { byteSize: 4, wgslTypes: ["vec4<u32>", "vec4u"] },
+    "sint8x2": { byteSize: 2, wgslTypes: ["vec2<i32>", "vec2i"] },
+    "sint8x4": { byteSize: 4, wgslTypes: ["vec4<i32>", "vec4i"] },
+    "unorm8x2": { byteSize: 2, wgslTypes: ["vec2<f32>", "vec2f"] },
+    "unorm8x4": { byteSize: 4, wgslTypes: ["vec4<f32>", "vec4f"] },
+    "snorm8x2": { byteSize: 2, wgslTypes: ["vec2<f32>", "vec2f"] },
+    "snorm8x4": { byteSize: 4, wgslTypes: ["vec4<f32>", "vec4f"] },
+    "uint16x2": { byteSize: 4, wgslTypes: ["vec2<u32>", "vec2u"] },
+    "uint16x4": { byteSize: 8, wgslTypes: ["vec4<u32>", "vec4u"] },
+    "sint16x2": { byteSize: 4, wgslTypes: ["vec2<i32>", "vec2i"] },
+    "sint16x4": { byteSize: 8, wgslTypes: ["vec4<i32>", "vec4i"] },
+    "unorm16x2": { byteSize: 4, wgslTypes: ["vec2<f32>", "vec2f"] },
+    "unorm16x4": { byteSize: 8, wgslTypes: ["vec4<f32>", "vec4f"] },
+    "snorm16x2": { byteSize: 4, wgslTypes: ["vec2<f32>", "vec2f"] },
+    "snorm16x4": { byteSize: 8, wgslTypes: ["vec4<f32>", "vec4f"] },
+    "float16x2": { byteSize: 4, wgslTypes: ["vec2<f16>", "vec2h"] },
+    "float16x4": { byteSize: 8, wgslTypes: ["vec4<f16>", "vec4h"] },
+    "float32": { byteSize: 4, wgslTypes: ["f32"] },
+    "float32x2": { byteSize: 8, wgslTypes: ["vec2<f32>", "vec2f"] },
+    "float32x3": { byteSize: 12, wgslTypes: ["vec3<f32>", "vec3f"] },
+    "float32x4": { byteSize: 16, wgslTypes: ["vec4<f32>", "vec4f"] },
+    "uint32": { byteSize: 4, wgslTypes: ["u32"] },
+    "uint32x2": { byteSize: 8, wgslTypes: ["vec2<u32>", "vec2u"] },
+    "uint32x3": { byteSize: 12, wgslTypes: ["vec3<u32>", "vec3u"] },
+    "uint32x4": { byteSize: 16, wgslTypes: ["vec4<u32>", "vec4u"] },
+    "sint32": { byteSize: 4, wgslTypes: ["i32"] },
+    "sint32x2": { byteSize: 8, wgslTypes: ["vec2<i32>", "vec2i"] },
+    "sint32x3": { byteSize: 12, wgslTypes: ["vec3<i32>", "vec3i"] },
+    "sint32x4": { byteSize: 16, wgslTypes: ["vec4<i32>", "vec4i"] }
+};
 
 
 export const textureFormats = [ //https://www.w3.org/TR/webgpu/#texture-formats
