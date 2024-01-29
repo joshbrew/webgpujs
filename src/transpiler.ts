@@ -207,19 +207,30 @@ export class WGSLTranspiler {
                         isModified
                     });
                 } else if (token.startsWith('vec') || token.startsWith('mat')) {
-                    const typeMatch = token.match(/(vec\d|mat\d+x\d+)\(([^)]+)\)/);
+                    const typeMatch = token.match(/(vec\d+|mat\d+x\d+)(f|h|i|u|<[^>]+>)?\(([^)]+)\)/);
                     if (typeMatch) {
+                        let type = typeMatch[1]; // Extracts 'vecN' or 'matNxM'
+                        let format = typeMatch[2]; // Extracts 'f', 'h', 'i', 'u', or '<...>'
+                
+                        // Convert shorthand format to full format
+                        switch (format) {
+                            case 'f': format = '<f32>'; break;
+                            case 'h': format = '<f16>'; break;
+                            case 'i': format = '<i32>'; break;
+                            case 'u': format = '<u32>'; break;
+                            default: format = format || '<f32>'; // Use the provided format or default to f32 if none
+                        }
+                
                         ast.push({
-                            type: typeMatch[1],
-                            name: token.split('=')[0],
-                            value: typeMatch[2],
+                            type: type, // Combines type with format (e.g., 'vec3<f32>')
+                            name: token.split('=')[0].trim(),
+                            value: format, // Captures the arguments inside the parentheses
                             isInput,
-                            isReturned: returnedVars ? returnedVars?.includes(token.split('=')[0]) : isInput ? true : false,
+                            isReturned: returnedVars ? returnedVars.includes(token.split('=')[0].trim()) : isInput ? true : false,
                             isModified
                         });
                     }
                 } else {
-
                     ast.push({
                         type: 'variable',
                         name: variableMatch[2],
@@ -251,19 +262,49 @@ export class WGSLTranspiler {
         if(value === 'true' || value === 'false') return 'bool';
         else if(value.startsWith('"') || value.startsWith("'") || value.startsWith('`')) return value.substring(1,value.length-1); //should extract string types
         else if (value.startsWith('vec')) {
-            const VecMatch = value.match(/vec(\d)(f|h|i|u)/);
+            // Matches both 'vec3f' and 'vec3<f32>' formats
+            const VecMatch = value.match(/vec(\d+)(f|h|i|u|<[^>]+>)?/);
             if (VecMatch) {
-                return VecMatch[0]; // Returns vec(n)f as-is
-            }
-            const vecTypeMatch = value.match(/vec(\d)\(/); // Check if the value starts with vec(n) pattern
-            if (vecTypeMatch) {
-                const vecSize = vecTypeMatch[1];
-                const type = value.includes('.') ? `<f32>` : `<i32>`;
+                const vecSize = VecMatch[1];
+                let type = VecMatch[2];
+        
+                if (!type) {
+                    // Infer type if not explicitly provided
+                    type = value.includes('.') ? '<f32>' : '<i32>';
+                } else if (type.length === 1) {
+                    // Convert single-letter type to full format
+                    switch (type) {
+                        case 'f': type = '<f32>'; break;
+                        case 'h': type = '<f16>'; break;
+                        case 'i': type = '<i32>'; break;
+                        case 'u': type = '<u32>'; break;
+                    }
+                }
+        
                 return `vec${vecSize}${type}`;
             }
         } else if (value.startsWith('mat')) {
-            const type = '<f32>'//value.includes('.') ? '<f32>' : '<i32>'; //f16 and f32 only supported in mats
-            return value.match(/mat(\d)x(\d)/)[0] + type;
+            // Matches both 'mat3x4f' and 'mat3x4<f32>' formats
+            const MatMatch = value.match(/mat(\d+)x(\d+)(f|h|i|u|<[^>]+>)?/);
+            if (MatMatch) {
+                const matSize = `${MatMatch[1]}x${MatMatch[2]}`;
+                let type = MatMatch[3];
+        
+                if (!type) {
+                    // Default type for matrices
+                    type = '<f32>';
+                } else if (type.length === 1) {
+                    // Convert single-letter type to full format
+                    switch (type) {
+                        case 'f': type = '<f32>'; break;
+                        case 'h': type = '<f16>'; break;
+                        // Matrices typically use floating point types
+                        default: type = '<f32>';
+                    }
+                }
+        
+                return `mat${matSize}${type}`;
+            }
         } else if (value.startsWith('[')) {
             // Infer the type from the first element if the array is initialized with values
             const firstElement = value.split(',')[0].substring(1);
@@ -581,7 +622,8 @@ export class WGSLTranspiler {
         return {code, params, defaultUniforms, lastBinding:bindingIncr};
     }
 
-    static extractAndTransposeInnerFunctions = (body, extract=true, ast, params, shaderType) => {
+    static extractAndTransposeInnerFunctions = (
+        body, extract=true, ast, params, shaderType) => {
         
         const functionRegex = /function (\w+)\(([^()]*|\((?:[^()]*|\([^()]*\))*\))*\) \{([\s\S]*?)\}/g;
 
@@ -635,7 +677,7 @@ export class WGSLTranspiler {
         nVertexBuffers=1, 
         workGroupSize=256, 
         gpuFuncs:(Function|string)[],
-        vbos
+        vboTypes
     ) {
         let code = '';
         
@@ -656,9 +698,8 @@ export class WGSLTranspiler {
         let vboInputStrings = [] as any[];
         if(shaderType === 'vertex' || shaderType === 'fragment') {
             let vboStrings;
-            if(vbos) {
-                
-            } else { //default vbos
+            //if(vboTypes) {
+            //} else { //default vbos
                 vboStrings = Array.from({length: nVertexBuffers}, (_, i) => {
                     if(shaderType === 'vertex') vboInputStrings.push(
                         
@@ -668,13 +709,13 @@ export class WGSLTranspiler {
         @location(${4*i+3}) normal${i>0 ? i+1 : ''}In: vec3<f32>${i===nVertexBuffers-1 ? '' : ','}`
                     );
                     return `
-        @location(${4*i}) vertex${i>0 ? i+1 : ''}In: vec4<f32>,
-        @location(${4*i+1}) color${i>0 ? i+1 : ''}In: vec4<f32>, 
-        @location(${4*i+2}) uv${i>0 ? i+1 : ''}In: vec2<f32>,
-        @location(${4*i+3}) normal${i>0 ? i+1 : ''}In: vec3<f32>${i===nVertexBuffers-1 ? '' : ','}`;
+        @location(${4*i}) vertex${i>0 ? i+1 : ''}: vec4<f32>,
+        @location(${4*i+1}) color${i>0 ? i+1 : ''}: vec4<f32>, 
+        @location(${4*i+2}) uv${i>0 ? i+1 : ''}: vec2<f32>,
+        @location(${4*i+3}) normal${i>0 ? i+1 : ''}: vec3<f32>${i===nVertexBuffers-1 ? '' : ','}`;
                 });
     
-            }
+            //}
 
             vtxInps = `
     @builtin(position) position: vec4<f32>, //pixel location
@@ -785,6 +826,7 @@ fn frag_main(
             });
         } else {
             // When shaderType is vertex or fragment, exclude specific variable names from the replacement
+            // Gather up custom vbos to add to the filter 
             code = code.replace(/(position|vertex|color|normal|uv)|(\w+)\[([\w\s+\-*\/]+)\]/gm, (match, p1, p2, p3) => {
                 if (p1 || arrayVars.includes(p2)) return match;  // if match is one of the keywords or is an array variable, return it as is
                 return `${p2}.values[${p3}]`;  // otherwise, apply the transformation
@@ -921,19 +963,37 @@ fn frag_main(
             const argArray = args.split(',').map(arg => arg.trim());
             const hasDecimal = argArray.some(arg => arg.includes('.'));
             
-            const isVecWithF = /^vec\d+f/.test(type);
-            // If any argument has a decimal, it's a float, otherwise it's an integer
-            const inferredType = (type.startsWith('mat') || isVecWithF || hasDecimal) ? 'f32' : 'i32';
-            
-            if (type.startsWith('mat')) {
-                // Always set internal vecs of mats to f32
-                return `${type}<f32>(${argArray.join(', ').replace(/vec(\d+)/gm, 'vec$1<f32>')})`;
+            // Check if the type includes 'f', 'u', 'i', or 'h'
+            const isVecOrMatWithSpecificType = /^(vec|mat)\d+[fuhi]/.test(type);
+
+            // Determine the inferred type
+            let inferredType;
+            if (isVecOrMatWithSpecificType) {
+                // Extract the type suffix (f, u, i, or h)
+                const typeSuffix = type.match(/[fuhi]$/)[0];
+                switch (typeSuffix) {
+                    case 'f': inferredType = 'f32'; break;
+                    case 'u': inferredType = 'u32'; break;
+                    case 'i': inferredType = 'i32'; break;
+                    case 'h': inferredType = 'f16'; break;
+                    default: inferredType = 'f32'; // Default to f32 if no match
+                }
             } else {
+                // If no specific type is indicated, default to f32 or i32 based on decimal presence
+                inferredType = hasDecimal ? 'f32' : 'i32';
+            }
+
+            if (type.startsWith('mat')) {
+                // For matrices, default internal vectors to f32 unless a specific type is given
+                const matInternalType = isVecOrMatWithSpecificType ? `<${inferredType}>` : '<f32>';
+                return `${type}${matInternalType}(${argArray.join(', ').replace(/vec(\d+)/gm, `vec$1${matInternalType}`)})`;
+            } else {
+                // For vectors, use the inferred type directly
                 return `${type}<${inferredType}>(${argArray.join(', ')})`;
             }
         });
 
-        
+
         params.forEach((param) => {
             if(param.isUniform) {
                 const regex = new RegExp(`(?<![a-zA-Z0-9])${param.name}(?![a-zA-Z0-9])`, 'gm');
@@ -1381,36 +1441,27 @@ export const replacements = {
 };
 
 const wgslTypeSizes32 = {
-    'u': { alignment: 4, size: 4 }, // shorthand for u32 appended like 16u (we can't do this in JS)
-    'i': { alignment: 4, size: 4 }, // shorthand for i32 appended like 16i (we can't do this in JS)
-    'bool':{ alignment: 1, size: 1 },
-    'u8':  { alignment: 1, size: 1 },
-    'i8':  { alignment: 1, size: 1 },
-    'i32': { alignment: 4, size: 4 },
-    'u32': { alignment: 4, size: 4 },
-    'f32': { alignment: 4, size: 4 },
+    'bool': { alignment: 1, size: 1 },
+    'u8': { alignment: 1, size: 1 },
+    'i8': { alignment: 1, size: 1 },
+    'i32': { alignment: 4, size: 4, vertexFormats: { "sint32": true } },
+    'u32': { alignment: 4, size: 4, vertexFormats: { "uint32": true } },
+    'f32': { alignment: 4, size: 4, vertexFormats: { "float32": true } },
     'i64': { alignment: 8, size: 8 },
     'u64': { alignment: 8, size: 8 },
     'f64': { alignment: 8, size: 8 },
     'atomic': { alignment: 4, size: 4 },
-    'vec2u': { alignment: 8, size: 8 }, // shorthand for vec2<u32>
-    'vec2i': { alignment: 8, size: 8 }, // shorthand for vec2<i32>
-    'vec3u': { alignment: 16, size: 12 }, // shorthand for vec3<u32>
-    'vec3i': { alignment: 16, size: 12 }, // shorthand for vec3<i32>
-    'vec4u': { alignment: 16, size: 16 }, // shorthand for vec4<u32>
-    'vec4i': { alignment: 16, size: 16 },  // shorthand for vec4<i32>
-    'vec2<f32>': { alignment: 8, size: 8 },
-    'vec2f': { alignment: 8, size: 8 },
-    'vec2<i32>': { alignment: 8, size: 8 },
-    'vec2<u32>': { alignment: 8, size: 8 },
-    'vec3<f32>': { alignment: 16, size: 12 },
-    'vec3f': { alignment: 16, size: 12 },
-    'vec3<i32>': { alignment: 16, size: 12 },
-    'vec3<u32>': { alignment: 16, size: 12 },
-    'vec4<f32>': { alignment: 16, size: 16 },
-    'vec4f': { alignment: 16, size: 16 },
-    'vec4<i32>': { alignment: 16, size: 16 },
-    'vec4<u32>': { alignment: 16, size: 16 },
+    'vec2<i32>': { alignment: 8, size: 8, vertexFormats: { "sint8x2": true, "sint16x2": true, "sint32x2": true } },
+    'vec2<u32>': { alignment: 8, size: 8, vertexFormats: { "uint8x2": true, "uint16x2": true, "uint32x2": true } },
+    'vec2<f32>': { alignment: 8, size: 8, vertexFormats: { "unorm8x2": true, "unorm16x2": true, "float32x2": true, "snorm8x2": true, "snorm16x2": true } },
+    'vec3<i32>': { alignment: 16, size: 12, vertexFormats: { "sint32x3": true } },
+    'vec3<u32>': { alignment: 16, size: 12, vertexFormats: { "uint32x3": true } },
+    'vec3<f32>': { alignment: 16, size: 12, vertexFormats: { "float32x3": true } },
+    'vec4<i32>': { alignment: 16, size: 16, vertexFormats: { "sint8x4": true, "sint16x4": true, "sint32x4": true } },
+    'vec4<u32>': { alignment: 16, size: 16, vertexFormats: { "uint8x4": true, "uint16x4": true, "uint32x4": true } },
+    'vec4<f32>': { alignment: 16, size: 16, vertexFormats: { "unorm8x4": true, "unorm16x4": true, "float32x4": true, "snorm8x4": true, "snorm16x4": true, "float16x4": true } },
+    
+    //FYI matrix u32 and i32 formats are not supported in wgsl (yet) afaik
     'mat2x2<f32>': { alignment: 8, size: 16 },
     'mat2x2<i32>': { alignment: 8, size: 16 },
     'mat2x2<u32>': { alignment: 8, size: 16 },
@@ -1438,26 +1489,54 @@ const wgslTypeSizes32 = {
     'mat4x4<f32>': { alignment: 16, size: 64 },
     'mat4x4<i32>': { alignment: 16, size: 64 },
     'mat4x4<u32>': { alignment: 16, size: 64 },
+
+    'mat2x2f': { alignment: 8, size: 16 }, // shorthand for mat2x2<f32>
+    'mat2x2i': { alignment: 8, size: 16 }, // shorthand for mat2x2<i32>
+    'mat2x2u': { alignment: 8, size: 16 }, // shorthand for mat2x2<u32>
+    'mat3x2f': { alignment: 8, size: 24 }, // shorthand for mat3x2<f32>
+    'mat3x2i': { alignment: 8, size: 24 }, // shorthand for mat3x2<i32>
+    'mat3x2u': { alignment: 8, size: 24 }, // shorthand for mat3x2<u32>
+    'mat4x2f': { alignment: 8, size: 32 }, // shorthand for mat4x2<f32>
+    'mat4x2i': { alignment: 8, size: 32 }, // shorthand for mat4x2<i32>
+    'mat4x2u': { alignment: 8, size: 32 }, // shorthand for mat4x2<u32>
+    'mat2x3f': { alignment: 16, size: 32 }, // shorthand for mat2x3<f32>
+    'mat2x3i': { alignment: 16, size: 32 }, // shorthand for mat2x3<i32>
+    'mat2x3u': { alignment: 16, size: 32 }, // shorthand for mat2x3<u32>
+    'mat3x3f': { alignment: 16, size: 48 }, // shorthand for mat3x3<f32>
+    'mat3x3i': { alignment: 16, size: 48 }, // shorthand for mat3x3<i32>
+    'mat3x3u': { alignment: 16, size: 48 }, // shorthand for mat3x3<u32>
+    'mat4x3f': { alignment: 16, size: 64 }, // shorthand for mat4x3<f32>
+    'mat4x3i': { alignment: 16, size: 64 }, // shorthand for mat4x3<i32>
+    'mat4x3u': { alignment: 16, size: 64 }, // shorthand for mat4x3<u32>
+    'mat2x4f': { alignment: 16, size: 32 }, // shorthand for mat2x4<f32>
+    'mat2x4i': { alignment: 16, size: 32 }, // shorthand for mat2x4<i32>
+    'mat2x4u': { alignment: 16, size: 32 }, // shorthand for mat2x4<u32>
+    'mat3x4f': { alignment: 16, size: 48 }, // shorthand for mat3x4<f32>
+    'mat3x4i': { alignment: 16, size: 48 }, // shorthand for mat3x4<i32>
+    'mat3x4u': { alignment: 16, size: 48 }, // shorthand for mat3x4<u32>
+    'mat4x4f': { alignment: 16, size: 64 }, // shorthand for mat4x4<f32>
+    'mat4x4i': { alignment: 16, size: 64 }, // shorthand for mat4x4<i32>
+    'mat4x4u': { alignment: 16, size: 64 }, // shorthand for mat4x4<u32>
+
+
 };
 
 const wgslTypeSizes16 = {
-    'h': { alignment: 2, size: 2 }, // shorthand for f16 appended like 16h (we can't do this in JS)
-    'i16': { alignment: 2, size: 2 }, //and we can do these
-    'u16': { alignment: 2, size: 2 }, //we can do these in javascript
-    'f16': { alignment: 2, size: 2 },
-    'vec2h': { alignment: 4, size: 4 }, // shorthand for vec2<f16>
-    'vec3h': { alignment: 8, size: 6 }, // shorthand for vec3<f16>
-    'vec4h': { alignment: 8, size: 8 },  // shorthand for vec4<f16>
-    'vec2<f16>': { alignment: 4, size: 4 },
+    'i16': { alignment: 2, size: 2 },
+    'u16': { alignment: 2, size: 2 },
+    'f16': { alignment: 2, size: 2, vertexFormats: { "float16x2": true, "float16x4": true } },
+    'vec2<f16>': { alignment: 4, size: 4, vertexFormats: { "float16x2": true } },
     'vec2<i16>': { alignment: 4, size: 4 },
     'vec2<u16>': { alignment: 4, size: 4 },
     'vec3<f16>': { alignment: 8, size: 6 },
     'vec3<i16>': { alignment: 8, size: 6 },
     'vec3<u16>': { alignment: 8, size: 6 },
-    'vec4<f16>': { alignment: 8, size: 8 },
+    'vec4<f16>': { alignment: 8, size: 8, vertexFormats: { "float16x4": true } },
     'vec4<i16>': { alignment: 8, size: 8 },
     'vec4<u16>': { alignment: 8, size: 8 },
-    'mat2x2<f16>': { alignment: 4, size: 8 }, //only f is actually supported in webgpu rn afaik
+
+    //FYI matrix u32 and i32 formats are not supported in wgsl (yet) afaik
+    'mat2x2<f16>': { alignment: 4, size: 8 },
     'mat2x2<i16>': { alignment: 4, size: 8 },
     'mat2x2<u16>': { alignment: 4, size: 8 },
     'mat3x2<f16>': { alignment: 4, size: 12 },
@@ -1482,41 +1561,52 @@ const wgslTypeSizes16 = {
     'mat3x4<i16>': { alignment: 8, size: 24 },
     'mat3x4<u16>': { alignment: 8, size: 24 },
     'mat4x4<f16>': { alignment: 8, size: 32 },
-    'mat4x4<i16>': { alignment: 8, size: 32 }, 
-    'mat4x4<u16>': { alignment: 8, size: 32 }
+    'mat4x4<i16>': { alignment: 8, size: 32 },
+    'mat4x4<u16>': { alignment: 8, size: 32 },
+
+    'mat2x2h': { alignment: 4, size: 8 }, // shorthand for mat2x2<f16>
+    'mat3x2h': { alignment: 4, size: 12 }, // shorthand for mat3x2<f16>
+    'mat4x2h': { alignment: 4, size: 16 }, // shorthand for mat4x2<f16>
+    'mat2x3h': { alignment: 8, size: 16 }, // shorthand for mat2x3<f16>
+    'mat3x3h': { alignment: 8, size: 24 }, // shorthand for mat3x3<f16>
+    'mat4x3h': { alignment: 8, size: 32 }, // shorthand for mat4x3<f16>
+    'mat2x4h': { alignment: 8, size: 16 }, // shorthand for mat2x4<f16>
+    'mat3x4h': { alignment: 8, size: 24 }, // shorthand for mat3x4<f16>
+    'mat4x4h': { alignment: 8, size: 32 }, // shorthand for mat4x4<f16>
+
 };
 
 export const vertexFormats = {
-    "uint8x2": { byteSize: 2, wgslTypes: ["vec2<u32>", "vec2u"] },
-    "uint8x4": { byteSize: 4, wgslTypes: ["vec4<u32>", "vec4u"] },
-    "sint8x2": { byteSize: 2, wgslTypes: ["vec2<i32>", "vec2i"] },
-    "sint8x4": { byteSize: 4, wgslTypes: ["vec4<i32>", "vec4i"] },
-    "unorm8x2": { byteSize: 2, wgslTypes: ["vec2<f32>", "vec2f"] },
-    "unorm8x4": { byteSize: 4, wgslTypes: ["vec4<f32>", "vec4f"] },
-    "snorm8x2": { byteSize: 2, wgslTypes: ["vec2<f32>", "vec2f"] },
-    "snorm8x4": { byteSize: 4, wgslTypes: ["vec4<f32>", "vec4f"] },
-    "uint16x2": { byteSize: 4, wgslTypes: ["vec2<u32>", "vec2u"] },
-    "uint16x4": { byteSize: 8, wgslTypes: ["vec4<u32>", "vec4u"] },
-    "sint16x2": { byteSize: 4, wgslTypes: ["vec2<i32>", "vec2i"] },
-    "sint16x4": { byteSize: 8, wgslTypes: ["vec4<i32>", "vec4i"] },
-    "unorm16x2": { byteSize: 4, wgslTypes: ["vec2<f32>", "vec2f"] },
-    "unorm16x4": { byteSize: 8, wgslTypes: ["vec4<f32>", "vec4f"] },
-    "snorm16x2": { byteSize: 4, wgslTypes: ["vec2<f32>", "vec2f"] },
-    "snorm16x4": { byteSize: 8, wgslTypes: ["vec4<f32>", "vec4f"] },
-    "float16x2": { byteSize: 4, wgslTypes: ["vec2<f16>", "vec2h"] },
-    "float16x4": { byteSize: 8, wgslTypes: ["vec4<f16>", "vec4h"] },
-    "float32": { byteSize: 4, wgslTypes: ["f32"] },
-    "float32x2": { byteSize: 8, wgslTypes: ["vec2<f32>", "vec2f"] },
-    "float32x3": { byteSize: 12, wgslTypes: ["vec3<f32>", "vec3f"] },
-    "float32x4": { byteSize: 16, wgslTypes: ["vec4<f32>", "vec4f"] },
-    "uint32": { byteSize: 4, wgslTypes: ["u32"] },
-    "uint32x2": { byteSize: 8, wgslTypes: ["vec2<u32>", "vec2u"] },
-    "uint32x3": { byteSize: 12, wgslTypes: ["vec3<u32>", "vec3u"] },
-    "uint32x4": { byteSize: 16, wgslTypes: ["vec4<u32>", "vec4u"] },
-    "sint32": { byteSize: 4, wgslTypes: ["i32"] },
-    "sint32x2": { byteSize: 8, wgslTypes: ["vec2<i32>", "vec2i"] },
-    "sint32x3": { byteSize: 12, wgslTypes: ["vec3<i32>", "vec3i"] },
-    "sint32x4": { byteSize: 16, wgslTypes: ["vec4<i32>", "vec4i"] }
+    "uint8x2": { byteSize: 2, wgslTypes: { "vec2<u32>": true, "vec2u": true } },
+    "uint8x4": { byteSize: 4, wgslTypes: { "vec4<u32>": true, "vec4u": true } },
+    "sint8x2": { byteSize: 2, wgslTypes: { "vec2<i32>": true, "vec2i": true } },
+    "sint8x4": { byteSize: 4, wgslTypes: { "vec4<i32>": true, "vec4i": true } },
+    "unorm8x2": { byteSize: 2, wgslTypes: { "vec2<f32>": true, "vec2f": true } },
+    "unorm8x4": { byteSize: 4, wgslTypes: { "vec4<f32>": true, "vec4f": true } },
+    "snorm8x2": { byteSize: 2, wgslTypes: { "vec2<f32>": true, "vec2f": true } },
+    "snorm8x4": { byteSize: 4, wgslTypes: { "vec4<f32>": true, "vec4f": true } },
+    "uint16x2": { byteSize: 4, wgslTypes: { "vec2<u32>": true, "vec2u": true } },
+    "uint16x4": { byteSize: 8, wgslTypes: { "vec4<u32>": true, "vec4u": true } },
+    "sint16x2": { byteSize: 4, wgslTypes: { "vec2<i32>": true, "vec2i": true } },
+    "sint16x4": { byteSize: 8, wgslTypes: { "vec4<i32>": true, "vec4i": true } },
+    "unorm16x2": { byteSize: 4, wgslTypes: { "vec2<f32>": true, "vec2f": true } },
+    "unorm16x4": { byteSize: 8, wgslTypes: { "vec4<f32>": true, "vec4f": true } },
+    "snorm16x2": { byteSize: 4, wgslTypes: { "vec2<f32>": true, "vec2f": true } },
+    "snorm16x4": { byteSize: 8, wgslTypes: { "vec4<f32>": true, "vec4f": true } },
+    "float16x2": { byteSize: 4, wgslTypes: { "vec2<f16>": true, "vec2h": true } },
+    "float16x4": { byteSize: 8, wgslTypes: { "vec4<f16>": true, "vec4h": true } },
+    "float32": { byteSize: 4, wgslTypes: { "f32": true } },
+    "float32x2": { byteSize: 8, wgslTypes: { "vec2<f32>": true, "vec2f": true } },
+    "float32x3": { byteSize: 12, wgslTypes: { "vec3<f32>": true, "vec3f": true } },
+    "float32x4": { byteSize: 16, wgslTypes: { "vec4<f32>": true, "vec4f": true } },
+    "uint32": { byteSize: 4, wgslTypes: { "u32": true } },
+    "uint32x2": { byteSize: 8, wgslTypes: { "vec2<u32>": true, "vec2u": true } },
+    "uint32x3": { byteSize: 12, wgslTypes: { "vec3<u32>": true, "vec3u": true } },
+    "uint32x4": { byteSize: 16, wgslTypes: { "vec4<u32>": true, "vec4u": true } },
+    "sint32": { byteSize: 4, wgslTypes: { "i32": true } },
+    "sint32x2": { byteSize: 8, wgslTypes: { "vec2<i32>": true, "vec2i": true } },
+    "sint32x3": { byteSize: 12, wgslTypes: { "vec3<i32>": true, "vec3i": true } },
+    "sint32x4": { byteSize: 16, wgslTypes: { "vec4<i32>": true, "vec4i": true } }
 };
 
 

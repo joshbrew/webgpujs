@@ -227,7 +227,8 @@ export class ShaderHelper {
                         this.prototypes[key].bindGroupNumber, 
                         this.prototypes[key].nVertexBuffers, 
                         this.prototypes[key].workGroupSize ? this.prototypes[key].workGroupSize : undefined,
-                        this.functions)
+                        this.functions
+                    )
                     ); 
         }
         this.init(this.prototypes, {skipCombinedBindings:true});
@@ -257,10 +258,10 @@ export class ShaderHelper {
                         );
                     return `
         
-        @location(${4*i}) vertex${i>0 ? i+1 : ''}In: vec4<f32>, 
-        @location(${4*i+1}) color${i>0 ? i+1 : ''}In: vec4<f32>,
-        @location(${4*i+2}) uv${i>0 ? i+1 : ''}In: vec2<f32>,
-        @location(${4*i+3}) normal${i>0 ? i+1 : ''}In: vec3<f32>${i===options.nVertexBuffers-1 ? '' : ','}`;
+        @location(${4*i}) vertex${i>0 ? i+1 : ''}: vec4<f32>, 
+        @location(${4*i+1}) color${i>0 ? i+1 : ''}: vec4<f32>,
+        @location(${4*i+2}) uv${i>0 ? i+1 : ''}: vec2<f32>,
+        @location(${4*i+3}) normal${i>0 ? i+1 : ''}: vec3<f32>${i===options.nVertexBuffers-1 ? '' : ','}`;
                 });
                 }
                 
@@ -808,15 +809,20 @@ export class ShaderContext {
             } else{
                 switch (inputTypes[inpIdx].type) {
                     case 'f32':
+                    case 'f':
                         dataView.setFloat32(offset, input, true); // true for little-endian
                         break;
                     case 'i32':
+                    case 'i':
                         dataView.setInt32(offset, input, true);
                         break;
                     case 'u32':
+                    case 'u':
                         dataView.setUint32(offset, input, true); 
                         break;
-                        break;
+                    case 'f16':
+                    case 'h':
+                        dataView.setUint16(offset, floatToHalf(input), true);
                     case 'i16':
                         dataView.setInt16(offset, input, true); 
                         break;
@@ -835,6 +841,8 @@ export class ShaderContext {
         offset += typeInfo.size; // Increment the offset by the size of the type
         return offset;
     }
+
+
 
     updateUBO = (inputs, inputTypes, bindGroupNumber=this.bindGroupNumber) => {
         if(!inputs) return;
@@ -1551,4 +1559,49 @@ export class ShaderContext {
       
 function isTypedArray(x) { //https://stackoverflow.com/a/40319428
     return (ArrayBuffer.isView(x) && Object.prototype.toString.call(x) !== "[object DataView]");
+}
+
+
+
+// Utility function to convert a float to a half-precision float
+function floatToHalf(float32:number) {
+    const float32View = new Float32Array(1);
+    const int32View = new Int32Array(float32View.buffer);
+
+    // Set the float32 using the Float32Array view
+    float32View[0] = float32;
+
+    // Get the binary representation using the Int32Array view
+    const f = int32View[0];
+
+    // Extract the sign, exponent, and mantissa
+    const sign = (f >>> 31) * 0x8000;
+    const exponent = ((f >>> 23) & 0xFF) - 127;
+    const mantissa = f & 0x7FFFFF;
+
+    if (exponent === 128) {
+        // Infinity or NaN
+        return sign | 0x7C00 | ((mantissa ? 1 : 0) * (mantissa >> 13));
+    }
+
+    // Check if the number is too small for a normalized half-float
+    if (exponent < -14) {
+        // Too small, make it a zero
+        return sign;
+    }
+
+    // Handle numbers that don't fit in 16 bits
+    if (exponent > 15) {
+        // Too large, make it infinity
+        return sign | 0x7C00;
+    }
+
+    // Normalize the exponent
+    const normalizedExponent = exponent + 15;
+
+    // Convert the mantissa, dropping excess precision
+    const normalizedMantissa = mantissa >> 13;
+
+    // Reconstruct the half-float
+    return sign | (normalizedExponent << 10) | normalizedMantissa;
 }

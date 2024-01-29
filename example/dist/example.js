@@ -184,14 +184,34 @@
               isModified
             });
           } else if (token.startsWith("vec") || token.startsWith("mat")) {
-            const typeMatch = token.match(/(vec\d|mat\d+x\d+)\(([^)]+)\)/);
+            const typeMatch = token.match(/(vec\d+|mat\d+x\d+)(f|h|i|u|<[^>]+>)?\(([^)]+)\)/);
             if (typeMatch) {
+              let type = typeMatch[1];
+              let format = typeMatch[2];
+              switch (format) {
+                case "f":
+                  format = "<f32>";
+                  break;
+                case "h":
+                  format = "<f16>";
+                  break;
+                case "i":
+                  format = "<i32>";
+                  break;
+                case "u":
+                  format = "<u32>";
+                  break;
+                default:
+                  format = format || "<f32>";
+              }
               ast.push({
-                type: typeMatch[1],
-                name: token.split("=")[0],
-                value: typeMatch[2],
+                type,
+                // Combines type with format (e.g., 'vec3<f32>')
+                name: token.split("=")[0].trim(),
+                value: format,
+                // Captures the arguments inside the parentheses
                 isInput,
-                isReturned: returnedVars ? returnedVars?.includes(token.split("=")[0]) : isInput ? true : false,
+                isReturned: returnedVars ? returnedVars.includes(token.split("=")[0].trim()) : isInput ? true : false,
                 isModified
               });
             }
@@ -226,19 +246,51 @@
       else if (value.startsWith('"') || value.startsWith("'") || value.startsWith("`"))
         return value.substring(1, value.length - 1);
       else if (value.startsWith("vec")) {
-        const floatVecMatch = value.match(/vec(\d)f/);
-        if (floatVecMatch) {
-          return floatVecMatch[0];
-        }
-        const vecTypeMatch = value.match(/vec(\d)\(/);
-        if (vecTypeMatch) {
-          const vecSize = vecTypeMatch[1];
-          const type = value.includes(".") ? `<f32>` : `<i32>`;
+        const VecMatch = value.match(/vec(\d+)(f|h|i|u|<[^>]+>)?/);
+        if (VecMatch) {
+          const vecSize = VecMatch[1];
+          let type = VecMatch[2];
+          if (!type) {
+            type = value.includes(".") ? "<f32>" : "<i32>";
+          } else if (type.length === 1) {
+            switch (type) {
+              case "f":
+                type = "<f32>";
+                break;
+              case "h":
+                type = "<f16>";
+                break;
+              case "i":
+                type = "<i32>";
+                break;
+              case "u":
+                type = "<u32>";
+                break;
+            }
+          }
           return `vec${vecSize}${type}`;
         }
       } else if (value.startsWith("mat")) {
-        const type = "<f32>";
-        return value.match(/mat(\d)x(\d)/)[0] + type;
+        const MatMatch = value.match(/mat(\d+)x(\d+)(f|h|i|u|<[^>]+>)?/);
+        if (MatMatch) {
+          const matSize = `${MatMatch[1]}x${MatMatch[2]}`;
+          let type = MatMatch[3];
+          if (!type) {
+            type = "<f32>";
+          } else if (type.length === 1) {
+            switch (type) {
+              case "f":
+                type = "<f32>";
+                break;
+              case "h":
+                type = "<f16>";
+                break;
+              default:
+                type = "<f32>";
+            }
+          }
+          return `mat${matSize}${type}`;
+        }
       } else if (value.startsWith("[")) {
         const firstElement = value.split(",")[0].substring(1);
         if (firstElement === "]")
@@ -403,19 +455,23 @@
         }
         node.binding = bindingIncr;
         node.group = bindGroup;
-        if (variableTypes?.[node.name]) {
+        if (variableTypes && variableTypes[node.name]) {
           if (typeof variableTypes[node.name] === "string") {
             code += `@group(${bindGroup}) @binding(${bindingIncr}) var ${node.name}: ${variableTypes[node.name]};
 
 `;
-          } else if ("binding" in variableTypes[node.name]) {
-            code += variableTypes[node.name].binding;
+            node.type = variableTypes[node.name];
+            bindingIncr++;
+            params2.push(node);
+          } else if (typeof variableTypes[node.name] === "object") {
+            code += `@group(${bindGroup}) @binding(${bindingIncr}) ${variableTypes[node.name].prefix} ${node.name}: ${variableTypes[node.name].type};
+
+`;
+            node.type = variableTypes[node.name].type;
+            bindingIncr++;
+            params2.push(node);
           }
-          bindingIncr++;
-          params2.push(node);
-          return;
-        }
-        if (node.isTexture) {
+        } else if (node.isTexture) {
           params2.push(node);
           let format = node.name.includes("i32") ? "i32" : node.name.includes("u32") ? "u32" : "f32";
           let typ;
@@ -579,7 +635,7 @@
         body = body.replace(functionRegex, "");
       return { body, extractedFunctions };
     };
-    static generateMainFunctionWorkGroup(funcStr, ast, params2, shaderType = "compute", nVertexBuffers = 1, workGroupSize = 256, gpuFuncs) {
+    static generateMainFunctionWorkGroup(funcStr, ast, params2, shaderType = "compute", nVertexBuffers = 1, workGroupSize = 256, gpuFuncs, vboTypes) {
       let code = "";
       if (gpuFuncs) {
         gpuFuncs.forEach((f) => {
@@ -593,19 +649,20 @@
       let vtxInps;
       let vboInputStrings = [];
       if (shaderType === "vertex" || shaderType === "fragment") {
-        let vboStrings = Array.from({ length: nVertexBuffers }, (_, i) => {
+        let vboStrings;
+        vboStrings = Array.from({ length: nVertexBuffers }, (_, i) => {
           if (shaderType === "vertex")
             vboInputStrings.push(
               `@location(${4 * i}) vertex${i > 0 ? i + 1 : ""}In: vec4<f32>, 
-    @location(${4 * i + 1}) color${i > 0 ? i + 1 : ""}In: vec4<f32>,
-    @location(${4 * i + 2}) uv${i > 0 ? i + 1 : ""}In: vec2<f32>,
-    @location(${4 * i + 3}) normal${i > 0 ? i + 1 : ""}In: vec3<f32>${i === nVertexBuffers - 1 ? "" : ","}`
+        @location(${4 * i + 1}) color${i > 0 ? i + 1 : ""}In: vec4<f32>,
+        @location(${4 * i + 2}) uv${i > 0 ? i + 1 : ""}In: vec2<f32>,
+        @location(${4 * i + 3}) normal${i > 0 ? i + 1 : ""}In: vec3<f32>${i === nVertexBuffers - 1 ? "" : ","}`
             );
           return `
-    @location(${4 * i}) vertex${i > 0 ? i + 1 : ""}: vec4<f32>,
-    @location(${4 * i + 1}) color${i > 0 ? i + 1 : ""}: vec4<f32>, 
-    @location(${4 * i + 2}) uv${i > 0 ? i + 1 : ""}: vec2<f32>,
-    @location(${4 * i + 3}) normal${i > 0 ? i + 1 : ""}: vec3<f32>${i === nVertexBuffers - 1 ? "" : ","}`;
+        @location(${4 * i}) vertex${i > 0 ? i + 1 : ""}: vec4<f32>,
+        @location(${4 * i + 1}) color${i > 0 ? i + 1 : ""}: vec4<f32>, 
+        @location(${4 * i + 2}) uv${i > 0 ? i + 1 : ""}: vec2<f32>,
+        @location(${4 * i + 3}) normal${i > 0 ? i + 1 : ""}: vec3<f32>${i === nVertexBuffers - 1 ? "" : ","}`;
         });
         vtxInps = `
     @builtin(position) position: vec4<f32>, //pixel location
@@ -806,10 +863,32 @@ for (var i: i32 = 0; i < ${size}; i = i + 1) {
       code = code.replace(vecMatCreationRegex, (match, type, vecSize, matSize, args) => {
         const argArray = args.split(",").map((arg) => arg.trim());
         const hasDecimal = argArray.some((arg) => arg.includes("."));
-        const isVecWithF = /^vec\d+f/.test(type);
-        const inferredType = type.startsWith("mat") || isVecWithF || hasDecimal ? "f32" : "i32";
+        const isVecOrMatWithSpecificType = /^(vec|mat)\d+[fuhi]/.test(type);
+        let inferredType;
+        if (isVecOrMatWithSpecificType) {
+          const typeSuffix = type.match(/[fuhi]$/)[0];
+          switch (typeSuffix) {
+            case "f":
+              inferredType = "f32";
+              break;
+            case "u":
+              inferredType = "u32";
+              break;
+            case "i":
+              inferredType = "i32";
+              break;
+            case "h":
+              inferredType = "f16";
+              break;
+            default:
+              inferredType = "f32";
+          }
+        } else {
+          inferredType = hasDecimal ? "f32" : "i32";
+        }
         if (type.startsWith("mat")) {
-          return `${type}<f32>(${argArray.join(", ").replace(/vec(\d+)/gm, "vec$1<f32>")})`;
+          const matInternalType = isVecOrMatWithSpecificType ? `<${inferredType}>` : "<f32>";
+          return `${type}${matInternalType}(${argArray.join(", ").replace(/vec(\d+)/gm, `vec$1${matInternalType}`)})`;
         } else {
           return `${type}<${inferredType}>(${argArray.join(", ")})`;
         }
@@ -1065,7 +1144,7 @@ for (var i: i32 = 0; i < ${size}; i = i + 1) {
       shader2Obj.params = combinedParams;
     }
     //this pipeline is set to only use javascript functions so it can generate asts and infer all of the necessary buffering orders and types
-    static convertToWebGPU(func, shaderType = "compute", bindGroupNumber = 0, nVertexBuffers = 1, workGroupSize = 256, gpuFuncs, variableTypes, lastBinding = 0) {
+    static convertToWebGPU(func, shaderType = "compute", bindGroupNumber = 0, nVertexBuffers = 1, workGroupSize = 256, gpuFuncs, variableTypes, vboTypes, lastBinding = 0) {
       let funcStr = typeof func === "string" ? func : func.toString();
       funcStr = funcStr.replace(/(?<!\w)this\./g, "");
       const tokens = this.tokenize(funcStr);
@@ -1086,7 +1165,8 @@ for (var i: i32 = 0; i < ${size}; i = i + 1) {
         shaderType,
         nVertexBuffers,
         workGroupSize,
-        gpuFuncs
+        gpuFuncs,
+        vboTypes
       );
       return {
         code: this.indentCode(webGPUCode.code),
@@ -1139,25 +1219,23 @@ for (var i: i32 = 0; i < ${size}; i = i + 1) {
     "bool": { alignment: 1, size: 1 },
     "u8": { alignment: 1, size: 1 },
     "i8": { alignment: 1, size: 1 },
-    "i32": { alignment: 4, size: 4 },
-    "u32": { alignment: 4, size: 4 },
-    "f32": { alignment: 4, size: 4 },
+    "i32": { alignment: 4, size: 4, vertexFormats: { "sint32": true } },
+    "u32": { alignment: 4, size: 4, vertexFormats: { "uint32": true } },
+    "f32": { alignment: 4, size: 4, vertexFormats: { "float32": true } },
     "i64": { alignment: 8, size: 8 },
     "u64": { alignment: 8, size: 8 },
     "f64": { alignment: 8, size: 8 },
     "atomic": { alignment: 4, size: 4 },
-    "vec2<f32>": { alignment: 8, size: 8 },
-    "vec2f": { alignment: 8, size: 8 },
-    "vec2<i32>": { alignment: 8, size: 8 },
-    "vec2<u32>": { alignment: 8, size: 8 },
-    "vec3<f32>": { alignment: 16, size: 12 },
-    "vec3f": { alignment: 16, size: 12 },
-    "vec3<i32>": { alignment: 16, size: 12 },
-    "vec3<u32>": { alignment: 16, size: 12 },
-    "vec4<f32>": { alignment: 16, size: 16 },
-    "vec4f": { alignment: 16, size: 16 },
-    "vec4<i32>": { alignment: 16, size: 16 },
-    "vec4<u32>": { alignment: 16, size: 16 },
+    "vec2<i32>": { alignment: 8, size: 8, vertexFormats: { "sint8x2": true, "sint16x2": true, "sint32x2": true } },
+    "vec2<u32>": { alignment: 8, size: 8, vertexFormats: { "uint8x2": true, "uint16x2": true, "uint32x2": true } },
+    "vec2<f32>": { alignment: 8, size: 8, vertexFormats: { "unorm8x2": true, "unorm16x2": true, "float32x2": true, "snorm8x2": true, "snorm16x2": true } },
+    "vec3<i32>": { alignment: 16, size: 12, vertexFormats: { "sint32x3": true } },
+    "vec3<u32>": { alignment: 16, size: 12, vertexFormats: { "uint32x3": true } },
+    "vec3<f32>": { alignment: 16, size: 12, vertexFormats: { "float32x3": true } },
+    "vec4<i32>": { alignment: 16, size: 16, vertexFormats: { "sint8x4": true, "sint16x4": true, "sint32x4": true } },
+    "vec4<u32>": { alignment: 16, size: 16, vertexFormats: { "uint8x4": true, "uint16x4": true, "uint32x4": true } },
+    "vec4<f32>": { alignment: 16, size: 16, vertexFormats: { "unorm8x4": true, "unorm16x4": true, "float32x4": true, "snorm8x4": true, "snorm16x4": true, "float16x4": true } },
+    //FYI matrix u32 and i32 formats are not supported in wgsl (yet) afaik
     "mat2x2<f32>": { alignment: 8, size: 16 },
     "mat2x2<i32>": { alignment: 8, size: 16 },
     "mat2x2<u32>": { alignment: 8, size: 16 },
@@ -1184,25 +1262,77 @@ for (var i: i32 = 0; i < ${size}; i = i + 1) {
     "mat3x4<u32>": { alignment: 16, size: 48 },
     "mat4x4<f32>": { alignment: 16, size: 64 },
     "mat4x4<i32>": { alignment: 16, size: 64 },
-    "mat4x4<u32>": { alignment: 16, size: 64 }
+    "mat4x4<u32>": { alignment: 16, size: 64 },
+    "mat2x2f": { alignment: 8, size: 16 },
+    // shorthand for mat2x2<f32>
+    "mat2x2i": { alignment: 8, size: 16 },
+    // shorthand for mat2x2<i32>
+    "mat2x2u": { alignment: 8, size: 16 },
+    // shorthand for mat2x2<u32>
+    "mat3x2f": { alignment: 8, size: 24 },
+    // shorthand for mat3x2<f32>
+    "mat3x2i": { alignment: 8, size: 24 },
+    // shorthand for mat3x2<i32>
+    "mat3x2u": { alignment: 8, size: 24 },
+    // shorthand for mat3x2<u32>
+    "mat4x2f": { alignment: 8, size: 32 },
+    // shorthand for mat4x2<f32>
+    "mat4x2i": { alignment: 8, size: 32 },
+    // shorthand for mat4x2<i32>
+    "mat4x2u": { alignment: 8, size: 32 },
+    // shorthand for mat4x2<u32>
+    "mat2x3f": { alignment: 16, size: 32 },
+    // shorthand for mat2x3<f32>
+    "mat2x3i": { alignment: 16, size: 32 },
+    // shorthand for mat2x3<i32>
+    "mat2x3u": { alignment: 16, size: 32 },
+    // shorthand for mat2x3<u32>
+    "mat3x3f": { alignment: 16, size: 48 },
+    // shorthand for mat3x3<f32>
+    "mat3x3i": { alignment: 16, size: 48 },
+    // shorthand for mat3x3<i32>
+    "mat3x3u": { alignment: 16, size: 48 },
+    // shorthand for mat3x3<u32>
+    "mat4x3f": { alignment: 16, size: 64 },
+    // shorthand for mat4x3<f32>
+    "mat4x3i": { alignment: 16, size: 64 },
+    // shorthand for mat4x3<i32>
+    "mat4x3u": { alignment: 16, size: 64 },
+    // shorthand for mat4x3<u32>
+    "mat2x4f": { alignment: 16, size: 32 },
+    // shorthand for mat2x4<f32>
+    "mat2x4i": { alignment: 16, size: 32 },
+    // shorthand for mat2x4<i32>
+    "mat2x4u": { alignment: 16, size: 32 },
+    // shorthand for mat2x4<u32>
+    "mat3x4f": { alignment: 16, size: 48 },
+    // shorthand for mat3x4<f32>
+    "mat3x4i": { alignment: 16, size: 48 },
+    // shorthand for mat3x4<i32>
+    "mat3x4u": { alignment: 16, size: 48 },
+    // shorthand for mat3x4<u32>
+    "mat4x4f": { alignment: 16, size: 64 },
+    // shorthand for mat4x4<f32>
+    "mat4x4i": { alignment: 16, size: 64 },
+    // shorthand for mat4x4<i32>
+    "mat4x4u": { alignment: 16, size: 64 }
+    // shorthand for mat4x4<u32>
   };
   var wgslTypeSizes16 = {
     "i16": { alignment: 2, size: 2 },
-    //and we can do these
     "u16": { alignment: 2, size: 2 },
-    //we can do these in javascript
-    "f16": { alignment: 2, size: 2 },
-    "vec2<f16>": { alignment: 4, size: 4 },
+    "f16": { alignment: 2, size: 2, vertexFormats: { "float16x2": true, "float16x4": true } },
+    "vec2<f16>": { alignment: 4, size: 4, vertexFormats: { "float16x2": true } },
     "vec2<i16>": { alignment: 4, size: 4 },
     "vec2<u16>": { alignment: 4, size: 4 },
     "vec3<f16>": { alignment: 8, size: 6 },
     "vec3<i16>": { alignment: 8, size: 6 },
     "vec3<u16>": { alignment: 8, size: 6 },
-    "vec4<f16>": { alignment: 8, size: 8 },
+    "vec4<f16>": { alignment: 8, size: 8, vertexFormats: { "float16x4": true } },
     "vec4<i16>": { alignment: 8, size: 8 },
     "vec4<u16>": { alignment: 8, size: 8 },
+    //FYI matrix u32 and i32 formats are not supported in wgsl (yet) afaik
     "mat2x2<f16>": { alignment: 4, size: 8 },
-    //only f is actually supported in webgpu rn afaik
     "mat2x2<i16>": { alignment: 4, size: 8 },
     "mat2x2<u16>": { alignment: 4, size: 8 },
     "mat3x2<f16>": { alignment: 4, size: 12 },
@@ -1228,7 +1358,25 @@ for (var i: i32 = 0; i < ${size}; i = i + 1) {
     "mat3x4<u16>": { alignment: 8, size: 24 },
     "mat4x4<f16>": { alignment: 8, size: 32 },
     "mat4x4<i16>": { alignment: 8, size: 32 },
-    "mat4x4<u16>": { alignment: 8, size: 32 }
+    "mat4x4<u16>": { alignment: 8, size: 32 },
+    "mat2x2h": { alignment: 4, size: 8 },
+    // shorthand for mat2x2<f16>
+    "mat3x2h": { alignment: 4, size: 12 },
+    // shorthand for mat3x2<f16>
+    "mat4x2h": { alignment: 4, size: 16 },
+    // shorthand for mat4x2<f16>
+    "mat2x3h": { alignment: 8, size: 16 },
+    // shorthand for mat2x3<f16>
+    "mat3x3h": { alignment: 8, size: 24 },
+    // shorthand for mat3x3<f16>
+    "mat4x3h": { alignment: 8, size: 32 },
+    // shorthand for mat4x3<f16>
+    "mat2x4h": { alignment: 8, size: 16 },
+    // shorthand for mat2x4<f16>
+    "mat3x4h": { alignment: 8, size: 24 },
+    // shorthand for mat3x4<f16>
+    "mat4x4h": { alignment: 8, size: 32 }
+    // shorthand for mat4x4<f16>
   };
   var textureFormats = [
     //https://www.w3.org/TR/webgpu/#texture-formats
@@ -1548,20 +1696,24 @@ for (var i: i32 = 0; i < ${size}; i = i + 1) {
           continue;
         if (shaderContext && shaderType === "fragment" && !shaders.vertex) {
           let vboInputStrings = [];
-          let vboStrings = Array.from({ length: options.nVertexBuffers }, (_, i) => {
-            vboInputStrings.push(
-              `@location(${4 * i}) vertex${i > 0 ? i + 1 : ""}In: vec4<f32>,
-    @location(${4 * i + 1}) color${i > 0 ? i + 1 : ""}In: vec4<f32>, 
-    @location(${4 * i + 3}) uv${i > 0 ? i + 1 : ""}In: vec2<f32>,
-    @location(${4 * i + 2}) normal${i > 0 ? i + 1 : ""}In: vec3<f32>${i === options.nVertexBuffers - 1 ? "" : ","}`
-            );
-            return `
-    
-    @location(${4 * i}) vertex${i > 0 ? i + 1 : ""}: vec4<f32>, 
-    @location(${4 * i + 1}) color${i > 0 ? i + 1 : ""}: vec4<f32>,
-    @location(${4 * i + 2}) uv${i > 0 ? i + 1 : ""}: vec2<f32>,
-    @location(${4 * i + 3}) normal${i > 0 ? i + 1 : ""}: vec3<f32>${i === options.nVertexBuffers - 1 ? "" : ","}`;
-          });
+          let vboStrings;
+          if (options.vboTypes) {
+          } else {
+            vboStrings = Array.from({ length: options.nVertexBuffers }, (_, i) => {
+              vboInputStrings.push(
+                `@location(${4 * i}) vertex${i > 0 ? i + 1 : ""}In: vec4<f32>,
+        @location(${4 * i + 1}) color${i > 0 ? i + 1 : ""}In: vec4<f32>, 
+        @location(${4 * i + 3}) uv${i > 0 ? i + 1 : ""}In: vec2<f32>,
+        @location(${4 * i + 2}) normal${i > 0 ? i + 1 : ""}In: vec3<f32>${i === options.nVertexBuffers - 1 ? "" : ","}`
+              );
+              return `
+        
+        @location(${4 * i}) vertex${i > 0 ? i + 1 : ""}: vec4<f32>, 
+        @location(${4 * i + 1}) color${i > 0 ? i + 1 : ""}: vec4<f32>,
+        @location(${4 * i + 2}) uv${i > 0 ? i + 1 : ""}: vec2<f32>,
+        @location(${4 * i + 3}) normal${i > 0 ? i + 1 : ""}: vec3<f32>${i === options.nVertexBuffers - 1 ? "" : ","}`;
+            });
+          }
           this.vertex = {
             code: `
 struct Vertex {
@@ -2011,15 +2163,20 @@ fn vtx_main(
         } else {
           switch (inputTypes[inpIdx].type) {
             case "f32":
+            case "f":
               dataView.setFloat32(offset, input, true);
               break;
             case "i32":
+            case "i":
               dataView.setInt32(offset, input, true);
               break;
             case "u32":
+            case "u":
               dataView.setUint32(offset, input, true);
               break;
-              break;
+            case "f16":
+            case "h":
+              dataView.setUint16(offset, floatToHalf(input), true);
             case "i16":
               dataView.setInt16(offset, input, true);
               break;
@@ -2635,6 +2792,27 @@ fn vtx_main(
   function isTypedArray(x) {
     return ArrayBuffer.isView(x) && Object.prototype.toString.call(x) !== "[object DataView]";
   }
+  function floatToHalf(float32) {
+    const float32View = new Float32Array(1);
+    const int32View = new Int32Array(float32View.buffer);
+    float32View[0] = float32;
+    const f = int32View[0];
+    const sign = (f >>> 31) * 32768;
+    const exponent = (f >>> 23 & 255) - 127;
+    const mantissa = f & 8388607;
+    if (exponent === 128) {
+      return sign | 31744 | (mantissa ? 1 : 0) * (mantissa >> 13);
+    }
+    if (exponent < -14) {
+      return sign;
+    }
+    if (exponent > 15) {
+      return sign | 31744;
+    }
+    const normalizedExponent = exponent + 15;
+    const normalizedMantissa = mantissa >> 13;
+    return sign | normalizedExponent << 10 | normalizedMantissa;
+  }
 
   // ../src/pipeline.ts
   var WebGPUjs = class _WebGPUjs {
@@ -2666,6 +2844,7 @@ fn vtx_main(
           options.workGroupSize,
           options.functions,
           options.variableTypes,
+          options.vboTypes,
           options.lastBinding
         );
         if (options.getPrevShaderBindGroups) {
@@ -2701,6 +2880,7 @@ fn vtx_main(
               options.workGroupSize,
               options.functions,
               options.variableTypes,
+              options.vboTypes,
               options.lastBinding
             );
           }
@@ -2731,6 +2911,7 @@ fn vtx_main(
                 options.workGroupSize,
                 options.functions,
                 options.variableTypes,
+                options.vboTypes,
                 options.lastBinding
               );
             }
@@ -2745,6 +2926,7 @@ fn vtx_main(
                 options.workGroupSize,
                 options.functions,
                 options.variableTypes,
+                options.vboTypes,
                 options.lastBinding
               );
               options.lastBinding = block.vertex.lastBinding;
@@ -2760,6 +2942,7 @@ fn vtx_main(
                 options.workGroupSize,
                 options.functions,
                 options.variableTypes,
+                options.vboTypes,
                 options.lastBinding
               );
             }
