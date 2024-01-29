@@ -9,6 +9,8 @@ Third: Paste to GPT and ask it to enhance the regex and replacing functions (you
 
 Fourth: Update anything in shader.ts as well related (again just search relevant WebGPU API calls you know need to be adjusted)
 
+Fifth: make sure it runs, and just keep pasting to gpt with errors and make new conversations when it gets stuck in a loop of BS.
+
 And that's pretty much it but I am still reorganizing this stuff slowly so it's a little more modular and easy to tackle. Of course, as context sizes expand we might just be able to dump this entire library to an AI and have it rework it soon haha.
 
 
