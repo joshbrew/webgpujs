@@ -1195,24 +1195,42 @@ for (var i: i32 = 0; i < ${size}; i = i + 1) {
   var replacements = {
     "Math.PI": `${Math.PI}`,
     "Math.E": `${Math.E}`,
+    "Math.LN10": `${Math.LN10}`,
+    "Math.LN2": `${Math.LN2}`,
+    "Math.LOG10E": `${Math.LOG10E}`,
+    "Math.LOG2E": `${Math.LOG2E}`,
+    "Math.SQRT1_2": `${Math.SQRT1_2}`,
+    "Math.SQRT2": `${Math.SQRT2}`,
     "Math.abs": "abs",
     "Math.acos": "acos",
+    "Math.acosh": "acosh",
     "Math.asin": "asin",
+    "Math.asinh": "asinh",
     "Math.atan": "atan",
     "Math.atan2": "atan2",
-    // Note: Shader might handle atan2 differently, ensure compatibility
+    "Math.atanh": "atanh",
+    // 'Math.cbrt': '', // No direct WGSL equivalent
     "Math.ceil": "ceil",
     "Math.cos": "cos",
+    "Math.cosh": "cosh",
+    "Math.clz32": "countLeadingZeros",
+    // 'Math.imul': '', // No direct WGSL equivalent
     "Math.exp": "exp",
+    // 'Math.expm1': '', // No direct WGSL equivalent
     "Math.floor": "floor",
     "Math.log": "log",
+    "Math.log2": "log2",
     "Math.max": "max",
     "Math.min": "min",
     "Math.pow": "pow",
+    // 'Math.random': '', // No direct WGSL equivalent
     "Math.round": "round",
     "Math.sin": "sin",
+    "Math.sinh": "sinh",
     "Math.sqrt": "sqrt",
-    "Math.tan": "tan"
+    "Math.tan": "tan",
+    "Math.tanh": "tanh",
+    "Math.trunc": "trunc"
     // ... add more replacements as needed
   };
   var wgslTypeSizes32 = {
@@ -1225,7 +1243,8 @@ for (var i: i32 = 0; i < ${size}; i = i + 1) {
     "i64": { alignment: 8, size: 8 },
     "u64": { alignment: 8, size: 8 },
     "f64": { alignment: 8, size: 8 },
-    "atomic": { alignment: 4, size: 4 },
+    "atomic<u32>": { alignment: 4, size: 4 },
+    "atomic<i32>": { alignment: 4, size: 4 },
     "vec2<i32>": { alignment: 8, size: 8, vertexFormats: { "sint8x2": true, "sint16x2": true, "sint32x2": true } },
     "vec2<u32>": { alignment: 8, size: 8, vertexFormats: { "uint8x2": true, "uint16x2": true, "uint32x2": true } },
     "vec2<f32>": { alignment: 8, size: 8, vertexFormats: { "unorm8x2": true, "unorm16x2": true, "float32x2": true, "snorm8x2": true, "snorm16x2": true } },
@@ -1235,7 +1254,7 @@ for (var i: i32 = 0; i < ${size}; i = i + 1) {
     "vec4<i32>": { alignment: 16, size: 16, vertexFormats: { "sint8x4": true, "sint16x4": true, "sint32x4": true } },
     "vec4<u32>": { alignment: 16, size: 16, vertexFormats: { "uint8x4": true, "uint16x4": true, "uint32x4": true } },
     "vec4<f32>": { alignment: 16, size: 16, vertexFormats: { "unorm8x4": true, "unorm16x4": true, "float32x4": true, "snorm8x4": true, "snorm16x4": true, "float16x4": true } },
-    //FYI matrix u32 and i32 formats are not supported in wgsl (yet) afaik
+    //FYI matrix u and i formats are not supported in wgsl (yet) afaik
     "mat2x2<f32>": { alignment: 8, size: 16 },
     "mat2x2<i32>": { alignment: 8, size: 16 },
     "mat2x2<u32>": { alignment: 8, size: 16 },
@@ -1331,7 +1350,7 @@ for (var i: i32 = 0; i < ${size}; i = i + 1) {
     "vec4<f16>": { alignment: 8, size: 8, vertexFormats: { "float16x4": true } },
     "vec4<i16>": { alignment: 8, size: 8 },
     "vec4<u16>": { alignment: 8, size: 8 },
-    //FYI matrix u32 and i32 formats are not supported in wgsl (yet) afaik
+    //FYI matrix u and i formats are not supported in wgsl (yet) afaik
     "mat2x2<f16>": { alignment: 4, size: 8 },
     "mat2x2<i16>": { alignment: 4, size: 8 },
     "mat2x2<u16>": { alignment: 4, size: 8 },

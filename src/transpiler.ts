@@ -1419,26 +1419,46 @@ function replaceJSFunctions(code, replacements) {
 // Usage: replace javascript functions or constants with their WGSL equivalent. Note you can also just call any WGSL function without the javascript equivalent existing as nothing executs in JS
 export const replacements = {
     'Math.PI': `${Math.PI}`,
-    'Math.E':  `${Math.E}`,
+    'Math.E': `${Math.E}`,
+    'Math.LN10': `${Math.LN10}`,
+    'Math.LN2': `${Math.LN2}`,
+    'Math.LOG10E': `${Math.LOG10E}`,
+    'Math.LOG2E': `${Math.LOG2E}`,
+    'Math.SQRT1_2': `${Math.SQRT1_2}`,
+    'Math.SQRT2': `${Math.SQRT2}`,
     'Math.abs': 'abs',
     'Math.acos': 'acos',
+    'Math.acosh': 'acosh',
     'Math.asin': 'asin',
+    'Math.asinh': 'asinh',
     'Math.atan': 'atan',
-    'Math.atan2': 'atan2', // Note: Shader might handle atan2 differently, ensure compatibility
+    'Math.atan2': 'atan2',
+    'Math.atanh': 'atanh',
+    // 'Math.cbrt': '', // No direct WGSL equivalent
     'Math.ceil': 'ceil',
     'Math.cos': 'cos',
+    'Math.cosh': 'cosh',
+    'Math.clz32': 'countLeadingZeros',
+    // 'Math.imul': '', // No direct WGSL equivalent
     'Math.exp': 'exp',
+    // 'Math.expm1': '', // No direct WGSL equivalent
     'Math.floor': 'floor',
     'Math.log': 'log',
+    'Math.log2': 'log2',
     'Math.max': 'max',
     'Math.min': 'min',
     'Math.pow': 'pow',
+    // 'Math.random': '', // No direct WGSL equivalent
     'Math.round': 'round',
     'Math.sin': 'sin',
+    'Math.sinh': 'sinh',
     'Math.sqrt': 'sqrt',
     'Math.tan': 'tan',
+    'Math.tanh': 'tanh',
+    'Math.trunc': 'trunc',
     // ... add more replacements as needed
 };
+
 
 const wgslTypeSizes32 = {
     'bool': { alignment: 1, size: 1 },
@@ -1450,7 +1470,10 @@ const wgslTypeSizes32 = {
     'i64': { alignment: 8, size: 8 },
     'u64': { alignment: 8, size: 8 },
     'f64': { alignment: 8, size: 8 },
-    'atomic': { alignment: 4, size: 4 },
+
+    'atomic<u32>': { alignment: 4, size: 4 },
+    'atomic<i32>': { alignment: 4, size: 4 },
+
     'vec2<i32>': { alignment: 8, size: 8, vertexFormats: { "sint8x2": true, "sint16x2": true, "sint32x2": true } },
     'vec2<u32>': { alignment: 8, size: 8, vertexFormats: { "uint8x2": true, "uint16x2": true, "uint32x2": true } },
     'vec2<f32>': { alignment: 8, size: 8, vertexFormats: { "unorm8x2": true, "unorm16x2": true, "float32x2": true, "snorm8x2": true, "snorm16x2": true } },
@@ -1461,7 +1484,7 @@ const wgslTypeSizes32 = {
     'vec4<u32>': { alignment: 16, size: 16, vertexFormats: { "uint8x4": true, "uint16x4": true, "uint32x4": true } },
     'vec4<f32>': { alignment: 16, size: 16, vertexFormats: { "unorm8x4": true, "unorm16x4": true, "float32x4": true, "snorm8x4": true, "snorm16x4": true, "float16x4": true } },
     
-    //FYI matrix u32 and i32 formats are not supported in wgsl (yet) afaik
+    //FYI matrix u and i formats are not supported in wgsl (yet) afaik
     'mat2x2<f32>': { alignment: 8, size: 16 },
     'mat2x2<i32>': { alignment: 8, size: 16 },
     'mat2x2<u32>': { alignment: 8, size: 16 },
@@ -1521,10 +1544,12 @@ const wgslTypeSizes32 = {
 
 };
 
+
 const wgslTypeSizes16 = {
     'i16': { alignment: 2, size: 2 },
     'u16': { alignment: 2, size: 2 },
     'f16': { alignment: 2, size: 2, vertexFormats: { "float16x2": true, "float16x4": true } },
+
     'vec2<f16>': { alignment: 4, size: 4, vertexFormats: { "float16x2": true } },
     'vec2<i16>': { alignment: 4, size: 4 },
     'vec2<u16>': { alignment: 4, size: 4 },
@@ -1535,7 +1560,7 @@ const wgslTypeSizes16 = {
     'vec4<i16>': { alignment: 8, size: 8 },
     'vec4<u16>': { alignment: 8, size: 8 },
 
-    //FYI matrix u32 and i32 formats are not supported in wgsl (yet) afaik
+    //FYI matrix u and i formats are not supported in wgsl (yet) afaik
     'mat2x2<f16>': { alignment: 4, size: 8 },
     'mat2x2<i16>': { alignment: 4, size: 8 },
     'mat2x2<u16>': { alignment: 4, size: 8 },
@@ -1763,6 +1788,76 @@ export const imageToTextureFormats = {
         "rgba32float"
     ]
 };
+
+
+//reference
+const wgslBuiltInFunctions = {
+    "Constructor Built-in Functions": {
+        "Zero Value Built-in Functions": { //default values if instantiating empty numbers e.g. f32() or bool()
+            "bool": "false",
+            "i32": "0i",
+            "u32": "0u",
+            "f32": "0.0f",
+            "f16": "0.0h"
+        },
+        "Value Constructor Built-in Functions": [
+            "array", "bool", "f16", "f32", "i32", 
+            "mat2x2", "mat2x3", "mat2x4", "mat3x2", 
+            "mat3x3", "mat3x4", "mat4x2", "mat4x3", 
+            "mat4x4", "Structures", "u32", "vec2", 
+            "vec3", "vec4"
+        ]
+    },
+    "Bit Reinterpretation Built-in Functions": ["bitcast"],
+    "Logical Built-in Functions": ["all", "any", "select"],
+    "Array Built-in Functions": ["arrayLength"],
+    "Numeric Built-in Functions": [
+        "abs", "acos", "acosh", "asin", "asinh", "atan", 
+        "atanh", "atan2", "ceil", "clamp", "cos", "cosh", 
+        "countLeadingZeros", "countOneBits", "countTrailingZeros", 
+        "cross", "degrees", "determinant", "distance", "dot", 
+        "dot4U8Packed", "dot4I8Packed", "exp", "exp2", 
+        "extractBits", "faceForward", 
+        "firstLeadingBit", 
+        "firstTrailingBit", "floor", "fma", "fract", "frexp", 
+        "insertBits", "inverseSqrt", "ldexp", "length", "log", 
+        "log2", "max", "min", "mix", "modf", "normalize", 
+        "pow", "quantizeToF16", "radians", "reflect", "refract", 
+        "reverseBits", "round", "saturate", "sign", "sin", 
+        "sinh", "smoothstep", "sqrt", "step", "tan", "tanh", 
+        "transpose", "trunc"
+    ],
+    "Derivative Built-in Functions": [
+        "dpdx", "dpdxCoarse", "dpdxFine", "dpdy", 
+        "dpdyCoarse", "dpdyFine", "fwidth", "fwidthCoarse", 
+        "fwidthFine"
+    ],
+    "Texture Built-in Functions": [
+        "textureDimensions", "textureGather", "textureGatherCompare", 
+        "textureLoad", "textureNumLayers", "textureNumLevels", 
+        "textureNumSamples", "textureSample", "textureSampleBias", 
+        "textureSampleCompare", "textureSampleCompareLevel", 
+        "textureSampleGrad", "textureSampleLevel", 
+        "textureSampleBaseClampToEdge", "textureStore"
+    ],
+    "Atomic Built-in Functions": [
+        "Atomic Load", "Atomic Store", "Atomic Read-modify-write"
+    ],
+    "Data Packing Built-in Functions": [
+        "pack4x8snorm", "pack4x8unorm", "pack4xI8", "pack4xU8", 
+        "pack4xI8Clamp", "pack4xU8Clamp", "pack2x16snorm", 
+        "pack2x16unorm", "pack2x16float"
+    ],
+    "Data Unpacking Built-in Functions": [
+        "unpack4x8snorm", "unpack4x8unorm", "unpack4xI8", "unpack4xU8", 
+        "unpack2x16snorm", "unpack2x16unorm", "unpack2x16float"
+    ],
+    "Synchronization Built-in Functions": [
+        "storageBarrier", "textureBarrier", "workgroupBarrier", 
+        "workgroupUniformLoad"
+    ]
+};
+
 
 export const WGSLTypeSizes = Object.assign({}, wgslTypeSizes16, wgslTypeSizes32);
 
