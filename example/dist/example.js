@@ -131,26 +131,32 @@
       return params2;
     }
     static excludedNames = {
-      "color": true,
       "position": true,
-      "uv": true,
-      "vertex": true,
-      "normal": true,
       "pixel": true
     };
-    static parse = (fstr, tokens, shaderType = "compute") => {
+    static parse = (fstr, tokens, shaderType = "compute", vertexBufferOptions) => {
       const ast = [];
       const returnMatches = fstr.match(/^(?![ \t]*\/\/).*\breturn .*;/gm);
       let returnedVars = returnMatches ? returnMatches.map((match) => match.replace(/^[ \t]*return /, "").replace(";", "")) : void 0;
       returnedVars = this.flattenStrings(returnedVars);
+      if (typeof vertexBufferOptions?.[0] === "object") vertexBufferOptions.forEach((opt) => {
+        const keys = Object.keys(opt);
+        keys.forEach((k) => {
+          if (!(k in this.excludedNames)) {
+            this.excludedNames[k] = true;
+          }
+        });
+      });
       const functionBody = fstr.substring(fstr.indexOf("{"));
       let checked = {};
+      const exnKeys = Object.keys(this.excludedNames);
+      const biuKeys = Object.keys(this.builtInUniforms);
       tokens.forEach(({ token, isInput }, i) => {
         if (checked[token]) return;
         checked[token] = true;
         let isReturned = returnedVars?.find((v) => {
           if (token.includes(v)) {
-            if (shaderType !== "compute" && Object.keys(this.excludedNames).find((t) => token.includes(t)) || Object.keys(this.builtInUniforms).find((t) => token.includes(t))) {
+            if (shaderType !== "compute" && exnKeys.find((t) => token.includes(t)) || biuKeys.find((t) => token.includes(t))) {
               tokens[i].isInput = false;
             } else return true;
           }
@@ -1098,16 +1104,13 @@ for (var i: i32 = 0; i < ${size}; i = i + 1) {
       shader2Obj.params = combinedParams;
     }
     //this pipeline is set to only use javascript functions so it can generate asts and infer all of the necessary buffering orders and types
-    static convertToWebGPU(func, shaderType = "compute", bindGroupNumber = 0, vertexBufferOptions = [{
-      vertex: "vec4<f32>",
-      color: "vec4<f32>",
-      uv: "vec2<f32>",
-      normal: "vec3<f32>"
-    }], workGroupSize = 256, gpuFuncs, variableTypes, lastBinding = 0) {
+    static convertToWebGPU(func, shaderType = "compute", bindGroupNumber = 0, workGroupSize = 256, vertexBufferOptions = [{
+      color: "vec4<f32>"
+    }], gpuFuncs, variableTypes, lastBinding = 0) {
       let funcStr = typeof func === "string" ? func : func.toString();
       funcStr = funcStr.replace(/(?<!\w)this\./g, "");
       const tokens = this.tokenize(funcStr);
-      const ast = this.parse(funcStr, tokens, shaderType);
+      const ast = this.parse(funcStr, tokens, shaderType, vertexBufferOptions);
       let webGPUCode = this.generateDataStructures(
         funcStr,
         ast,
@@ -2778,8 +2781,8 @@ fn vtx_main(
           shaders,
           options.canvas ? "fragment" : "compute",
           options.bindGroupNumber,
-          options.renderPass?.vbos,
           options.workGroupSize,
+          options.renderPass?.vbos,
           options.functions,
           options.variableTypes,
           options.lastBinding
@@ -2813,8 +2816,8 @@ fn vtx_main(
               block.code,
               options.canvas ? "fragment" : "compute",
               options.bindGroupNumber,
-              options.renderPass?.vbos,
               options.workGroupSize,
+              options.renderPass?.vbos,
               options.functions,
               options.variableTypes,
               options.lastBinding
@@ -2843,8 +2846,8 @@ fn vtx_main(
                 block.compute,
                 "compute",
                 options.bindGroupNumber,
-                options.renderPass?.vbos,
                 options.workGroupSize,
+                options.renderPass?.vbos,
                 options.functions,
                 options.variableTypes,
                 options.lastBinding
@@ -2857,8 +2860,8 @@ fn vtx_main(
                 block.vertex,
                 "vertex",
                 block.compute ? block.compute.bindGroupNumber + 1 : options.bindGroupNumber,
-                options.renderPass?.vbos,
                 options.workGroupSize,
+                options.renderPass?.vbos,
                 options.functions,
                 options.variableTypes,
                 options.lastBinding
@@ -2872,8 +2875,8 @@ fn vtx_main(
                 block.fragment,
                 "fragment",
                 block.compute ? block.compute.bindGroupNumber + 1 : options.bindGroupNumber,
-                options.renderPass?.vbos,
                 options.workGroupSize,
+                options.renderPass?.vbos,
                 options.functions,
                 options.variableTypes,
                 options.lastBinding
@@ -4856,10 +4859,6 @@ fn vtx_main(
     const x3 = [1, 2, 3];
     let x4 = new Array(100).fill(vec3(0, 0, 0));
     let x5 = new Array(100).fill(mat2x2(vec2(1, 1), vec2(1, 1)));
-    const N = i32(inputData.length);
-    const k = threadId.x;
-    let sum = vec2f(0, 0);
-    var sum2 = add(sum, sum);
     let width = resX;
     const b = 3 + outp4;
     `const bb : array<f32, 5> = array(1,2,3,4,5)`;
@@ -4872,6 +4871,10 @@ fn vtx_main(
     let D = M + M;
     var Z = outp3 * mat2x2(vec2f(4, -1), vec2f(3, 2));
     var Zz = outp5 + vec3(4, 5, 6);
+    const N = i32(inputData.length);
+    const k = threadId.x;
+    let sum = vec2f(0, 0);
+    var sum2 = add(sum, sum);
     for (let n = 0; n < N; n++) {
       const phase = 2 * Math.PI * f32(k) * f32(n) / f32(N);
       sum = sum + vec2f(
@@ -4891,8 +4894,8 @@ fn vtx_main(
       fn,
       shaderType,
       void 0,
-      vbos,
       void 0,
+      vbos,
       void 0,
       void 0,
       lastBinding

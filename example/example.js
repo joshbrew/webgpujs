@@ -27,7 +27,6 @@ function dft(
     //let x6 = new Array(inputData.length).fill(0.0) //cannot dynamically size const arrays
 
 
-    var sum2 = add(sum,sum);
 
     let width = resX;
 
@@ -52,6 +51,8 @@ function dft(
     const k = threadId.x;
     let sum = vec2f(0.0, 0.0); //will be replaced with var
 
+    var sum2 = add(sum,sum);
+    
     for (let n = 0; n < N; n++) {
         const phase = 2.0 * Math.PI * f32(k) * f32(n) / f32(N);
         sum = sum + vec2f(

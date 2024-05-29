@@ -142,15 +142,11 @@ export class WGSLTranspiler {
     }
 
     static excludedNames = {
-        'color':true,
         'position':true,
-        'uv':true,
-        'vertex':true,
-        'normal':true,
         'pixel':true
     }
 
-    static parse = (fstr, tokens, shaderType='compute') => {
+    static parse = (fstr, tokens, shaderType='compute', vertexBufferOptions) => {
         const ast = [] as any[];
         // Extract all returned variables from the tokens
         const returnMatches = fstr.match(/^(?![ \t]*\/\/).*\breturn .*;/gm);
@@ -158,10 +154,23 @@ export class WGSLTranspiler {
 
         returnedVars = this.flattenStrings(returnedVars);
 
+        if(typeof vertexBufferOptions?.[0] === 'object') vertexBufferOptions.forEach((opt) => {
+            const keys = Object.keys(opt);
+
+            keys.forEach((k) => {
+                if(!(k in this.excludedNames)) {
+                    this.excludedNames[k] = true;
+                }
+            })
+        });
 
         const functionBody = fstr.substring(fstr.indexOf('{')); 
         //basic function splitting, we dont support object inputs right now, anyway. e.g. we could add {x,y,z} objects to define vectors
         let checked = {};
+
+        const exnKeys = Object.keys(this.excludedNames);
+        const biuKeys = Object.keys(this.builtInUniforms);
+
         tokens.forEach(({ token, isInput },i) => {
             if(checked[token]) return; //skip redundancies
             checked[token] = true;
@@ -169,8 +178,8 @@ export class WGSLTranspiler {
                 if(token.includes(v)) {
                     if(
                         (shaderType !== 'compute' &&
-                        Object.keys(this.excludedNames).find((t) => token.includes(t)) ||
-                        Object.keys(this.builtInUniforms).find((t) => token.includes(t)))
+                        exnKeys.find((t) => token.includes(t))) ||
+                        biuKeys.find((t) => token.includes(t))
                     ) {
                         tokens[i].isInput = false;
                     }
@@ -1392,7 +1401,7 @@ fn frag_main(
         let funcStr = typeof func === 'string' ? func : func.toString();
         funcStr = funcStr.replace(/(?<!\w)this\./g, '');
         const tokens = this.tokenize(funcStr);
-        const ast = this.parse(funcStr, tokens, shaderType);
+        const ast = this.parse(funcStr, tokens, shaderType, vertexBufferOptions);
         //console.log(ast);
         let webGPUCode = this.generateDataStructures(
             funcStr, 

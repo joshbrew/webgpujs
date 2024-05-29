@@ -37,14 +37,10 @@ export declare class WGSLTranspiler {
         isInput: boolean;
     }[];
     static excludedNames: {
-        color: boolean;
         position: boolean;
-        uv: boolean;
-        vertex: boolean;
-        normal: boolean;
         pixel: boolean;
     };
-    static parse: (fstr: any, tokens: any, shaderType?: string) => any[];
+    static parse: (fstr: any, tokens: any, shaderType: string, vertexBufferOptions: any) => any[];
     static inferTypeFromValue(value: any, funcStr: any, ast: any, defaultValue?: any): any;
     static flattenStrings(arr: any): any;
     static generateDataStructures(funcStr: any, ast: any, bindGroup?: number, shaderType?: 'compute' | 'fragment' | 'vertex', variableTypes?: {
