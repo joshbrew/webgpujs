@@ -589,10 +589,7 @@
       return { body, extractedFunctions };
     };
     static generateMainFunctionWorkGroup(funcStr, ast, params2, shaderType = "compute", vertexBufferOptions = [{
-      vertex: "vec4<f32>",
-      color: "vec4<f32>",
-      uv: "vec2<f32>",
-      normal: "vec3<f32>"
+      color: "vec4<f32>"
     }], workGroupSize = 256, gpuFuncs) {
       let code = "";
       if (gpuFuncs) {
@@ -1195,125 +1192,125 @@ for (var i: i32 = 0; i < ${size}; i = i + 1) {
     // ... add more replacements as needed
   };
   var wgslTypeSizes32 = {
-    "bool": { alignment: 1, size: 1 },
-    "u8": { alignment: 1, size: 1 },
-    "i8": { alignment: 1, size: 1 },
-    "i32": { alignment: 4, size: 4, vertexFormats: { "sint32": true } },
-    "u32": { alignment: 4, size: 4, vertexFormats: { "uint32": true } },
-    "f32": { alignment: 4, size: 4, vertexFormats: { "float32": true } },
-    "i64": { alignment: 8, size: 8 },
-    "u64": { alignment: 8, size: 8 },
-    "f64": { alignment: 8, size: 8 },
-    "atomic<u32>": { alignment: 4, size: 4 },
-    "atomic<i32>": { alignment: 4, size: 4 },
-    "vec2<i32>": { alignment: 8, size: 8, vertexFormats: { "sint8x2": true, "sint16x2": true, "sint32x2": true } },
-    "vec2<u32>": { alignment: 8, size: 8, vertexFormats: { "uint8x2": true, "uint16x2": true, "uint32x2": true } },
-    "vec2<f32>": { alignment: 8, size: 8, vertexFormats: { "unorm8x2": true, "unorm16x2": true, "float32x2": true, "snorm8x2": true, "snorm16x2": true } },
-    "vec3<i32>": { alignment: 16, size: 12, vertexFormats: { "sint32x3": true } },
-    "vec3<u32>": { alignment: 16, size: 12, vertexFormats: { "uint32x3": true } },
-    "vec3<f32>": { alignment: 16, size: 12, vertexFormats: { "float32x3": true } },
-    "vec4<i32>": { alignment: 16, size: 16, vertexFormats: { "sint8x4": true, "sint16x4": true, "sint32x4": true } },
-    "vec4<u32>": { alignment: 16, size: 16, vertexFormats: { "uint8x4": true, "uint16x4": true, "uint32x4": true } },
-    "vec4<f32>": { alignment: 16, size: 16, vertexFormats: { "unorm8x4": true, "unorm16x4": true, "float32x4": true, "snorm8x4": true, "snorm16x4": true, "float16x4": true } },
-    "vec2i": { alignment: 8, size: 8, vertexFormats: { "sint8x2": true, "sint16x2": true, "sint32x2": true } },
+    "bool": { alignment: 1, size: 1, ct: 1 },
+    "u8": { alignment: 1, size: 1, ct: 1 },
+    "i8": { alignment: 1, size: 1, ct: 1 },
+    "i32": { alignment: 4, size: 4, vertexFormats: { "sint32": true }, ct: 1 },
+    "u32": { alignment: 4, size: 4, vertexFormats: { "uint32": true }, ct: 1 },
+    "f32": { alignment: 4, size: 4, vertexFormats: { "float32": true }, ct: 1 },
+    "i64": { alignment: 8, size: 8, ct: 1 },
+    "u64": { alignment: 8, size: 8, ct: 1 },
+    "f64": { alignment: 8, size: 8, ct: 1 },
+    "atomic<u32>": { alignment: 4, size: 4, ct: 1 },
+    "atomic<i32>": { alignment: 4, size: 4, ct: 1 },
+    "vec2<i32>": { alignment: 8, size: 8, vertexFormats: { "sint8x2": true, "sint16x2": true, "sint32x2": true }, ct: 2 },
+    "vec2<u32>": { alignment: 8, size: 8, vertexFormats: { "uint8x2": true, "uint16x2": true, "uint32x2": true }, ct: 2 },
+    "vec2<f32>": { alignment: 8, size: 8, vertexFormats: { "unorm8x2": true, "unorm16x2": true, "float32x2": true, "snorm8x2": true, "snorm16x2": true }, ct: 2 },
+    "vec3<i32>": { alignment: 16, size: 12, vertexFormats: { "sint32x3": true }, ct: 3 },
+    "vec3<u32>": { alignment: 16, size: 12, vertexFormats: { "uint32x3": true }, ct: 3 },
+    "vec3<f32>": { alignment: 16, size: 12, vertexFormats: { "float32x3": true }, ct: 3 },
+    "vec4<i32>": { alignment: 16, size: 16, vertexFormats: { "sint8x4": true, "sint16x4": true, "sint32x4": true }, ct: 4 },
+    "vec4<u32>": { alignment: 16, size: 16, vertexFormats: { "uint8x4": true, "uint16x4": true, "uint32x4": true }, ct: 4 },
+    "vec4<f32>": { alignment: 16, size: 16, vertexFormats: { "unorm8x4": true, "unorm16x4": true, "float32x4": true, "snorm8x4": true, "snorm16x4": true, "float16x4": true }, ct: 4 },
+    "vec2i": { alignment: 8, size: 8, vertexFormats: { "sint8x2": true, "sint16x2": true, "sint32x2": true }, ct: 2 },
     // shorthand for vec2<i32>
-    "vec2u": { alignment: 8, size: 8, vertexFormats: { "uint8x2": true, "uint16x2": true, "uint32x2": true } },
+    "vec2u": { alignment: 8, size: 8, vertexFormats: { "uint8x2": true, "uint16x2": true, "uint32x2": true }, ct: 2 },
     // shorthand for vec2<u32>
-    "vec2f": { alignment: 8, size: 8, vertexFormats: { "unorm8x2": true, "unorm16x2": true, "float32x2": true, "snorm8x2": true, "snorm16x2": true } },
+    "vec2f": { alignment: 8, size: 8, vertexFormats: { "unorm8x2": true, "unorm16x2": true, "float32x2": true, "snorm8x2": true, "snorm16x2": true }, ct: 2 },
     // shorthand for vec2<f32>
-    "vec3i": { alignment: 16, size: 12, vertexFormats: { "sint32x3": true } },
+    "vec3i": { alignment: 16, size: 12, vertexFormats: { "sint32x3": true }, ct: 3 },
     // shorthand for vec3<i32>
-    "vec3u": { alignment: 16, size: 12, vertexFormats: { "uint32x3": true } },
+    "vec3u": { alignment: 16, size: 12, vertexFormats: { "uint32x3": true }, ct: 3 },
     // shorthand for vec3<u32>
-    "vec3f": { alignment: 16, size: 12, vertexFormats: { "float32x3": true } },
+    "vec3f": { alignment: 16, size: 12, vertexFormats: { "float32x3": true }, ct: 3 },
     // shorthand for vec3<f32>
-    "vec4i": { alignment: 16, size: 16, vertexFormats: { "sint8x4": true, "sint16x4": true, "sint32x4": true } },
+    "vec4i": { alignment: 16, size: 16, vertexFormats: { "sint8x4": true, "sint16x4": true, "sint32x4": true }, ct: 4 },
     // shorthand for vec4<i32>
-    "vec4u": { alignment: 16, size: 16, vertexFormats: { "uint8x4": true, "uint16x4": true, "uint32x4": true } },
+    "vec4u": { alignment: 16, size: 16, vertexFormats: { "uint8x4": true, "uint16x4": true, "uint32x4": true }, ct: 4 },
     // shorthand for vec4<u32>
-    "vec4f": { alignment: 16, size: 16, vertexFormats: { "unorm8x4": true, "unorm16x4": true, "float32x4": true, "snorm8x4": true, "snorm16x4": true, "float16x4": true } },
+    "vec4f": { alignment: 16, size: 16, vertexFormats: { "unorm8x4": true, "unorm16x4": true, "float32x4": true, "snorm8x4": true, "snorm16x4": true, "float16x4": true }, ct: 4 },
     // shorthand for vec4<f32>
     //FYI matrix u and i formats are not supported in wgsl (yet) afaik
-    "mat2x2<f32>": { alignment: 8, size: 16 },
-    "mat2x2<i32>": { alignment: 8, size: 16 },
-    "mat2x2<u32>": { alignment: 8, size: 16 },
-    "mat3x2<f32>": { alignment: 8, size: 24 },
-    "mat3x2<i32>": { alignment: 8, size: 24 },
-    "mat3x2<u32>": { alignment: 8, size: 24 },
-    "mat4x2<f32>": { alignment: 8, size: 32 },
-    "mat4x2<i32>": { alignment: 8, size: 32 },
-    "mat4x2<u32>": { alignment: 8, size: 32 },
-    "mat2x3<f32>": { alignment: 16, size: 32 },
-    "mat2x3<i32>": { alignment: 16, size: 32 },
-    "mat2x3<u32>": { alignment: 16, size: 32 },
-    "mat3x3<f32>": { alignment: 16, size: 48 },
-    "mat3x3<i32>": { alignment: 16, size: 48 },
-    "mat3x3<u32>": { alignment: 16, size: 48 },
-    "mat4x3<f32>": { alignment: 16, size: 64 },
-    "mat4x3<i32>": { alignment: 16, size: 64 },
-    "mat4x3<u32>": { alignment: 16, size: 64 },
-    "mat2x4<f32>": { alignment: 16, size: 32 },
-    "mat2x4<i32>": { alignment: 16, size: 32 },
-    "mat2x4<u32>": { alignment: 16, size: 32 },
-    "mat3x4<f32>": { alignment: 16, size: 48 },
-    "mat3x4<i32>": { alignment: 16, size: 48 },
-    "mat3x4<u32>": { alignment: 16, size: 48 },
-    "mat4x4<f32>": { alignment: 16, size: 64 },
-    "mat4x4<i32>": { alignment: 16, size: 64 },
-    "mat4x4<u32>": { alignment: 16, size: 64 },
-    "mat2x2f": { alignment: 8, size: 16 },
+    "mat2x2<f32>": { alignment: 8, size: 16, ct: 4 },
+    "mat2x2<i32>": { alignment: 8, size: 16, ct: 4 },
+    "mat2x2<u32>": { alignment: 8, size: 16, ct: 4 },
+    "mat3x2<f32>": { alignment: 8, size: 24, ct: 6 },
+    "mat3x2<i32>": { alignment: 8, size: 24, ct: 6 },
+    "mat3x2<u32>": { alignment: 8, size: 24, ct: 6 },
+    "mat4x2<f32>": { alignment: 8, size: 32, ct: 8 },
+    "mat4x2<i32>": { alignment: 8, size: 32, ct: 8 },
+    "mat4x2<u32>": { alignment: 8, size: 32, ct: 8 },
+    "mat2x3<f32>": { alignment: 16, size: 24, ct: 6 },
+    "mat2x3<i32>": { alignment: 16, size: 24, ct: 6 },
+    "mat2x3<u32>": { alignment: 16, size: 24, ct: 6 },
+    "mat3x3<f32>": { alignment: 16, size: 36, ct: 9 },
+    "mat3x3<i32>": { alignment: 16, size: 36, ct: 9 },
+    "mat3x3<u32>": { alignment: 16, size: 36, ct: 9 },
+    "mat4x3<f32>": { alignment: 16, size: 48, ct: 12 },
+    "mat4x3<i32>": { alignment: 16, size: 48, ct: 12 },
+    "mat4x3<u32>": { alignment: 16, size: 48, ct: 12 },
+    "mat2x4<f32>": { alignment: 16, size: 32, ct: 8 },
+    "mat2x4<i32>": { alignment: 16, size: 32, ct: 8 },
+    "mat2x4<u32>": { alignment: 16, size: 32, ct: 8 },
+    "mat3x4<f32>": { alignment: 16, size: 48, ct: 12 },
+    "mat3x4<i32>": { alignment: 16, size: 48, ct: 12 },
+    "mat3x4<u32>": { alignment: 16, size: 48, ct: 12 },
+    "mat4x4<f32>": { alignment: 16, size: 64, ct: 16 },
+    "mat4x4<i32>": { alignment: 16, size: 64, ct: 16 },
+    "mat4x4<u32>": { alignment: 16, size: 64, ct: 16 },
+    "mat2x2f": { alignment: 8, size: 16, ct: 4 },
     // shorthand for mat2x2<f32>
-    "mat2x2i": { alignment: 8, size: 16 },
+    "mat2x2i": { alignment: 8, size: 16, ct: 4 },
     // shorthand for mat2x2<i32>
-    "mat2x2u": { alignment: 8, size: 16 },
+    "mat2x2u": { alignment: 8, size: 16, ct: 4 },
     // shorthand for mat2x2<u32>
-    "mat3x2f": { alignment: 8, size: 24 },
+    "mat3x2f": { alignment: 8, size: 24, ct: 6 },
     // shorthand for mat3x2<f32>
-    "mat3x2i": { alignment: 8, size: 24 },
+    "mat3x2i": { alignment: 8, size: 24, ct: 6 },
     // shorthand for mat3x2<i32>
-    "mat3x2u": { alignment: 8, size: 24 },
+    "mat3x2u": { alignment: 8, size: 24, ct: 6 },
     // shorthand for mat3x2<u32>
-    "mat4x2f": { alignment: 8, size: 32 },
+    "mat4x2f": { alignment: 8, size: 32, ct: 8 },
     // shorthand for mat4x2<f32>
-    "mat4x2i": { alignment: 8, size: 32 },
+    "mat4x2i": { alignment: 8, size: 32, ct: 8 },
     // shorthand for mat4x2<i32>
-    "mat4x2u": { alignment: 8, size: 32 },
+    "mat4x2u": { alignment: 8, size: 32, ct: 8 },
     // shorthand for mat4x2<u32>
-    "mat2x3f": { alignment: 16, size: 32 },
+    "mat2x3f": { alignment: 16, size: 24, ct: 6 },
     // shorthand for mat2x3<f32>
-    "mat2x3i": { alignment: 16, size: 32 },
+    "mat2x3i": { alignment: 16, size: 24, ct: 6 },
     // shorthand for mat2x3<i32>
-    "mat2x3u": { alignment: 16, size: 32 },
+    "mat2x3u": { alignment: 16, size: 24, ct: 6 },
     // shorthand for mat2x3<u32>
-    "mat3x3f": { alignment: 16, size: 48 },
+    "mat3x3f": { alignment: 16, size: 36, ct: 9 },
     // shorthand for mat3x3<f32>
-    "mat3x3i": { alignment: 16, size: 48 },
+    "mat3x3i": { alignment: 16, size: 36, ct: 9 },
     // shorthand for mat3x3<i32>
-    "mat3x3u": { alignment: 16, size: 48 },
+    "mat3x3u": { alignment: 16, size: 36, ct: 9 },
     // shorthand for mat3x3<u32>
-    "mat4x3f": { alignment: 16, size: 64 },
+    "mat4x3f": { alignment: 16, size: 48, ct: 12 },
     // shorthand for mat4x3<f32>
-    "mat4x3i": { alignment: 16, size: 64 },
+    "mat4x3i": { alignment: 16, size: 48, ct: 12 },
     // shorthand for mat4x3<i32>
-    "mat4x3u": { alignment: 16, size: 64 },
+    "mat4x3u": { alignment: 16, size: 48, ct: 12 },
     // shorthand for mat4x3<u32>
-    "mat2x4f": { alignment: 16, size: 32 },
+    "mat2x4f": { alignment: 16, size: 32, ct: 8 },
     // shorthand for mat2x4<f32>
-    "mat2x4i": { alignment: 16, size: 32 },
+    "mat2x4i": { alignment: 16, size: 32, ct: 8 },
     // shorthand for mat2x4<i32>
-    "mat2x4u": { alignment: 16, size: 32 },
+    "mat2x4u": { alignment: 16, size: 32, ct: 8 },
     // shorthand for mat2x4<u32>
-    "mat3x4f": { alignment: 16, size: 48 },
+    "mat3x4f": { alignment: 16, size: 48, ct: 12 },
     // shorthand for mat3x4<f32>
-    "mat3x4i": { alignment: 16, size: 48 },
+    "mat3x4i": { alignment: 16, size: 48, ct: 12 },
     // shorthand for mat3x4<i32>
-    "mat3x4u": { alignment: 16, size: 48 },
+    "mat3x4u": { alignment: 16, size: 48, ct: 12 },
     // shorthand for mat3x4<u32>
-    "mat4x4f": { alignment: 16, size: 64 },
+    "mat4x4f": { alignment: 16, size: 64, ct: 16 },
     // shorthand for mat4x4<f32>
-    "mat4x4i": { alignment: 16, size: 64 },
+    "mat4x4i": { alignment: 16, size: 64, ct: 16 },
     // shorthand for mat4x4<i32>
-    "mat4x4u": { alignment: 16, size: 64 }
+    "mat4x4u": { alignment: 16, size: 64, ct: 16 }
     // shorthand for mat4x4<u32>
   };
   var wgslTypeSizes16 = {
@@ -1847,6 +1844,7 @@ fn vtx_main(
     bindGroupNumber;
     bindGroupLayout;
     bindGroupLayoutEntries;
+    vertexBufferOptions;
     constructor(props) {
       Object.assign(this, props);
       const bIUCopy = {};
@@ -2006,55 +2004,61 @@ fn vtx_main(
         bufferGroup = this.makeBufferGroup(bindGroupNumber);
       }
       if (vertices) {
-        if (!isTypedArray(vertices)) {
-          if (!Array.isArray(vertices)) {
-            vertices = ShaderHelper.combineVertices(
-              typeof vertices.vertex?.[0] === "object" ? ShaderHelper.flattenArray(vertices.vertex) : vertices.vertex,
-              typeof vertices.color?.[0] === "object" ? ShaderHelper.flattenArray(vertices.color) : vertices.color,
-              typeof vertices.uv?.[0] === "object" ? ShaderHelper.flattenArray(vertices.uv) : vertices.uv,
-              typeof vertices.normal?.[0] === "object" ? ShaderHelper.flattenArray(vertices.normal) : vertices.normal
-            );
-          } else vertices = new Float32Array(typeof vertices === "object" ? ShaderHelper.flattenArray(vertices) : vertices);
-        }
-        if (indexBuffer || bufferGroup.vertexBuffers?.[index]?.size !== vertices.byteLength) {
-          if (indexBuffer) {
-            if (!bufferGroup.indexCount) bufferGroup.indexCount = vertices.length;
-          } else {
-            if (!bufferGroup.vertexBuffers) bufferGroup.vertexBuffers = [];
-            if (!bufferGroup.vertexCount) bufferGroup.vertexCount = vertices.length / 13;
-          }
-          if (indexBuffer) {
-            const vertexBuffer = this.device.createBuffer({
-              size: vertices.byteLength,
-              usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC | GPUBufferUsage.INDEX
-              //assume read/write
-            });
-            bufferGroup.indexBuffer = vertexBuffer;
-          } else {
-            const vertexBuffer = this.device.createBuffer({
-              size: vertices.byteLength,
-              usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC
-              //assume read/write
-            });
-            bufferGroup.vertexBuffers[index] = vertexBuffer;
-          }
-        }
-        if (indexBuffer) {
-          this.device.queue.writeBuffer(
-            bufferGroup.indexBuffer,
-            bufferOffset,
-            vertices,
-            dataOffset,
-            vertices.length
-          );
+        if (vertices instanceof GPUBuffer) {
+          if (!bufferGroup.vertexBuffers) bufferGroup.vertexBuffers = [];
+          bufferGroup.vertexBuffers[index] = vertices;
         } else {
-          this.device.queue.writeBuffer(
-            bufferGroup.vertexBuffers[index],
-            bufferOffset,
-            vertices,
-            dataOffset,
-            vertices.length
-          );
+          if (!isTypedArray(vertices)) {
+            if (!Array.isArray(vertices)) {
+              vertices = ShaderHelper.combineVertices(
+                typeof vertices.vertex?.[0] === "object" ? ShaderHelper.flattenArray(vertices.vertex) : vertices.vertex,
+                typeof vertices.color?.[0] === "object" ? ShaderHelper.flattenArray(vertices.color) : vertices.color,
+                typeof vertices.uv?.[0] === "object" ? ShaderHelper.flattenArray(vertices.uv) : vertices.uv,
+                typeof vertices.normal?.[0] === "object" ? ShaderHelper.flattenArray(vertices.normal) : vertices.normal
+              );
+            } else
+              vertices = new Float32Array(typeof vertices === "object" ? ShaderHelper.flattenArray(vertices) : vertices);
+          }
+          if (indexBuffer || bufferGroup.vertexBuffers?.[index]?.size !== vertices.byteLength) {
+            if (indexBuffer) {
+              if (!bufferGroup.indexCount) bufferGroup.indexCount = vertices.length;
+            } else {
+              if (!bufferGroup.vertexBuffers) bufferGroup.vertexBuffers = [];
+              if (!bufferGroup.vertexCount) bufferGroup.vertexCount = vertices.length / (this.vertexBufferOptions[index]?.COUNT || 4);
+            }
+            if (indexBuffer) {
+              const vertexBuffer = this.device.createBuffer({
+                size: vertices.byteLength,
+                usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC | GPUBufferUsage.INDEX
+                //assume read/write
+              });
+              bufferGroup.indexBuffer = vertexBuffer;
+            } else {
+              const vertexBuffer = this.device.createBuffer({
+                size: vertices.byteLength,
+                usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC
+                //assume read/write
+              });
+              bufferGroup.vertexBuffers[index] = vertexBuffer;
+            }
+          }
+          if (indexBuffer) {
+            this.device.queue.writeBuffer(
+              bufferGroup.indexBuffer,
+              bufferOffset,
+              vertices,
+              dataOffset,
+              vertices.length
+            );
+          } else {
+            this.device.queue.writeBuffer(
+              bufferGroup.vertexBuffers[index],
+              bufferOffset,
+              vertices,
+              dataOffset,
+              vertices.length
+            );
+          }
         }
       }
     };
@@ -2196,14 +2200,17 @@ fn vtx_main(
     }], swapChainFormat = navigator.gpu.getPreferredCanvasFormat(), renderPipelineDescriptor = {}) => {
       const vertexBuffers = [];
       let loc = 0;
-      vertexBufferOptions.forEach((opt) => {
+      this.vertexBufferOptions = vertexBufferOptions;
+      vertexBufferOptions.forEach((opt, i) => {
         let arrayStride = 0;
         const attributes = [];
+        let ct = 0;
         for (const key in opt) {
           const typeInfo = WGSLTypeSizes[opt[key]];
           const format = Object.keys(typeInfo.vertexFormats).find((f) => {
             if (f.startsWith("float32")) return true;
           }) || Object.values(typeInfo.vertexFormats)[0];
+          ct += typeInfo.ct;
           attributes.push({
             format,
             offset: arrayStride,
@@ -2212,6 +2219,7 @@ fn vtx_main(
           arrayStride += typeInfo.size;
           loc++;
         }
+        vertexBufferOptions[i].COUNT = ct;
         vertexBuffers.push({
           arrayStride,
           attributes
@@ -2280,10 +2288,7 @@ fn vtx_main(
       };
     };
     updateGraphicsPipeline = (vertexBufferOptions = [{
-      vertex: "vec4<f32>",
-      color: "vec4<f32>",
-      uv: "vec2<f32>",
-      normal: "vec3<f32>"
+      color: "vec4<f32>"
     }], contextSettings, renderPipelineDescriptor, renderPassDescriptor) => {
       const swapChainFormat = navigator.gpu.getPreferredCanvasFormat();
       this.context?.configure(contextSettings ? contextSettings : {
@@ -2444,13 +2449,17 @@ fn vtx_main(
                 );
                 inputBuffers[inpBuf_i].unmap();
               } else {
-                inputBuffers[inpBuf_i] = this.device.createBuffer({
-                  size: inputs[inpBuf_i] ? inputs[inpBuf_i].byteLength ? inputs[inpBuf_i].byteLength : inputs[inpBuf_i]?.length ? inputs[inpBuf_i].length * 4 : 8 : 8,
-                  usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST,
-                  mappedAtCreation: true
-                });
-                new Float32Array(inputBuffers[inpBuf_i].getMappedRange()).set(inputs[inpBuf_i]);
-                inputBuffers[inpBuf_i].unmap();
+                if (inputs[inpBuf_i] instanceof GPUBuffer) {
+                  inputBuffers[inpBuf_i] = inputs[inpBuf_i];
+                } else {
+                  inputBuffers[inpBuf_i] = this.device.createBuffer({
+                    size: inputs[inpBuf_i] ? inputs[inpBuf_i].byteLength ? inputs[inpBuf_i].byteLength : inputs[inpBuf_i]?.length ? inputs[inpBuf_i].length * 4 : 8 : 8,
+                    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST | GPUBufferUsage.VERTEX,
+                    mappedAtCreation: true
+                  });
+                  new Float32Array(inputBuffers[inpBuf_i].getMappedRange()).set(inputs[inpBuf_i]);
+                  inputBuffers[inpBuf_i].unmap();
+                }
               }
             }
             inpBuf_i++;

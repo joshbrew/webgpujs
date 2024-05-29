@@ -684,10 +684,7 @@ export class WGSLTranspiler {
         params:any, 
         shaderType ='compute', 
         vertexBufferOptions:{[key:string]:string}[]=[{
-            vertex:'vec4<f32>',
-            color:'vec4<f32>',
-            uv:'vec2<f32>',
-            normal:'vec3<f32>'
+            color:'vec4<f32>'
         }], 
         workGroupSize=256, 
         gpuFuncs:(Function|string)[]
@@ -1499,95 +1496,95 @@ export const replacements = {
 
 
 const wgslTypeSizes32 = {
-    'bool': { alignment: 1, size: 1 },
-    'u8': { alignment: 1, size: 1 },
-    'i8': { alignment: 1, size: 1 },
-    'i32': { alignment: 4, size: 4, vertexFormats: { "sint32": true } },
-    'u32': { alignment: 4, size: 4, vertexFormats: { "uint32": true } },
-    'f32': { alignment: 4, size: 4, vertexFormats: { "float32": true } },
-    'i64': { alignment: 8, size: 8 },
-    'u64': { alignment: 8, size: 8 },
-    'f64': { alignment: 8, size: 8 },
+    'bool': { alignment: 1, size: 1, ct:1 },
+    'u8': { alignment: 1, size: 1, ct:1 },
+    'i8': { alignment: 1, size: 1, ct:1 },
+    'i32': { alignment: 4, size: 4, vertexFormats: { "sint32": true }, ct:1 },
+    'u32': { alignment: 4, size: 4, vertexFormats: { "uint32": true }, ct:1 },
+    'f32': { alignment: 4, size: 4, vertexFormats: { "float32": true }, ct:1 },
+    'i64': { alignment: 8, size: 8, ct:1 },
+    'u64': { alignment: 8, size: 8, ct:1 },
+    'f64': { alignment: 8, size: 8, ct:1 },
 
-    'atomic<u32>': { alignment: 4, size: 4 },
-    'atomic<i32>': { alignment: 4, size: 4 },
+    'atomic<u32>': { alignment: 4, size: 4, ct:1 },
+    'atomic<i32>': { alignment: 4, size: 4 , ct:1},
 
-    'vec2<i32>': { alignment: 8, size: 8, vertexFormats: { "sint8x2": true, "sint16x2": true, "sint32x2": true } },
-    'vec2<u32>': { alignment: 8, size: 8, vertexFormats: { "uint8x2": true, "uint16x2": true, "uint32x2": true } },
-    'vec2<f32>': { alignment: 8, size: 8, vertexFormats: { "unorm8x2": true, "unorm16x2": true, "float32x2": true, "snorm8x2": true, "snorm16x2": true } },
-    'vec3<i32>': { alignment: 16, size: 12, vertexFormats: { "sint32x3": true } },
-    'vec3<u32>': { alignment: 16, size: 12, vertexFormats: { "uint32x3": true } },
-    'vec3<f32>': { alignment: 16, size: 12, vertexFormats: { "float32x3": true } },
-    'vec4<i32>': { alignment: 16, size: 16, vertexFormats: { "sint8x4": true, "sint16x4": true, "sint32x4": true } },
-    'vec4<u32>': { alignment: 16, size: 16, vertexFormats: { "uint8x4": true, "uint16x4": true, "uint32x4": true } },
-    'vec4<f32>': { alignment: 16, size: 16, vertexFormats: { "unorm8x4": true, "unorm16x4": true, "float32x4": true, "snorm8x4": true, "snorm16x4": true, "float16x4": true } },
+    'vec2<i32>': { alignment: 8, size: 8, vertexFormats: { "sint8x2": true, "sint16x2": true, "sint32x2": true }, ct:2 },
+    'vec2<u32>': { alignment: 8, size: 8, vertexFormats: { "uint8x2": true, "uint16x2": true, "uint32x2": true }, ct:2 },
+    'vec2<f32>': { alignment: 8, size: 8, vertexFormats: { "unorm8x2": true, "unorm16x2": true, "float32x2": true, "snorm8x2": true, "snorm16x2": true }, ct:2 },
+    'vec3<i32>': { alignment: 16, size: 12, vertexFormats: { "sint32x3": true }, ct:3 },
+    'vec3<u32>': { alignment: 16, size: 12, vertexFormats: { "uint32x3": true }, ct:3 },
+    'vec3<f32>': { alignment: 16, size: 12, vertexFormats: { "float32x3": true }, ct:3 },
+    'vec4<i32>': { alignment: 16, size: 16, vertexFormats: { "sint8x4": true, "sint16x4": true, "sint32x4": true }, ct:4 },
+    'vec4<u32>': { alignment: 16, size: 16, vertexFormats: { "uint8x4": true, "uint16x4": true, "uint32x4": true }, ct:4 },
+    'vec4<f32>': { alignment: 16, size: 16, vertexFormats: { "unorm8x4": true, "unorm16x4": true, "float32x4": true, "snorm8x4": true, "snorm16x4": true, "float16x4": true }, ct:4 },
     
-    'vec2i': { alignment: 8, size: 8, vertexFormats: { "sint8x2": true, "sint16x2": true, "sint32x2": true } }, // shorthand for vec2<i32>
-    'vec2u': { alignment: 8, size: 8, vertexFormats: { "uint8x2": true, "uint16x2": true, "uint32x2": true } }, // shorthand for vec2<u32>
-    'vec2f': { alignment: 8, size: 8, vertexFormats: { "unorm8x2": true, "unorm16x2": true, "float32x2": true, "snorm8x2": true, "snorm16x2": true } }, // shorthand for vec2<f32>
-    'vec3i': { alignment: 16, size: 12, vertexFormats: { "sint32x3": true } }, // shorthand for vec3<i32>
-    'vec3u': { alignment: 16, size: 12, vertexFormats: { "uint32x3": true } }, // shorthand for vec3<u32>
-    'vec3f': { alignment: 16, size: 12, vertexFormats: { "float32x3": true } }, // shorthand for vec3<f32>
-    'vec4i': { alignment: 16, size: 16, vertexFormats: { "sint8x4": true, "sint16x4": true, "sint32x4": true } }, // shorthand for vec4<i32>
-    'vec4u': { alignment: 16, size: 16, vertexFormats: { "uint8x4": true, "uint16x4": true, "uint32x4": true } }, // shorthand for vec4<u32>
-    'vec4f': { alignment: 16, size: 16, vertexFormats: { "unorm8x4": true, "unorm16x4": true, "float32x4": true, "snorm8x4": true, "snorm16x4": true, "float16x4": true } }, // shorthand for vec4<f32>
+    'vec2i': { alignment: 8, size: 8, vertexFormats: { "sint8x2": true, "sint16x2": true, "sint32x2": true }, ct:2 }, // shorthand for vec2<i32>
+    'vec2u': { alignment: 8, size: 8, vertexFormats: { "uint8x2": true, "uint16x2": true, "uint32x2": true }, ct:2 }, // shorthand for vec2<u32>
+    'vec2f': { alignment: 8, size: 8, vertexFormats: { "unorm8x2": true, "unorm16x2": true, "float32x2": true, "snorm8x2": true, "snorm16x2": true }, ct:2 }, // shorthand for vec2<f32>
+    'vec3i': { alignment: 16, size: 12, vertexFormats: { "sint32x3": true }, ct:3 }, // shorthand for vec3<i32>
+    'vec3u': { alignment: 16, size: 12, vertexFormats: { "uint32x3": true }, ct:3 }, // shorthand for vec3<u32>
+    'vec3f': { alignment: 16, size: 12, vertexFormats: { "float32x3": true }, ct:3 }, // shorthand for vec3<f32>
+    'vec4i': { alignment: 16, size: 16, vertexFormats: { "sint8x4": true, "sint16x4": true, "sint32x4": true }, ct:4 }, // shorthand for vec4<i32>
+    'vec4u': { alignment: 16, size: 16, vertexFormats: { "uint8x4": true, "uint16x4": true, "uint32x4": true }, ct:4 }, // shorthand for vec4<u32>
+    'vec4f': { alignment: 16, size: 16, vertexFormats: { "unorm8x4": true, "unorm16x4": true, "float32x4": true, "snorm8x4": true, "snorm16x4": true, "float16x4": true }, ct:4 }, // shorthand for vec4<f32>
 
     //FYI matrix u and i formats are not supported in wgsl (yet) afaik
-    'mat2x2<f32>': { alignment: 8, size: 16 },
-    'mat2x2<i32>': { alignment: 8, size: 16 },
-    'mat2x2<u32>': { alignment: 8, size: 16 },
-    'mat3x2<f32>': { alignment: 8, size: 24 },
-    'mat3x2<i32>': { alignment: 8, size: 24 },
-    'mat3x2<u32>': { alignment: 8, size: 24 },
-    'mat4x2<f32>': { alignment: 8, size: 32 },
-    'mat4x2<i32>': { alignment: 8, size: 32 },
-    'mat4x2<u32>': { alignment: 8, size: 32 },
-    'mat2x3<f32>': { alignment: 16, size: 32 },
-    'mat2x3<i32>': { alignment: 16, size: 32 },
-    'mat2x3<u32>': { alignment: 16, size: 32 },
-    'mat3x3<f32>': { alignment: 16, size: 48 },
-    'mat3x3<i32>': { alignment: 16, size: 48 },
-    'mat3x3<u32>': { alignment: 16, size: 48 },
-    'mat4x3<f32>': { alignment: 16, size: 64 },
-    'mat4x3<i32>': { alignment: 16, size: 64 },
-    'mat4x3<u32>': { alignment: 16, size: 64 },
-    'mat2x4<f32>': { alignment: 16, size: 32 },
-    'mat2x4<i32>': { alignment: 16, size: 32 },
-    'mat2x4<u32>': { alignment: 16, size: 32 },
-    'mat3x4<f32>': { alignment: 16, size: 48 },
-    'mat3x4<i32>': { alignment: 16, size: 48 },
-    'mat3x4<u32>': { alignment: 16, size: 48 },
-    'mat4x4<f32>': { alignment: 16, size: 64 },
-    'mat4x4<i32>': { alignment: 16, size: 64 },
-    'mat4x4<u32>': { alignment: 16, size: 64 },
+    'mat2x2<f32>': { alignment: 8, size: 16, ct:4 },
+    'mat2x2<i32>': { alignment: 8, size: 16, ct:4 },
+    'mat2x2<u32>': { alignment: 8, size: 16, ct:4 },
+    'mat3x2<f32>': { alignment: 8, size: 24, ct:6 },
+    'mat3x2<i32>': { alignment: 8, size: 24, ct:6 },
+    'mat3x2<u32>': { alignment: 8, size: 24, ct:6 },
+    'mat4x2<f32>': { alignment: 8, size: 32, ct:8 },
+    'mat4x2<i32>': { alignment: 8, size: 32, ct:8 },
+    'mat4x2<u32>': { alignment: 8, size: 32, ct:8 },
+    'mat2x3<f32>': { alignment: 16, size: 24, ct:6 },
+    'mat2x3<i32>': { alignment: 16, size: 24, ct:6 },
+    'mat2x3<u32>': { alignment: 16, size: 24, ct:6 },
+    'mat3x3<f32>': { alignment: 16, size: 36, ct:9 },
+    'mat3x3<i32>': { alignment: 16, size: 36, ct:9 },
+    'mat3x3<u32>': { alignment: 16, size: 36, ct:9 },
+    'mat4x3<f32>': { alignment: 16, size: 48, ct:12 },
+    'mat4x3<i32>': { alignment: 16, size: 48, ct:12 },
+    'mat4x3<u32>': { alignment: 16, size: 48, ct:12 },
+    'mat2x4<f32>': { alignment: 16, size: 32, ct:8 },
+    'mat2x4<i32>': { alignment: 16, size: 32, ct:8 },
+    'mat2x4<u32>': { alignment: 16, size: 32, ct:8 },
+    'mat3x4<f32>': { alignment: 16, size: 48, ct:12 },
+    'mat3x4<i32>': { alignment: 16, size: 48, ct:12 },
+    'mat3x4<u32>': { alignment: 16, size: 48, ct:12 },
+    'mat4x4<f32>': { alignment: 16, size: 64, ct:16 },
+    'mat4x4<i32>': { alignment: 16, size: 64, ct:16 },
+    'mat4x4<u32>': { alignment: 16, size: 64, ct:16 },
 
-    'mat2x2f': { alignment: 8, size: 16 }, // shorthand for mat2x2<f32>
-    'mat2x2i': { alignment: 8, size: 16 }, // shorthand for mat2x2<i32>
-    'mat2x2u': { alignment: 8, size: 16 }, // shorthand for mat2x2<u32>
-    'mat3x2f': { alignment: 8, size: 24 }, // shorthand for mat3x2<f32>
-    'mat3x2i': { alignment: 8, size: 24 }, // shorthand for mat3x2<i32>
-    'mat3x2u': { alignment: 8, size: 24 }, // shorthand for mat3x2<u32>
-    'mat4x2f': { alignment: 8, size: 32 }, // shorthand for mat4x2<f32>
-    'mat4x2i': { alignment: 8, size: 32 }, // shorthand for mat4x2<i32>
-    'mat4x2u': { alignment: 8, size: 32 }, // shorthand for mat4x2<u32>
-    'mat2x3f': { alignment: 16, size: 32 }, // shorthand for mat2x3<f32>
-    'mat2x3i': { alignment: 16, size: 32 }, // shorthand for mat2x3<i32>
-    'mat2x3u': { alignment: 16, size: 32 }, // shorthand for mat2x3<u32>
-    'mat3x3f': { alignment: 16, size: 48 }, // shorthand for mat3x3<f32>
-    'mat3x3i': { alignment: 16, size: 48 }, // shorthand for mat3x3<i32>
-    'mat3x3u': { alignment: 16, size: 48 }, // shorthand for mat3x3<u32>
-    'mat4x3f': { alignment: 16, size: 64 }, // shorthand for mat4x3<f32>
-    'mat4x3i': { alignment: 16, size: 64 }, // shorthand for mat4x3<i32>
-    'mat4x3u': { alignment: 16, size: 64 }, // shorthand for mat4x3<u32>
-    'mat2x4f': { alignment: 16, size: 32 }, // shorthand for mat2x4<f32>
-    'mat2x4i': { alignment: 16, size: 32 }, // shorthand for mat2x4<i32>
-    'mat2x4u': { alignment: 16, size: 32 }, // shorthand for mat2x4<u32>
-    'mat3x4f': { alignment: 16, size: 48 }, // shorthand for mat3x4<f32>
-    'mat3x4i': { alignment: 16, size: 48 }, // shorthand for mat3x4<i32>
-    'mat3x4u': { alignment: 16, size: 48 }, // shorthand for mat3x4<u32>
-    'mat4x4f': { alignment: 16, size: 64 }, // shorthand for mat4x4<f32>
-    'mat4x4i': { alignment: 16, size: 64 }, // shorthand for mat4x4<i32>
-    'mat4x4u': { alignment: 16, size: 64 }, // shorthand for mat4x4<u32>
+    'mat2x2f': { alignment: 8, size: 16, ct:4 }, // shorthand for mat2x2<f32>
+    'mat2x2i': { alignment: 8, size: 16, ct:4 }, // shorthand for mat2x2<i32>
+    'mat2x2u': { alignment: 8, size: 16, ct:4 }, // shorthand for mat2x2<u32>
+    'mat3x2f': { alignment: 8, size: 24, ct:6 }, // shorthand for mat3x2<f32>
+    'mat3x2i': { alignment: 8, size: 24, ct:6 }, // shorthand for mat3x2<i32>
+    'mat3x2u': { alignment: 8, size: 24, ct:6 }, // shorthand for mat3x2<u32>
+    'mat4x2f': { alignment: 8, size: 32, ct:8 }, // shorthand for mat4x2<f32>
+    'mat4x2i': { alignment: 8, size: 32, ct:8 }, // shorthand for mat4x2<i32>
+    'mat4x2u': { alignment: 8, size: 32, ct:8 }, // shorthand for mat4x2<u32>
+    'mat2x3f': { alignment: 16, size: 24, ct:6 }, // shorthand for mat2x3<f32>
+    'mat2x3i': { alignment: 16, size: 24, ct:6 }, // shorthand for mat2x3<i32>
+    'mat2x3u': { alignment: 16, size: 24, ct:6 }, // shorthand for mat2x3<u32>
+    'mat3x3f': { alignment: 16, size: 36, ct:9 }, // shorthand for mat3x3<f32>
+    'mat3x3i': { alignment: 16, size: 36, ct:9 }, // shorthand for mat3x3<i32>
+    'mat3x3u': { alignment: 16, size: 36, ct:9 }, // shorthand for mat3x3<u32>
+    'mat4x3f': { alignment: 16, size: 48, ct:12 }, // shorthand for mat4x3<f32>
+    'mat4x3i': { alignment: 16, size: 48, ct:12 }, // shorthand for mat4x3<i32>
+    'mat4x3u': { alignment: 16, size: 48, ct:12 }, // shorthand for mat4x3<u32>
+    'mat2x4f': { alignment: 16, size: 32, ct:8 }, // shorthand for mat2x4<f32>
+    'mat2x4i': { alignment: 16, size: 32, ct:8 }, // shorthand for mat2x4<i32>
+    'mat2x4u': { alignment: 16, size: 32, ct:8 }, // shorthand for mat2x4<u32>
+    'mat3x4f': { alignment: 16, size: 48, ct:12 }, // shorthand for mat3x4<f32>
+    'mat3x4i': { alignment: 16, size: 48, ct:12 }, // shorthand for mat3x4<i32>
+    'mat3x4u': { alignment: 16, size: 48, ct:12 }, // shorthand for mat3x4<u32>
+    'mat4x4f': { alignment: 16, size: 64, ct:16 }, // shorthand for mat4x4<f32>
+    'mat4x4i': { alignment: 16, size: 64, ct:16 }, // shorthand for mat4x4<i32>
+    'mat4x4u': { alignment: 16, size: 64, ct:16 }, // shorthand for mat4x4<u32>
 
 
 };

@@ -470,6 +470,8 @@ export class ShaderContext {
     bindGroupLayout:GPUBindGroupLayout;
     bindGroupLayoutEntries:GPUBindGroupLayoutEntry[];
 
+    vertexBufferOptions:{[key:string]:string}[];
+
     constructor(props?) {
         Object.assign(this, props);
 
@@ -656,70 +658,73 @@ export class ShaderContext {
             bufferGroup = this.makeBufferGroup(bindGroupNumber);
         }
         if(vertices) {
-            if(!isTypedArray(vertices)) {
-                if(!Array.isArray(vertices)) {
-                    vertices = ShaderHelper.combineVertices(
-                        typeof vertices.vertex?.[0] === 'object' ? ShaderHelper.flattenArray(vertices.vertex) : vertices.vertex,
-                        typeof vertices.color?.[0] === 'object' ? ShaderHelper.flattenArray(vertices.color) : vertices.color,
-                        typeof vertices.uv?.[0] === 'object' ? ShaderHelper.flattenArray(vertices.uv) : vertices.uv,
-                        typeof vertices.normal?.[0] === 'object' ? ShaderHelper.flattenArray(vertices.normal) : vertices.normal,
+            if(vertices instanceof GPUBuffer) {
+                if(!bufferGroup.vertexBuffers) bufferGroup.vertexBuffers = [] as any[];
+                bufferGroup.vertexBuffers[index] = vertices;
+            } else {
+                if(!isTypedArray(vertices)) {
+                    if(!Array.isArray(vertices)) {
+                        vertices = ShaderHelper.combineVertices(
+                            typeof vertices.vertex?.[0] === 'object' ? ShaderHelper.flattenArray(vertices.vertex) : vertices.vertex,
+                            typeof vertices.color?.[0] === 'object' ? ShaderHelper.flattenArray(vertices.color) : vertices.color,
+                            typeof vertices.uv?.[0] === 'object' ? ShaderHelper.flattenArray(vertices.uv) : vertices.uv,
+                            typeof vertices.normal?.[0] === 'object' ? ShaderHelper.flattenArray(vertices.normal) : vertices.normal,
+                        );
+                    }
+                    else 
+                        vertices = new Float32Array(typeof vertices === 'object' ? ShaderHelper.flattenArray(vertices) : vertices);
+                }
+    
+                if(indexBuffer || bufferGroup.vertexBuffers?.[index]?.size !== vertices.byteLength) {
+    
+                    if(indexBuffer) {
+                        if(!bufferGroup.indexCount) bufferGroup.indexCount = vertices.length;
+                    }
+                    else {
+                        if(!bufferGroup.vertexBuffers) bufferGroup.vertexBuffers = [] as any[];
+                        if(!bufferGroup.vertexCount) bufferGroup.vertexCount = vertices.length / ((this.vertexBufferOptions[index] as any)?.COUNT || 4);
+                    }
+    
+                    if(indexBuffer) {
+                        const vertexBuffer = this.device.createBuffer({
+                            size: vertices.byteLength,
+                            usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC | GPUBufferUsage.INDEX, 
+                            //assume read/write
+                        });
+                        bufferGroup.indexBuffer = vertexBuffer;
+                    }
+                    else {
+                        const vertexBuffer = this.device.createBuffer({
+                            size: vertices.byteLength,
+                            usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC, 
+                            //assume read/write
+                        });
+                        bufferGroup.vertexBuffers[index] = vertexBuffer;
+                    }
+                }
+    
+    
+                if(indexBuffer) {
+                    // Copy the vertex data over to the GPUBuffer using the writeBuffer() utility function
+                    this.device.queue.writeBuffer(
+                        bufferGroup.indexBuffer, 
+                        bufferOffset, 
+                        vertices, 
+                        dataOffset, 
+                        vertices.length
                     );
                 }
-                else vertices = new Float32Array(typeof vertices === 'object' ? ShaderHelper.flattenArray(vertices) : vertices);
-            }
-
-            if(indexBuffer || bufferGroup.vertexBuffers?.[index]?.size !== vertices.byteLength) {
-
-                if(indexBuffer) {
-                    if(!bufferGroup.indexCount) bufferGroup.indexCount = vertices.length;
-                }
                 else {
-                    if(!bufferGroup.vertexBuffers) bufferGroup.vertexBuffers = [] as any[];
-                    if(!bufferGroup.vertexCount) bufferGroup.vertexCount = vertices.length / 13;
-                }
-
-               
-
-                if(indexBuffer) {
-                    const vertexBuffer = this.device.createBuffer({
-                        size: vertices.byteLength,
-                        usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC | GPUBufferUsage.INDEX, 
-                        //assume read/write
-                    });
-                    bufferGroup.indexBuffer = vertexBuffer;
-                }
-                else {
-                    const vertexBuffer = this.device.createBuffer({
-                        size: vertices.byteLength,
-                        usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC, 
-                        //assume read/write
-                    });
-                    bufferGroup.vertexBuffers[index] = vertexBuffer;
+                    // Copy the vertex data over to the GPUBuffer using the writeBuffer() utility function
+                    this.device.queue.writeBuffer(
+                        bufferGroup.vertexBuffers[index], 
+                        bufferOffset, 
+                        vertices, 
+                        dataOffset, 
+                        vertices.length
+                    );
                 }
             }
-
-
-            if(indexBuffer) {
-                // Copy the vertex data over to the GPUBuffer using the writeBuffer() utility function
-                this.device.queue.writeBuffer(
-                    bufferGroup.indexBuffer, 
-                    bufferOffset, 
-                    vertices, 
-                    dataOffset, 
-                    vertices.length
-                );
-            }
-            else {
-                // Copy the vertex data over to the GPUBuffer using the writeBuffer() utility function
-                this.device.queue.writeBuffer(
-                    bufferGroup.vertexBuffers[index], 
-                    bufferOffset, 
-                    vertices, 
-                    dataOffset, 
-                    vertices.length
-                );
-            }
-            
         }
     }
 
@@ -937,14 +942,21 @@ export class ShaderContext {
         //remember to just use your own render pipeline descriptor to avoid the assumptions we make;
         const vertexBuffers = [];
         let loc = 0;
-        vertexBufferOptions.forEach((opt) => {
+
+        this.vertexBufferOptions = vertexBufferOptions;
+        
+
+        vertexBufferOptions.forEach((opt,i) => {
             let arrayStride = 0;
             const attributes = [];
+
+            let ct = 0;
             for(const key in opt) {
                 const typeInfo = WGSLTypeSizes[opt[key]];
                 const format = Object.keys(typeInfo.vertexFormats).find((f) => {
                     if(f.startsWith('float32')) return true;
                 }) || Object.values(typeInfo.vertexFormats)[0]
+                ct += typeInfo.ct;
 
                 attributes.push({
                     format,
@@ -955,6 +967,8 @@ export class ShaderContext {
                 arrayStride += typeInfo.size;
                 loc++;
             }
+
+            (vertexBufferOptions as any)[i].COUNT = ct; //for setting vertexCount automatically using our assumptions
 
             vertexBuffers.push({
                 arrayStride,
@@ -1042,10 +1056,7 @@ export class ShaderContext {
 
     updateGraphicsPipeline = (
         vertexBufferOptions:{[key:string]:string}[]=[{
-            vertex:'vec4<f32>',
-            color:'vec4<f32>',
-            uv:'vec2<f32>',
-            normal:'vec3<f32>'
+            color:'vec4<f32>'
         }],
         contextSettings?:GPUCanvasConfiguration, 
         renderPipelineDescriptor?:Partial<GPURenderPipelineDescriptor>,
@@ -1255,17 +1266,23 @@ export class ShaderContext {
                             inputBuffers[inpBuf_i].unmap();
                         }
                         else {
-                            inputBuffers[inpBuf_i] = (
-                                this.device.createBuffer({
-                                    size:  inputs[inpBuf_i] ? (inputs[inpBuf_i].byteLength ? inputs[inpBuf_i].byteLength : inputs[inpBuf_i]?.length ? inputs[inpBuf_i].length*4 : 8) : 8,
-                                    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST,
-                                    mappedAtCreation: true
-                                })  
-                            );
-                            
-                            //console.log(inputs[inpBuf_i])
-                            new Float32Array(inputBuffers[inpBuf_i].getMappedRange()).set(inputs[inpBuf_i]);
-                            inputBuffers[inpBuf_i].unmap();
+
+                            if(inputs[inpBuf_i] instanceof GPUBuffer) {
+                                inputBuffers[inpBuf_i] = inputs[inpBuf_i]; //preallocated
+                            } else {
+                                inputBuffers[inpBuf_i] = (
+                                    this.device.createBuffer({
+                                        size:  inputs[inpBuf_i] ? (inputs[inpBuf_i].byteLength ? inputs[inpBuf_i].byteLength : inputs[inpBuf_i]?.length ? inputs[inpBuf_i].length*4 : 8) : 8,
+                                        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST | GPUBufferUsage.VERTEX,
+                                        mappedAtCreation: true
+                                    })  
+                                );
+                                
+                                //console.log(inputs[inpBuf_i])
+                                new Float32Array(inputBuffers[inpBuf_i].getMappedRange()).set(inputs[inpBuf_i]);
+                                inputBuffers[inpBuf_i].unmap();
+                            }
+
                         }
                     }
 

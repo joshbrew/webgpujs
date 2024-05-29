@@ -79,6 +79,9 @@ export declare class ShaderContext {
     bindGroupNumber: number;
     bindGroupLayout: GPUBindGroupLayout;
     bindGroupLayoutEntries: GPUBindGroupLayoutEntry[];
+    vertexBufferOptions: {
+        [key: string]: string;
+    }[];
     constructor(props?: any);
     createBindGroupEntries: (textures?: any, bindGroupNumber?: number, visibility?: number) => GPUBindGroupLayoutEntry[];
     setBindGroupLayout: (entries?: any[], bindGroupNumber?: number) => GPUBindGroupLayout;

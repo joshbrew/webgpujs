@@ -542,14 +542,17 @@ export declare const WGSLTypeSizes: {
     bool: {
         alignment: number;
         size: number;
+        ct: number;
     };
     u8: {
         alignment: number;
         size: number;
+        ct: number;
     };
     i8: {
         alignment: number;
         size: number;
+        ct: number;
     };
     i32: {
         alignment: number;
@@ -557,6 +560,7 @@ export declare const WGSLTypeSizes: {
         vertexFormats: {
             sint32: boolean;
         };
+        ct: number;
     };
     u32: {
         alignment: number;
@@ -564,6 +568,7 @@ export declare const WGSLTypeSizes: {
         vertexFormats: {
             uint32: boolean;
         };
+        ct: number;
     };
     f32: {
         alignment: number;
@@ -571,26 +576,32 @@ export declare const WGSLTypeSizes: {
         vertexFormats: {
             float32: boolean;
         };
+        ct: number;
     };
     i64: {
         alignment: number;
         size: number;
+        ct: number;
     };
     u64: {
         alignment: number;
         size: number;
+        ct: number;
     };
     f64: {
         alignment: number;
         size: number;
+        ct: number;
     };
     'atomic<u32>': {
         alignment: number;
         size: number;
+        ct: number;
     };
     'atomic<i32>': {
         alignment: number;
         size: number;
+        ct: number;
     };
     'vec2<i32>': {
         alignment: number;
@@ -600,6 +611,7 @@ export declare const WGSLTypeSizes: {
             sint16x2: boolean;
             sint32x2: boolean;
         };
+        ct: number;
     };
     'vec2<u32>': {
         alignment: number;
@@ -609,6 +621,7 @@ export declare const WGSLTypeSizes: {
             uint16x2: boolean;
             uint32x2: boolean;
         };
+        ct: number;
     };
     'vec2<f32>': {
         alignment: number;
@@ -620,6 +633,7 @@ export declare const WGSLTypeSizes: {
             snorm8x2: boolean;
             snorm16x2: boolean;
         };
+        ct: number;
     };
     'vec3<i32>': {
         alignment: number;
@@ -627,6 +641,7 @@ export declare const WGSLTypeSizes: {
         vertexFormats: {
             sint32x3: boolean;
         };
+        ct: number;
     };
     'vec3<u32>': {
         alignment: number;
@@ -634,6 +649,7 @@ export declare const WGSLTypeSizes: {
         vertexFormats: {
             uint32x3: boolean;
         };
+        ct: number;
     };
     'vec3<f32>': {
         alignment: number;
@@ -641,6 +657,7 @@ export declare const WGSLTypeSizes: {
         vertexFormats: {
             float32x3: boolean;
         };
+        ct: number;
     };
     'vec4<i32>': {
         alignment: number;
@@ -650,6 +667,7 @@ export declare const WGSLTypeSizes: {
             sint16x4: boolean;
             sint32x4: boolean;
         };
+        ct: number;
     };
     'vec4<u32>': {
         alignment: number;
@@ -659,6 +677,7 @@ export declare const WGSLTypeSizes: {
             uint16x4: boolean;
             uint32x4: boolean;
         };
+        ct: number;
     };
     'vec4<f32>': {
         alignment: number;
@@ -671,6 +690,7 @@ export declare const WGSLTypeSizes: {
             snorm16x4: boolean;
             float16x4: boolean;
         };
+        ct: number;
     };
     vec2i: {
         alignment: number;
@@ -680,6 +700,7 @@ export declare const WGSLTypeSizes: {
             sint16x2: boolean;
             sint32x2: boolean;
         };
+        ct: number;
     };
     vec2u: {
         alignment: number;
@@ -689,6 +710,7 @@ export declare const WGSLTypeSizes: {
             uint16x2: boolean;
             uint32x2: boolean;
         };
+        ct: number;
     };
     vec2f: {
         alignment: number;
@@ -700,6 +722,7 @@ export declare const WGSLTypeSizes: {
             snorm8x2: boolean;
             snorm16x2: boolean;
         };
+        ct: number;
     };
     vec3i: {
         alignment: number;
@@ -707,6 +730,7 @@ export declare const WGSLTypeSizes: {
         vertexFormats: {
             sint32x3: boolean;
         };
+        ct: number;
     };
     vec3u: {
         alignment: number;
@@ -714,6 +738,7 @@ export declare const WGSLTypeSizes: {
         vertexFormats: {
             uint32x3: boolean;
         };
+        ct: number;
     };
     vec3f: {
         alignment: number;
@@ -721,6 +746,7 @@ export declare const WGSLTypeSizes: {
         vertexFormats: {
             float32x3: boolean;
         };
+        ct: number;
     };
     vec4i: {
         alignment: number;
@@ -730,6 +756,7 @@ export declare const WGSLTypeSizes: {
             sint16x4: boolean;
             sint32x4: boolean;
         };
+        ct: number;
     };
     vec4u: {
         alignment: number;
@@ -739,6 +766,7 @@ export declare const WGSLTypeSizes: {
             uint16x4: boolean;
             uint32x4: boolean;
         };
+        ct: number;
     };
     vec4f: {
         alignment: number;
@@ -751,221 +779,276 @@ export declare const WGSLTypeSizes: {
             snorm16x4: boolean;
             float16x4: boolean;
         };
+        ct: number;
     };
     'mat2x2<f32>': {
         alignment: number;
         size: number;
+        ct: number;
     };
     'mat2x2<i32>': {
         alignment: number;
         size: number;
+        ct: number;
     };
     'mat2x2<u32>': {
         alignment: number;
         size: number;
+        ct: number;
     };
     'mat3x2<f32>': {
         alignment: number;
         size: number;
+        ct: number;
     };
     'mat3x2<i32>': {
         alignment: number;
         size: number;
+        ct: number;
     };
     'mat3x2<u32>': {
         alignment: number;
         size: number;
+        ct: number;
     };
     'mat4x2<f32>': {
         alignment: number;
         size: number;
+        ct: number;
     };
     'mat4x2<i32>': {
         alignment: number;
         size: number;
+        ct: number;
     };
     'mat4x2<u32>': {
         alignment: number;
         size: number;
+        ct: number;
     };
     'mat2x3<f32>': {
         alignment: number;
         size: number;
+        ct: number;
     };
     'mat2x3<i32>': {
         alignment: number;
         size: number;
+        ct: number;
     };
     'mat2x3<u32>': {
         alignment: number;
         size: number;
+        ct: number;
     };
     'mat3x3<f32>': {
         alignment: number;
         size: number;
+        ct: number;
     };
     'mat3x3<i32>': {
         alignment: number;
         size: number;
+        ct: number;
     };
     'mat3x3<u32>': {
         alignment: number;
         size: number;
+        ct: number;
     };
     'mat4x3<f32>': {
         alignment: number;
         size: number;
+        ct: number;
     };
     'mat4x3<i32>': {
         alignment: number;
         size: number;
+        ct: number;
     };
     'mat4x3<u32>': {
         alignment: number;
         size: number;
+        ct: number;
     };
     'mat2x4<f32>': {
         alignment: number;
         size: number;
+        ct: number;
     };
     'mat2x4<i32>': {
         alignment: number;
         size: number;
+        ct: number;
     };
     'mat2x4<u32>': {
         alignment: number;
         size: number;
+        ct: number;
     };
     'mat3x4<f32>': {
         alignment: number;
         size: number;
+        ct: number;
     };
     'mat3x4<i32>': {
         alignment: number;
         size: number;
+        ct: number;
     };
     'mat3x4<u32>': {
         alignment: number;
         size: number;
+        ct: number;
     };
     'mat4x4<f32>': {
         alignment: number;
         size: number;
+        ct: number;
     };
     'mat4x4<i32>': {
         alignment: number;
         size: number;
+        ct: number;
     };
     'mat4x4<u32>': {
         alignment: number;
         size: number;
+        ct: number;
     };
     mat2x2f: {
         alignment: number;
         size: number;
+        ct: number;
     };
     mat2x2i: {
         alignment: number;
         size: number;
+        ct: number;
     };
     mat2x2u: {
         alignment: number;
         size: number;
+        ct: number;
     };
     mat3x2f: {
         alignment: number;
         size: number;
+        ct: number;
     };
     mat3x2i: {
         alignment: number;
         size: number;
+        ct: number;
     };
     mat3x2u: {
         alignment: number;
         size: number;
+        ct: number;
     };
     mat4x2f: {
         alignment: number;
         size: number;
+        ct: number;
     };
     mat4x2i: {
         alignment: number;
         size: number;
+        ct: number;
     };
     mat4x2u: {
         alignment: number;
         size: number;
+        ct: number;
     };
     mat2x3f: {
         alignment: number;
         size: number;
+        ct: number;
     };
     mat2x3i: {
         alignment: number;
         size: number;
+        ct: number;
     };
     mat2x3u: {
         alignment: number;
         size: number;
+        ct: number;
     };
     mat3x3f: {
         alignment: number;
         size: number;
+        ct: number;
     };
     mat3x3i: {
         alignment: number;
         size: number;
+        ct: number;
     };
     mat3x3u: {
         alignment: number;
         size: number;
+        ct: number;
     };
     mat4x3f: {
         alignment: number;
         size: number;
+        ct: number;
     };
     mat4x3i: {
         alignment: number;
         size: number;
+        ct: number;
     };
     mat4x3u: {
         alignment: number;
         size: number;
+        ct: number;
     };
     mat2x4f: {
         alignment: number;
         size: number;
+        ct: number;
     };
     mat2x4i: {
         alignment: number;
         size: number;
+        ct: number;
     };
     mat2x4u: {
         alignment: number;
         size: number;
+        ct: number;
     };
     mat3x4f: {
         alignment: number;
         size: number;
+        ct: number;
     };
     mat3x4i: {
         alignment: number;
         size: number;
+        ct: number;
     };
     mat3x4u: {
         alignment: number;
         size: number;
+        ct: number;
     };
     mat4x4f: {
         alignment: number;
         size: number;
+        ct: number;
     };
     mat4x4i: {
         alignment: number;
         size: number;
+        ct: number;
     };
     mat4x4u: {
         alignment: number;
         size: number;
+        ct: number;
     };
 };
