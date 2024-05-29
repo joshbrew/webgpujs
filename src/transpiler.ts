@@ -389,7 +389,7 @@ export class WGSLTranspiler {
         ast, 
         bindGroup=0, 
         shaderType?:'compute'|'fragment'|'vertex',
-        variableTypes?:{[key:string]:string|{prefix:string, type:string}},
+        variableTypes?:{[key:string]:string|{prefix?:string, type:string}},
         minBinding=0
     ) {
         let code = '//Bindings (data passed to/from CPU) \n';
@@ -502,7 +502,7 @@ export class WGSLTranspiler {
                     bindingIncr++;
                     params.push(node);
                 } else if (typeof variableTypes[node.name] === 'object') {
-                    code += `@group(${bindGroup}) @binding(${bindingIncr}) ${(variableTypes[node.name] as any).prefix} ${node.name}: ${(variableTypes[node.name] as any).type};\n\n`;
+                    code += `@group(${bindGroup}) @binding(${bindingIncr}) ${(variableTypes[node.name] as any).prefix || 'var'} ${node.name}: ${(variableTypes[node.name] as any).type};\n\n`;
                     node.type = (variableTypes[node.name] as any).type;
                     bindingIncr++;
                     params.push(node);
@@ -623,7 +623,7 @@ export class WGSLTranspiler {
     }
 
     static extractAndTransposeInnerFunctions = (
-        body, extract=true, ast, params, shaderType) => {
+        body, extract=true, ast, params, shaderType, vertexBufferOptions) => {
         
         const functionRegex = /function (\w+)\(([^()]*|\((?:[^()]*|\([^()]*\))*\))*\) \{([\s\S]*?)\}/g;
 
@@ -657,7 +657,7 @@ export class WGSLTranspiler {
             });
 
             // Transpose the function body
-            const transposedBody = this.transposeBody(funcBody, funcBody, params, shaderType, true, undefined, false).code; // Assuming AST is not used in your current implementation
+            const transposedBody = this.transposeBody(funcBody, funcBody, params, shaderType, true, undefined, false, vertexBufferOptions).code; // Assuming AST is not used in your current implementation
 
             //todo: infer output types better, instead of just assuming from the first input type
             extractedFunctions += `fn ${funcName}(${params}) -> ${outputParam} {${transposedBody}}\n\n`;
@@ -674,22 +674,26 @@ export class WGSLTranspiler {
         ast:any, 
         params:any, 
         shaderType ='compute', 
-        nVertexBuffers=1, 
+        vertexBufferOptions:{[key:string]:string}[]=[{
+            vertex:'vec4<f32>',
+            color:'vec4<f32>',
+            uv:'vec2<f32>',
+            normal:'vec3<f32>'
+        }], 
         workGroupSize=256, 
-        gpuFuncs:(Function|string)[],
-        vboTypes
+        gpuFuncs:(Function|string)[]
     ) {
         let code = '';
         
         if(gpuFuncs) {
             gpuFuncs.forEach((f:Function|string) => {
-                let result = this.extractAndTransposeInnerFunctions(typeof f === 'function' ? f.toString() : f, false, ast, params, shaderType);
+                let result = this.extractAndTransposeInnerFunctions(typeof f === 'function' ? f.toString() : f, false, ast, params, shaderType, vertexBufferOptions);
                 if(result.extractedFunctions) code += result.extractedFunctions;
-            })
+            });
         }
 
         // Extract inner functions and transpose them
-        const { body: mainBody, extractedFunctions } = this.extractAndTransposeInnerFunctions(funcStr.match(/{([\s\S]+)}/)[1], true, ast, params, shaderType);
+        const { body: mainBody, extractedFunctions } = this.extractAndTransposeInnerFunctions(funcStr.match(/{([\s\S]+)}/)[1], true, ast, params, shaderType, vertexBufferOptions);
         
         // Prepend the transposed inner functions to the main function
         code += extractedFunctions;
@@ -697,26 +701,32 @@ export class WGSLTranspiler {
         let vtxInps;
         let vboInputStrings = [] as any[];
         if(shaderType === 'vertex' || shaderType === 'fragment') {
-            let vboStrings;
-            //if(vboTypes) {
-            //} else { //default vbos
-                vboStrings = Array.from({length: nVertexBuffers}, (_, i) => {
-                    if(shaderType === 'vertex') vboInputStrings.push(
-                        
-    `@location(${4*i}) vertex${i>0 ? i+1 : ''}In: vec4<f32>, 
-        @location(${4*i+1}) color${i>0 ? i+1 : ''}In: vec4<f32>,
-        @location(${4*i+2}) uv${i>0 ? i+1 : ''}In: vec2<f32>,
-        @location(${4*i+3}) normal${i>0 ? i+1 : ''}In: vec3<f32>${i===nVertexBuffers-1 ? '' : ','}`
-                    );
-                    return `
-        @location(${4*i}) vertex${i>0 ? i+1 : ''}: vec4<f32>,
-        @location(${4*i+1}) color${i>0 ? i+1 : ''}: vec4<f32>, 
-        @location(${4*i+2}) uv${i>0 ? i+1 : ''}: vec2<f32>,
-        @location(${4*i+3}) normal${i>0 ? i+1 : ''}: vec3<f32>${i===nVertexBuffers-1 ? '' : ','}`;
+            let vboStrings = [];
+            if(vertexBufferOptions) {
+                const types = [];
+                const keys = []; vertexBufferOptions.forEach((obj) => { 
+                    keys.push(...Object.keys(obj)); 
+                    types.push(...Object.values(obj));
                 });
-    
-            //}
+                
+                let loc = 0;
+                for(const key of keys) {
+                    const type = types[loc];
 
+                    vboStrings.push(
+                        `@location(${loc}) ${key}: ${type}${loc === keys.length-1 ? '' : ','}`
+                    );
+                    
+                    if(shaderType === 'vertex') {   
+                        vboInputStrings.push(
+                            `@location(${loc}) ${key}In: ${type}${loc === keys.length-1 ? '' : ','}`
+                        );
+                    }
+                    
+                    loc++;
+                }
+            }
+            
             vtxInps = `
     @builtin(position) position: vec4<f32>, //pixel location
     //uploaded vertices from CPU, in interleaved format
@@ -764,7 +774,7 @@ fn frag_main(
         }
         let shaderHead = code;
         // Transpose the main body
-        let transposed = this.transposeBody(mainBody, funcStr, params, shaderType, shaderType === 'fragment', shaderHead, true);
+        let transposed = this.transposeBody(mainBody, funcStr, params, shaderType, shaderType === 'fragment', shaderHead, true, vertexBufferOptions);
         code += transposed.code;
         if(transposed.consts?.length > 0) 
             code = transposed.consts.join('\n') + '\n\n' + code;
@@ -774,7 +784,16 @@ fn frag_main(
         return code;
     }
 
-    static transposeBody = (body, funcStr, params, shaderType, returns = false, shaderHead='', extractConsts=false) => {
+    static transposeBody = (
+        body, 
+        funcStr, 
+        params, 
+        shaderType, 
+        returns = false, 
+        shaderHead='', 
+        extractConsts=false,
+        vertexBufferOptions
+    ) => {
         let code = '';
 
         // Capture commented lines and replace with a placeholder
@@ -827,7 +846,17 @@ fn frag_main(
         } else {
             // When shaderType is vertex or fragment, exclude specific variable names from the replacement
             // Gather up custom vbos to add to the filter 
-            code = code.replace(/(position|vertex|color|normal|uv)|(\w+)\[([\w\s+\-*\/]+)\]/gm, (match, p1, p2, p3) => {
+
+            let names = ['position'];
+            vertexBufferOptions.forEach((opt) => {
+                names.push(...Object.keys(opt));
+            })
+
+            // Create a regular expression pattern from the names array
+            let namesPattern = names.join('|');
+
+            // Use the dynamically generated pattern in the replace function
+            code = code.replace(new RegExp(`(${namesPattern})|(\\w+)\\[([\\w\\s+\\-*\\/]+)\\]`, 'gm'), (match, p1, p2, p3) => {
                 if (p1 || arrayVars.includes(p2)) return match;  // if match is one of the keywords or is an array variable, return it as is
                 return `${p2}.values[${p3}]`;  // otherwise, apply the transformation
             });
@@ -1352,11 +1381,12 @@ fn frag_main(
         func:Function|string,  
         shaderType:'compute'|'vertex'|'fragment'='compute', 
         bindGroupNumber=0, 
-        nVertexBuffers=1, 
         workGroupSize=256, 
+        vertexBufferOptions:{[key:string]:string}[]=[{
+            color:'vec4<f32>'
+        }],
         gpuFuncs?:(Function|string)[],
-        variableTypes?:{[key:string]:string|{ prefix: string; type: string; }},
-        vboTypes?:{[key:string]:string}, //e.g. 'vertexIn:"float32x4"
+        variableTypes?:{[key:string]:string|{ prefix?: string; type: string; }},
         lastBinding=0
     ) { //use compute shaders for geometry shaders
         let funcStr = typeof func === 'string' ? func : func.toString();
@@ -1379,10 +1409,9 @@ fn frag_main(
             ast, 
             webGPUCode.params, 
             shaderType, 
-            nVertexBuffers, 
+            vertexBufferOptions, 
             workGroupSize, 
-            gpuFuncs,
-            vboTypes
+            gpuFuncs
         ); // Pass funcStr as the first argument
 
         return {
@@ -1484,6 +1513,16 @@ const wgslTypeSizes32 = {
     'vec4<u32>': { alignment: 16, size: 16, vertexFormats: { "uint8x4": true, "uint16x4": true, "uint32x4": true } },
     'vec4<f32>': { alignment: 16, size: 16, vertexFormats: { "unorm8x4": true, "unorm16x4": true, "float32x4": true, "snorm8x4": true, "snorm16x4": true, "float16x4": true } },
     
+    'vec2i': { alignment: 8, size: 8, vertexFormats: { "sint8x2": true, "sint16x2": true, "sint32x2": true } }, // shorthand for vec2<i32>
+    'vec2u': { alignment: 8, size: 8, vertexFormats: { "uint8x2": true, "uint16x2": true, "uint32x2": true } }, // shorthand for vec2<u32>
+    'vec2f': { alignment: 8, size: 8, vertexFormats: { "unorm8x2": true, "unorm16x2": true, "float32x2": true, "snorm8x2": true, "snorm16x2": true } }, // shorthand for vec2<f32>
+    'vec3i': { alignment: 16, size: 12, vertexFormats: { "sint32x3": true } }, // shorthand for vec3<i32>
+    'vec3u': { alignment: 16, size: 12, vertexFormats: { "uint32x3": true } }, // shorthand for vec3<u32>
+    'vec3f': { alignment: 16, size: 12, vertexFormats: { "float32x3": true } }, // shorthand for vec3<f32>
+    'vec4i': { alignment: 16, size: 16, vertexFormats: { "sint8x4": true, "sint16x4": true, "sint32x4": true } }, // shorthand for vec4<i32>
+    'vec4u': { alignment: 16, size: 16, vertexFormats: { "uint8x4": true, "uint16x4": true, "uint32x4": true } }, // shorthand for vec4<u32>
+    'vec4f': { alignment: 16, size: 16, vertexFormats: { "unorm8x4": true, "unorm16x4": true, "float32x4": true, "snorm8x4": true, "snorm16x4": true, "float16x4": true } }, // shorthand for vec4<f32>
+
     //FYI matrix u and i formats are not supported in wgsl (yet) afaik
     'mat2x2<f32>': { alignment: 8, size: 16 },
     'mat2x2<i32>': { alignment: 8, size: 16 },

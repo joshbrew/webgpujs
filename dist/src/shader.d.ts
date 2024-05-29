@@ -98,9 +98,13 @@ export declare class ShaderContext {
     } | ImageBitmap | any, name: string, bindGroupNumber?: number) => boolean;
     setUBOposition: (dataView: DataView, inputTypes: any, typeInfo: any, offset: any, input: any, inpIdx: any) => any;
     updateUBO: (inputs: any, inputTypes: any, bindGroupNumber?: number) => void;
-    createRenderPipelineDescriptor: (nVertexBuffers?: number, swapChainFormat?: GPUTextureFormat, renderPipelineDescriptor?: Partial<GPURenderPipelineDescriptor>) => Partial<GPURenderPipelineDescriptor>;
+    createRenderPipelineDescriptor: (vertexBufferOptions?: {
+        [key: string]: string;
+    }[], swapChainFormat?: GPUTextureFormat, renderPipelineDescriptor?: Partial<GPURenderPipelineDescriptor>) => Partial<GPURenderPipelineDescriptor>;
     createRenderPassDescriptor: () => GPURenderPassDescriptor;
-    updateGraphicsPipeline: (nVertexBuffers?: number, contextSettings?: GPUCanvasConfiguration, renderPipelineDescriptor?: Partial<GPURenderPipelineDescriptor>, renderPassDescriptor?: GPURenderPassDescriptor) => void;
+    updateGraphicsPipeline: (vertexBufferOptions?: {
+        [key: string]: string;
+    }[], contextSettings?: GPUCanvasConfiguration, renderPipelineDescriptor?: Partial<GPURenderPipelineDescriptor>, renderPassDescriptor?: GPURenderPassDescriptor) => void;
     makeBufferGroup: (bindGroupNumber?: number) => any;
     firstRun: boolean;
     buffer: ({ vbos, textures, indexBuffer, indexFormat, skipOutputDef, bindGroupNumber, outputVBOs, outputTextures, newBindings }?: Partial<{

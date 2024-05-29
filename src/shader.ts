@@ -193,7 +193,7 @@ export class ShaderHelper {
             }
             
             this.fragment.updateGraphicsPipeline(
-                options?.nVertexBuffers,  
+                options?.renderPass?.vbos as any,  
                 options?.contextSettings,  
                 options?.renderPipelineDescriptor,
                 options?.renderPassDescriptor
@@ -207,7 +207,7 @@ export class ShaderHelper {
             }
 
             this.vertex.updateGraphicsPipeline(
-                options?.nVertexBuffers,  
+                options?.renderPass?.vbos as any,  
                 options?.contextSettings,  
                 options?.renderPipelineDescriptor,
                 options?.renderPassDescriptor
@@ -225,7 +225,7 @@ export class ShaderHelper {
                         this.prototypes[key].funcStr, 
                         key as any, 
                         this.prototypes[key].bindGroupNumber, 
-                        this.prototypes[key].nVertexBuffers, 
+                        this.prototypes[key].vbos, 
                         this.prototypes[key].workGroupSize ? this.prototypes[key].workGroupSize : undefined,
                         this.functions
                     )
@@ -244,25 +244,30 @@ export class ShaderHelper {
             if(shaderContext && shaderType === 'fragment' && !shaders.vertex) {
                 let vboInputStrings = [] as any[];
 
-                let vboStrings;
-                if(options.vboTypes) {
-                   
-                } else {
-                    vboStrings = Array.from({length: options.nVertexBuffers}, (_, i) => {
-                        vboInputStrings.push(
+                let vboStrings = [];
+                if(options.vbos) {
+                    const types = [];
+                    const keys = []; options.vbos.forEach((obj) => { 
+                        keys.push(...Object.keys(obj)); 
+                        types.push(...Object.values(obj));
+                    });
                     
-    `@location(${4*i}) vertex${i>0 ? i+1 : ''}In: vec4<f32>,
-        @location(${4*i+1}) color${i>0 ? i+1 : ''}In: vec4<f32>, 
-        @location(${4*i+3}) uv${i>0 ? i+1 : ''}In: vec2<f32>,
-        @location(${4*i+2}) normal${i>0 ? i+1 : ''}In: vec3<f32>${i===options.nVertexBuffers-1 ? '' : ','}`
+                    let loc = 0;
+                    for(const key of keys) {
+                        const type = types[loc];
+    
+                        vboStrings.push(
+                            `@location(${loc}) ${key}: ${type}${loc === keys.length-1 ? '' : ','}`
                         );
-                    return `
-        
-        @location(${4*i}) vertex${i>0 ? i+1 : ''}: vec4<f32>, 
-        @location(${4*i+1}) color${i>0 ? i+1 : ''}: vec4<f32>,
-        @location(${4*i+2}) uv${i>0 ? i+1 : ''}: vec2<f32>,
-        @location(${4*i+3}) normal${i>0 ? i+1 : ''}: vec3<f32>${i===options.nVertexBuffers-1 ? '' : ','}`;
-                });
+                        
+                        //if(shaderType === 'vertex') {   
+                            vboInputStrings.push(
+                                `@location(${loc}) ${key}In: ${type}${loc === keys.length-1 ? '' : ','}`
+                            );
+                        //}
+                        
+                        loc++;
+                    }
                 }
                 
 
@@ -922,23 +927,54 @@ export class ShaderContext {
 
 
     createRenderPipelineDescriptor = (
-        nVertexBuffers=1, 
+        vertexBufferOptions:{[key:string]:string}[]=[{
+            color:'vec4<f32>'
+        }], 
         swapChainFormat = navigator.gpu.getPreferredCanvasFormat(),
         renderPipelineDescriptor:Partial<GPURenderPipelineDescriptor>={}
     ) => {
 
-        // 5: Create a GPUVertexBufferLayout and GPURenderPipelineDescriptor to provide a definition of our render pipline
-        const vertexBuffers = Array.from({length:nVertexBuffers}, (_,i) => {
-            return {
-                arrayStride: 52,
-                attributes: [
-                    {format: "float32x4", offset: 0,  shaderLocation:  4*i},   //vertex vec4
-                    {format: "float32x4", offset: 16, shaderLocation:  4*i+1}, //color vec4
-                    {format: "float32x2", offset: 32, shaderLocation:  4*i+2}, //uv vec2
-                    {format: "float32x3", offset: 40, shaderLocation:  4*i+3}  //normal vec3
-                ]
+        //remember to just use your own render pipeline descriptor to avoid the assumptions we make;
+        const vertexBuffers = [];
+        let loc = 0;
+        vertexBufferOptions.forEach((opt) => {
+            let arrayStride = 0;
+            const attributes = [];
+            for(const key in opt) {
+                const typeInfo = WGSLTypeSizes[opt[key]];
+                const format = Object.keys(typeInfo.vertexFormats).find((f) => {
+                    if(f.startsWith('float32')) return true;
+                }) || Object.values(typeInfo.vertexFormats)[0]
+
+                attributes.push({
+                    format,
+                    offset:arrayStride,
+                    shaderLocation:loc
+                })
+
+                arrayStride += typeInfo.size;
+                loc++;
             }
+
+            vertexBuffers.push({
+                arrayStride,
+                attributes
+            })
+            
         });
+
+        // 5: Create a GPUVertexBufferLayout and GPURenderPipelineDescriptor to provide a definition of our render pipline
+        // const vertexBuffers = Array.from({length:vertexBufferOptions.length}, (_,i) => {
+        //     return {
+        //         arrayStride: 52,
+        //         attributes: [
+        //             {format: "float32x4", offset: 0,  shaderLocation:  4*i},   //vertex vec4
+        //             {format: "float32x4", offset: 16, shaderLocation:  4*i+1}, //color vec4
+        //             {format: "float32x2", offset: 32, shaderLocation:  4*i+2}, //uv vec2
+        //             {format: "float32x3", offset: 40, shaderLocation:  4*i+3}  //normal vec3
+        //         ]
+        //     }
+        // });
         
         let desc = { //https://developer.mozilla.org/en-US/docs/Web/API/GPUDevice/createRenderPipeline
             layout: this.pipelineLayout ? this.pipelineLayout : 'auto',
@@ -1005,7 +1041,12 @@ export class ShaderContext {
     }
 
     updateGraphicsPipeline = (
-        nVertexBuffers=1, 
+        vertexBufferOptions:{[key:string]:string}[]=[{
+            vertex:'vec4<f32>',
+            color:'vec4<f32>',
+            uv:'vec2<f32>',
+            normal:'vec3<f32>'
+        }],
         contextSettings?:GPUCanvasConfiguration, 
         renderPipelineDescriptor?:Partial<GPURenderPipelineDescriptor>,
         renderPassDescriptor?:GPURenderPassDescriptor
@@ -1020,7 +1061,7 @@ export class ShaderContext {
             alphaMode: 'premultiplied'
         });
 
-        renderPipelineDescriptor = this.createRenderPipelineDescriptor(nVertexBuffers, swapChainFormat, renderPipelineDescriptor);
+        renderPipelineDescriptor = this.createRenderPipelineDescriptor(vertexBufferOptions, swapChainFormat, renderPipelineDescriptor);
 
         if(!renderPassDescriptor)
             renderPassDescriptor = this.createRenderPassDescriptor();

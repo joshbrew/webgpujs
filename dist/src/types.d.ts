@@ -7,8 +7,12 @@ export type ShaderOptions = {
     functions?: Function[];
     variableTypes?: {
         [key: string]: string | {
-            binding: string;
+            prefix?: string;
+            type: string;
         };
+    };
+    vboTypes?: {
+        [key: string]: string;
     };
     inputs?: any[];
     bindGroupLayouts?: GPUBindGroupLayout[];
@@ -27,7 +31,6 @@ export type RenderOptions = {
     renderPipelineDescriptor?: Partial<GPURenderPipelineDescriptor>;
     renderPassDescriptor?: GPURenderPassDescriptor;
     renderPipelineSettings?: any;
-    nVertexBuffers?: number;
     renderPass?: RenderPassSettings;
 };
 export type ComputeOptions = {

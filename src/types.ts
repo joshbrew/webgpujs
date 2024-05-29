@@ -4,7 +4,7 @@ export type ShaderOptions = {
     bindGroupNumber?:number,
     getPrevShaderBindGroups?:string,
     functions?:Function[],
-    variableTypes?:{[key:string]:string|{ prefix: string; type: string; }}, //we can skip the implicit typing of the bindings and set them ourselves e.g. tex1:'texture_2d' or tex1:{binding:'@group(0) @binding(1) var x: texture_2d;'} etc.
+    variableTypes?:{[key:string]:string|{ prefix?: string; type: string; }}, //we can skip the implicit typing of the bindings and set them ourselves e.g. tex1:'texture_2d' or tex1:{prefix:'var', type:'texture_2d'} etc.
     vboTypes?:{[key:string]:string}, //e.g. 'vertexIn:"float32x4"'
     inputs?:any[],
     bindGroupLayouts?:GPUBindGroupLayout[],
@@ -22,7 +22,6 @@ export type RenderOptions = {
     renderPipelineDescriptor?:Partial<GPURenderPipelineDescriptor>, //specify partial settings e.g. the primitive topology
     renderPassDescriptor?:GPURenderPassDescriptor,
     renderPipelineSettings?:any,
-    nVertexBuffers?:number, //set to allow multiple vbos 
     renderPass?:RenderPassSettings
 };
 

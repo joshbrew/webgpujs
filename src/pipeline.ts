@@ -98,11 +98,10 @@ export class WebGPUjs {
                 shaders,
                 options.canvas ? 'fragment' : 'compute', 
                 options.bindGroupNumber, 
-                options.nVertexBuffers, 
                 options.workGroupSize, 
+                options.renderPass?.vbos as any, 
                 options.functions,
                 options.variableTypes,
-                options.vboTypes,
                 options.lastBinding
             );
 
@@ -139,11 +138,10 @@ export class WebGPUjs {
                         block.code, 
                         options.canvas ? 'fragment' : 'compute', 
                         options.bindGroupNumber, 
-                        options.nVertexBuffers, 
                         options.workGroupSize, 
+                        options.renderPass?.vbos as any, 
                         options.functions,
                         options.variableTypes,
-                        options.vboTypes,
                         options.lastBinding
                     );
                 }
@@ -174,11 +172,10 @@ export class WebGPUjs {
                             block.compute, 
                             'compute', 
                             options.bindGroupNumber, 
-                            options.nVertexBuffers, 
                             options.workGroupSize, 
+                            options.renderPass?.vbos as any, 
                             options.functions,
                             options.variableTypes,
-                            options.vboTypes,
                             options.lastBinding
                         );
                     }
@@ -189,11 +186,10 @@ export class WebGPUjs {
                             block.vertex, 
                             'vertex', 
                             block.compute ? block.compute.bindGroupNumber + 1 : options.bindGroupNumber, 
-                            options.nVertexBuffers, 
                             options.workGroupSize, 
+                            options.renderPass?.vbos as any, 
                             options.functions,
                             options.variableTypes,
-                            options.vboTypes,
                             options.lastBinding
                         );
                         options.lastBinding = block.vertex.lastBinding;
@@ -204,12 +200,11 @@ export class WebGPUjs {
                         block.fragment = WGSLTranspiler.convertToWebGPU(
                             block.fragment, 
                             'fragment', 
-                            block.compute ? block.compute.bindGroupNumber + 1 : options.bindGroupNumber, 
-                            options.nVertexBuffers, 
-                            options.workGroupSize, 
+                            block.compute ? block.compute.bindGroupNumber + 1 : options.bindGroupNumber,
+                            options.workGroupSize,  
+                            options.renderPass?.vbos as any, 
                             options.functions,
                             options.variableTypes,
-                            options.vboTypes,
                             options.lastBinding
                         );
                     }

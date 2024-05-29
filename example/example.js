@@ -26,9 +26,6 @@ function dft(
     let x5 = new Array(100).fill(mat2x2(vec2(1,1),vec2(1,1)));
     //let x6 = new Array(inputData.length).fill(0.0) //cannot dynamically size const arrays
 
-    const N = i32(inputData.length);
-    const k = threadId.x;
-    let sum = vec2f(0.0, 0.0); //will be replaced with var
 
     var sum2 = add(sum,sum);
 
@@ -50,6 +47,10 @@ function dft(
     var Z = outp3 * mat2x2(vec2f(4.0,-1.0),vec2f(3.0,2.0));
 
     var Zz = outp5 + vec3(4,5,6);
+    
+    const N = i32(inputData.length);
+    const k = threadId.x;
+    let sum = vec2f(0.0, 0.0); //will be replaced with var
 
     for (let n = 0; n < N; n++) {
         const phase = 2.0 * Math.PI * f32(k) * f32(n) / f32(N);
@@ -75,8 +76,17 @@ function dft(
 
 //explicit return statements will define only that variable as an output (i.e. a mutable read_write buffer)
 
-function setupWebGPUConverterUI(fn, target=document.body, shaderType, lastBinding) {
-    let webGPUCode = WGSLTranspiler.convertToWebGPU(fn, shaderType,undefined,undefined,undefined,undefined,undefined,lastBinding);
+function setupWebGPUConverterUI(fn, target=document.body, shaderType, lastBinding, vbos) {
+    let webGPUCode = WGSLTranspiler.convertToWebGPU(
+        fn, 
+        shaderType,
+        undefined,
+        undefined,
+        vbos,
+        undefined,
+        undefined,
+        lastBinding
+    );
     const uniqueID = Date.now();
 
     const beforeTextAreaID = `t2_${uniqueID}`;
@@ -186,8 +196,8 @@ canvas.width = 800; canvas.height = 600;
 
 document.getElementById('ex2').appendChild(canvas);
 
-let ex12Id1 = setupWebGPUConverterUI(vertexExample, document.getElementById('ex2'), 'vertex');
-let ex12Id2 = setupWebGPUConverterUI(fragmentExample, document.getElementById('ex2'), 'fragment',ex12Id1.lastBinding);
+let ex12Id1 = setupWebGPUConverterUI(vertexExample, document.getElementById('ex2'), 'vertex',undefined, [{color: 'vec4f'}]);
+let ex12Id2 = setupWebGPUConverterUI(fragmentExample, document.getElementById('ex2'), 'fragment',ex12Id1.lastBinding, [{color: 'vec4f'}]);
 
 setTimeout(() => {
     console.time('createRenderPipeline and render triangle');
@@ -199,14 +209,11 @@ setTimeout(() => {
         canvas,
         renderPass:{
             vertexCount:3,
-            // vbos:[ //upload vbos, we'll also just fill a dummy vbo for you if none are provided
-            //     { // pos vec4, color vec4, uv vec2, normal vec3
-            //         //vertex
-            //         color:new Array(3*4).fill(0)
-            //         //uv
-            //         //normal
-            //     }
-            // ],
+            vbos:[
+                {
+                    color: 'vec4f'
+                }
+            ]
         }
     }).then(pipeline => {
         console.timeEnd('createRenderPipeline and render triangle');
@@ -255,8 +262,18 @@ const createImageExample = async () => {
     let canv2 = document.createElement('canvas'); 
     canv2.width = 800; canv2.height = 600;
     document.getElementById('ex3').appendChild(canv2);
-    let ex3Id1 = setupWebGPUConverterUI(cubeExampleVert, document.getElementById('ex3'), 'vertex');
-    let ex3Id2 = setupWebGPUConverterUI(cubeExampleFrag, document.getElementById('ex3'), 'fragment', ex3Id1.webGPUCode.lastBinding);
+
+    const vbos = [ //we can upload vbos
+        { //named variables for this VBO that we will upload in interleaved format (i.e. [pos vec4 0,color vec4 0,uv vec2 0,norm vec3 0, pos vec4 1, ...])
+            vertex:'vec4f',
+            color:'vec4f',
+            uv:'vec2f',
+            //normal:'vec3f'
+        } //the shader system will set the draw call count based on the number of rows (assumed to be position4,color4,uv2,normal3 or vertexCount = len/13) in the vertices of the first supplied vbo
+    ]
+
+    let ex3Id1 = setupWebGPUConverterUI(cubeExampleVert, document.getElementById('ex3'), 'vertex', undefined, vbos);
+    let ex3Id2 = setupWebGPUConverterUI(cubeExampleFrag, document.getElementById('ex3'), 'fragment', ex3Id1.webGPUCode.lastBinding, vbos);
     
 
     const aspect = canv2.width / canv2.height;
@@ -289,9 +306,14 @@ const createImageExample = async () => {
     },{
         canvas:canv2,
         renderPass:{ //tell it to make an initial render pass with these inputs
-            vertexCount:cubeVertices.length/13,
+            vertexCount:cubeVertices.length/10,
             vbos:[ //we can upload vbos
-                cubeVertices //the shader system will set the draw call count based on the number of rows (assumed to be position4,color4,uv2,normal3 or vertexCount = len/13) in the vertices of the first supplied vbo
+                { //named variables for this VBO that we will upload in interleaved format (i.e. [pos vec4 0,color vec4 0,uv vec2 0,norm vec3 0, pos vec4 1, ...])
+                    vertex:'vec4f',
+                    color:'vec4f',
+                    uv:'vec2f',
+                    //normal:'vec3f'
+                } //the shader system will set the draw call count based on the number of rows (assumed to be position4,color4,uv2,normal3 or vertexCount = len/13) in the vertices of the first supplied vbo
             ],
             textures:{
                 image:textureData //corresponds to the variable which is defined implicitly by usage with texture calls
@@ -313,6 +335,8 @@ const createImageExample = async () => {
         console.log(pipeline);
         //should have rendered
 
+        pipeline.fragment.updateVBO(cubeVertices,0);
+
         let now = performance.now();
         let fps = [];
         let fpsticker = document.getElementById('ex3fps');
@@ -329,7 +353,7 @@ const createImageExample = async () => {
             //update projection matrix then re-render
             transformationMatrix = getTransformationMatrix(); 
             pipeline.render({
-                vertexCount:cubeVertices.length/13 // pos vec4, color vec4, uv vec2, normal vec3
+                vertexCount:cubeVertices.length/10 // pos vec4, color vec4, uv vec2, normal vec3
             }, transformationMatrix);
             requestAnimationFrame(anim);
         }
