@@ -131,15 +131,16 @@ export class ShaderHelper {
             this.compute.setBindGroupLayout(entries, options.bindGroupNumber);
         }
         if(this.fragment) {
-            //console.log(shaders.fragment.code)
             this.fragment.bufferGroups = this.bufferGroups;
+            this.fragment.bindGroups = this.bindGroups;
             this.fragment.bindGroupLayouts = this.bindGroupLayouts;
-            const entries = this.fragment.createBindGroupEntries(options?.renderPass?.textures, undefined, GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT);
+            let entries = this.fragment.createBindGroupEntries(options?.renderPass?.textures, undefined, GPUShaderStage.VERTEX |GPUShaderStage.FRAGMENT);
+            //if(this.compute?.bindGroupLayoutEntries) entries = [...this.compute.bindGroupLayoutEntries,...entries];
             this.fragment.bindGroupLayoutEntries = entries;
             this.fragment.bindGroupLayout = this.device.createBindGroupLayout({
+                label:'fragmentLayout',
                 entries: entries
             });
-
 
             this.fragment.setBindGroupLayout(entries, options.bindGroupNumber);
         }
@@ -153,6 +154,7 @@ export class ShaderHelper {
 
             if(this.bindGroupLayouts.length > 0) {
                 this.compute.pipelineLayout = this.device.createPipelineLayout({
+                    label:'computeRenderPipelineDescriptor',
                     bindGroupLayouts:this.bindGroupLayouts.filter(v => {if(v) return true;}) //this should have the combined compute and vertex/fragment (and accumulated) layouts
                 });
             }
@@ -188,6 +190,7 @@ export class ShaderHelper {
 
             if(this.bindGroupLayouts.length > 0) {
                 this.fragment.pipelineLayout = this.device.createPipelineLayout({
+                    label:'fragmentRenderPipelineDescriptor',
                     bindGroupLayouts:this.bindGroupLayouts.filter(v => {if(v) return true;}) //this should have the combined compute and vertex/fragment (and accumulated) layouts
                 });
             }
@@ -202,6 +205,7 @@ export class ShaderHelper {
             
             if(this.bindGroupLayouts.length > 0) {
                 this.vertex.pipelineLayout = this.device.createPipelineLayout({
+                    label:'vertexRenderPipelineDescriptor',
                     bindGroupLayouts:this.bindGroupLayouts.filter(v => {if(v) return true;}) //this should have the combined compute and vertex/fragment (and accumulated) layouts
                 });
             }
@@ -460,6 +464,7 @@ export class ShaderContext {
 
     builtInUniforms:any;
 
+    bufferGroup:any;
     bufferGroups:any[] = [];
 
     bindings?:Partial<GPUBindGroupEntry>[];
@@ -659,21 +664,31 @@ export class ShaderContext {
         }
         if(vertices) {
             if(vertices instanceof GPUBuffer) {
-                if(!bufferGroup.vertexBuffers) bufferGroup.vertexBuffers = [] as any[];
-                bufferGroup.vertexBuffers[index] = vertices;
-            } else {
-                if(!isTypedArray(vertices)) {
-                    if(!Array.isArray(vertices)) {
-                        vertices = ShaderHelper.combineVertices(
-                            typeof vertices.vertex?.[0] === 'object' ? ShaderHelper.flattenArray(vertices.vertex) : vertices.vertex,
-                            typeof vertices.color?.[0] === 'object' ? ShaderHelper.flattenArray(vertices.color) : vertices.color,
-                            typeof vertices.uv?.[0] === 'object' ? ShaderHelper.flattenArray(vertices.uv) : vertices.uv,
-                            typeof vertices.normal?.[0] === 'object' ? ShaderHelper.flattenArray(vertices.normal) : vertices.normal,
-                        );
-                    }
-                    else 
-                        vertices = new Float32Array(typeof vertices === 'object' ? ShaderHelper.flattenArray(vertices) : vertices);
+                if(indexBuffer) {
+                    if(!bufferGroup.indexCount) bufferGroup.indexCount = 1;
+                    bufferGroup.indexBuffer = vertices;
                 }
+                else {
+                    if(!bufferGroup.vertexBuffers) bufferGroup.vertexBuffers = [] as any[];
+                    bufferGroup.vertexBuffers[index] = vertices;
+                }
+            } else {
+                if(Array.isArray(vertices)) {
+                    // if(!Array.isArray(vertices)) {
+                    //     vertices = ShaderHelper.combineVertices(
+                    //         typeof vertices.vertex?.[0] === 'object' ? ShaderHelper.flattenArray(vertices.vertex) : vertices.vertex,
+                    //         typeof vertices.color?.[0] === 'object' ? ShaderHelper.flattenArray(vertices.color) : vertices.color,
+                    //         typeof vertices.uv?.[0] === 'object' ? ShaderHelper.flattenArray(vertices.uv) : vertices.uv,
+                    //         typeof vertices.normal?.[0] === 'object' ? ShaderHelper.flattenArray(vertices.normal) : vertices.normal,
+                    //     );
+                    // }
+                    // else 
+                    vertices = new Float32Array(
+                        ShaderHelper.flattenArray(vertices)
+                    );
+                }
+
+                if(!isTypedArray(vertices)) return;
     
                 if(indexBuffer || bufferGroup.vertexBuffers?.[index]?.size !== vertices.byteLength) {
     
@@ -682,11 +697,14 @@ export class ShaderContext {
                     }
                     else {
                         if(!bufferGroup.vertexBuffers) bufferGroup.vertexBuffers = [] as any[];
-                        if(!bufferGroup.vertexCount) bufferGroup.vertexCount = vertices.length / ((this.vertexBufferOptions[index] as any)?.COUNT || 4);
+                        if(!bufferGroup.vertexCount) bufferGroup.vertexCount = vertices.length ? (
+                            vertices.length / ((this.vertexBufferOptions[index] as any)?.__COUNT || 4)
+                        ) : 1;
                     }
     
                     if(indexBuffer) {
                         const vertexBuffer = this.device.createBuffer({
+                            label:'indexBuffer',
                             size: vertices.byteLength,
                             usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC | GPUBufferUsage.INDEX, 
                             //assume read/write
@@ -695,6 +713,7 @@ export class ShaderContext {
                     }
                     else {
                         const vertexBuffer = this.device.createBuffer({
+                            label:'vbo'+index,
                             size: vertices.byteLength,
                             usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC, 
                             //assume read/write
@@ -932,7 +951,10 @@ export class ShaderContext {
 
 
     createRenderPipelineDescriptor = (
-        vertexBufferOptions:{[key:string]:string}[]=[{
+        vertexBufferOptions:{
+            stepMode?:'vertex'|'instance',
+            [key:string]:string
+        }[]=[{
             color:'vec4<f32>'
         }], 
         swapChainFormat = navigator.gpu.getPreferredCanvasFormat(),
@@ -952,6 +974,8 @@ export class ShaderContext {
 
             let ct = 0;
             for(const key in opt) {
+                if(key === 'stepMode' || key === '__COUNT') continue;
+
                 const typeInfo = WGSLTypeSizes[opt[key]];
                 const format = Object.keys(typeInfo.vertexFormats).find((f) => {
                     if(f.startsWith('float32')) return true;
@@ -968,12 +992,17 @@ export class ShaderContext {
                 loc++;
             }
 
-            (vertexBufferOptions as any)[i].COUNT = ct; //for setting vertexCount automatically using our assumptions
+            (vertexBufferOptions as any)[i].__COUNT = ct; //for setting vertexCount automatically using our assumptions
 
-            vertexBuffers.push({
+            const vtxState = {
                 arrayStride,
                 attributes
-            })
+            } as any;
+
+            if(opt.stepMode)
+                vtxState.stepMode = opt.stepMode;
+
+            vertexBuffers.push(vtxState);
             
         });
 
@@ -991,6 +1020,7 @@ export class ShaderContext {
         // });
         
         let desc = { //https://developer.mozilla.org/en-US/docs/Web/API/GPUDevice/createRenderPipeline
+            label:'renderPipeline',
             layout: this.pipelineLayout ? this.pipelineLayout : 'auto',
             vertex: this.vertex ? {
                 module: this.vertex.shaderModule,
@@ -1105,6 +1135,8 @@ export class ShaderContext {
 
         this.bufferGroups[bindGroupNumber] = bufferGroup; //we aren't doing anything with these yet
 
+        if(!this.bufferGroup) this.bufferGroup = bufferGroup;
+
         return bufferGroup;
     }
 
@@ -1121,7 +1153,9 @@ export class ShaderContext {
             bindGroupNumber,
             outputVBOs, //we can read out the VBO e.g. to receive pixel data
             outputTextures,
-            newBindings
+            newBindings,
+
+            
         }={} as Partial<RenderPassSettings & ComputePassSettings>, 
         ...inputs
     ) => {
@@ -1170,7 +1204,7 @@ export class ShaderContext {
                     }
                 }
             });
-        } else newBindGroupBuffer = true; //will trigger bindGroups to be set
+        } else if(!bufferGroup.bindGroup) newBindGroupBuffer = true; //will trigger bindGroups to be set
 
         if(textures) {
             const entries = this.createBindGroupEntries(
@@ -1198,7 +1232,7 @@ export class ShaderContext {
 
         if(params) for(let i = 0; i < params.length; i++ ) {
             const node = params[i];
-            if(typeof inputs[inpBuf_i] !== 'undefined' && this.altBindings?.[node.name] && this.altBindings?.[node.name].group !== bindGroupNumber) {
+            if(typeof inputs[inpBuf_i] !== 'undefined' && this.altBindings?.[node.name] && parseInt(this.altBindings?.[node.name].group) !== bindGroupNumber) {
                 if(!bindGroupAlts[this.altBindings?.[node.name].group]) { 
                     bindGroupAlts[this.altBindings?.[node.name].group] = [] as any[];
                 }
@@ -1233,6 +1267,7 @@ export class ShaderContext {
                         }
 
                         uniformBuffer = this.device.createBuffer({
+                            label:'uniform',
                             size: bufferGroup.totalUniformBufferSize ? bufferGroup.totalUniformBufferSize : 8, // This should be the sum of byte sizes of all uniforms
                             usage: GPUBufferUsage.UNIFORM  | GPUBufferUsage.COPY_SRC,
                             mappedAtCreation:true
@@ -1272,6 +1307,7 @@ export class ShaderContext {
                             } else {
                                 inputBuffers[inpBuf_i] = (
                                     this.device.createBuffer({
+                                        label: `arrayBuffer${inpBuf_i}`,
                                         size:  inputs[inpBuf_i] ? (inputs[inpBuf_i].byteLength ? inputs[inpBuf_i].byteLength : inputs[inpBuf_i]?.length ? inputs[inpBuf_i].length*4 : 8) : 8,
                                         usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST | GPUBufferUsage.VERTEX,
                                         mappedAtCreation: true
@@ -1335,6 +1371,7 @@ export class ShaderContext {
 
             //if(!bufferGroup.defaultUniformBuffer) {
             bufferGroup.defaultUniformBuffer = this.device.createBuffer({
+                label:'defaultUniforms',
                 size: bufferGroup.totalDefaultUniformBufferSize, // This should be the sum of byte sizes of all uniforms
                 usage: GPUBufferUsage.UNIFORM  | GPUBufferUsage.COPY_SRC,
                 mappedAtCreation:true
@@ -1356,28 +1393,38 @@ export class ShaderContext {
             if(bufferGroup.bindGroupLayoutEntries)  {
                 bindGroupEntries.push(...bufferGroup.bindGroupLayoutEntries);
                 let inpBufi = 0;
+
                 bufferGroup.bindGroupLayoutEntries.forEach((entry,i) => {
                     let type = entry.buffer?.type;
-                    if((type && (type.includes('storage') || type.includes('uniform'))) && inputBuffers[inpBufi]) {
-                        entry.resource = { buffer: inputBuffers[inpBufi] }
-                        inpBufi++;
+                    if(type) {
+                        if(type.includes('storage') && inputBuffers[inpBufi] && inputBuffers[inpBufi].label !== 'uniform') {
+                            entry.resource = { buffer: inputBuffers[inpBufi] }
+                            inpBufi++;
+                        }
+                        else if(type.includes('uniform') && (bufferGroup.uniformBuffer)) {
+                            entry.resource = { buffer: bufferGroup.uniformBuffer }
+                            inpBufi++;
+                        }
                     }
                 });
-                if(bufferGroup.defaultUniformBuffer) bindGroupEntries[bindGroupEntries.length-1].resource = {buffer:bufferGroup.defaultUniformBuffer};
+                if(bufferGroup.defaultUniformBuffer) bindGroupEntries[bindGroupEntries.length-1].resource = {
+                    buffer:bufferGroup.defaultUniformBuffer
+                };
             } else if(inputBuffers) {
                 bindGroupEntries.push(...inputBuffers.map((buffer, index) => ({
                     binding: index,
                     resource: { buffer }
                 }))); 
-                if(bufferGroup.defaultUniformBuffer) bindGroupEntries.push({
-                    binding: bufferGroup.defaultUniformBinding, 
-                    resource: {buffer:bufferGroup.defaultUniformBuffer}
-                });
+                if(bufferGroup.defaultUniformBuffer) 
+                    bindGroupEntries.push({
+                        binding: bufferGroup.defaultUniformBinding, 
+                        resource: {buffer:bufferGroup.defaultUniformBuffer}
+                    });
             }
             
-            //console.log(bindGroupEntries);
-            
+
             const bindGroup = this.device.createBindGroup({
+                label:`bindGroup${bindGroupNumber}`,
                 layout: this.bindGroupLayouts[bindGroupNumber],
                 entries: bindGroupEntries
             });
@@ -1515,7 +1562,6 @@ export class ShaderContext {
                         this.renderPassDescriptor.depthStencilAttachment.view = view;
                     }
                     
-                    
                     //record a render pass
                     renderPass = this.device.createRenderBundleEncoder({
                         colorFormats: [navigator.gpu.getPreferredCanvasFormat()],
@@ -1544,7 +1590,8 @@ export class ShaderContext {
 
                     this.bindGroups.forEach(withBindGroup);
                     
-                    if(!bufferGroup.vertexBuffers) this.updateVBO({color:new Array(bufferGroup.vertexCount*4).fill(0)}, 0); //put a default in to force it to run a single pass
+                    if(!bufferGroup.vertexBuffers?.length) 
+                        this.updateVBO(new Float32Array(bufferGroup.vertexCount*4), 0); //put a default in to force it to run a single pass
                     
                     if(bufferGroup.vertexBuffers) 
                         bufferGroup.vertexBuffers.forEach((vbo,i) => {

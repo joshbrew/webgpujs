@@ -72,6 +72,7 @@ export declare class ShaderContext {
     contextSettings: any;
     altBindings: any;
     builtInUniforms: any;
+    bufferGroup: any;
     bufferGroups: any[];
     bindings?: Partial<GPUBindGroupEntry>[];
     bindGroups: GPUBindGroup[];
@@ -102,6 +103,7 @@ export declare class ShaderContext {
     setUBOposition: (dataView: DataView, inputTypes: any, typeInfo: any, offset: any, input: any, inpIdx: any) => any;
     updateUBO: (inputs: any, inputTypes: any, bindGroupNumber?: number) => void;
     createRenderPipelineDescriptor: (vertexBufferOptions?: {
+        stepMode?: 'vertex' | 'instance';
         [key: string]: string;
     }[], swapChainFormat?: GPUTextureFormat, renderPipelineDescriptor?: Partial<GPURenderPipelineDescriptor>) => Partial<GPURenderPipelineDescriptor>;
     createRenderPassDescriptor: () => GPURenderPassDescriptor;
@@ -110,7 +112,7 @@ export declare class ShaderContext {
     }[], contextSettings?: GPUCanvasConfiguration, renderPipelineDescriptor?: Partial<GPURenderPipelineDescriptor>, renderPassDescriptor?: GPURenderPassDescriptor) => void;
     makeBufferGroup: (bindGroupNumber?: number) => any;
     firstRun: boolean;
-    buffer: ({ vbos, textures, indexBuffer, indexFormat, skipOutputDef, bindGroupNumber, outputVBOs, outputTextures, newBindings }?: Partial<{
+    buffer: ({ vbos, textures, indexBuffer, indexFormat, skipOutputDef, bindGroupNumber, outputVBOs, outputTextures, newBindings, }?: Partial<{
         vertexCount?: number;
         instanceCount?: number;
         firstVertex?: number;
@@ -122,12 +124,10 @@ export declare class ShaderContext {
         indexFormat?: "uint16" | "uint32";
         firstIndex?: number;
         useRenderBundle?: any;
-        vbos?: (Float32Array | {
-            vertex?: number[] | number[][];
-            color?: number[] | number[][];
-            uv?: number[] | number[][];
-            normal?: number[] | number[][];
-        })[];
+        vbos?: ({
+            [key: string]: string;
+            stepMode?: "instance" | "vertex";
+        } | Float32Array | GPUBuffer)[];
         outputVBOs?: boolean;
         textures?: {
             [key: string]: ImageBitmap | {
@@ -165,12 +165,10 @@ export declare class ShaderContext {
         indexFormat?: "uint16" | "uint32";
         firstIndex?: number;
         useRenderBundle?: any;
-        vbos?: (Float32Array | {
-            vertex?: number[] | number[][];
-            color?: number[] | number[][];
-            uv?: number[] | number[][];
-            normal?: number[] | number[][];
-        })[];
+        vbos?: ({
+            [key: string]: string;
+            stepMode?: "instance" | "vertex";
+        } | Float32Array | GPUBuffer)[];
         outputVBOs?: boolean;
         textures?: {
             [key: string]: ImageBitmap | {

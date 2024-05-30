@@ -52,7 +52,7 @@ function dft(
     let sum = vec2f(0.0, 0.0); //will be replaced with var
 
     var sum2 = add(sum,sum);
-    
+
     for (let n = 0; n < N; n++) {
         const phase = 2.0 * Math.PI * f32(k) * f32(n) / f32(N);
         sum = sum + vec2f(
@@ -301,6 +301,7 @@ const createImageExample = async () => {
     } 
     let transformationMatrix = getTransformationMatrix();
     console.time('createRenderPipeline and render texture');
+    
     WebGPUjs.createPipeline({
         vertex:cubeExampleVert,
         fragment:cubeExampleFrag
@@ -373,8 +374,7 @@ createImageExample();
 //we need to add some stuff to our transpiler to make this more doable methinks.
 function boidsCompute(
     //array buffers
-    particlesA = 'array<vec2f>', //float32array with x,y,vx,vy
-    particlesB = 'array<vec2f>', //float32array with x,y,vx,vy per position
+    particles = 'array<vec2f>', //float32array with x,y,vx,vy per position
     //uniforms
     deltaT = 0.04,
     rule1Distance = 0.1,
@@ -384,83 +384,206 @@ function boidsCompute(
     rule2Scale = 0.05,
     rule3Scale = 0.005
 ) {
-    const index = threadId.x*2;
-    var vPos = particlesA[index];
-    var vVel = particlesA[index+1];
-    let len = particlesA.length * 0.5; //should be counted as a vec2 array
+    let index = i32(threadId.x*2); 
+    var pPos = particles[index];
+    var pVel = particles[index+1];
+    var plen = i32(f32(particles.length) * 0.5); //should be counted as a vec2 array
     var cMass = vec2f(0,0);
     var cVel = vec2f(0,0);
+    var colVel = vec2f(0,0);
     var cMassCount = 0;
     var cVelCount = 0;
 
 
-    for(var i = 0; i < len; i++) {
+    for(let i = 0; i < plen; i++) {
         if(i == index) {
             continue;
         }
         let j = i * 2;
 
-        var pos = particlesA(j);
-        var vel = particlesB(j+1);
+        var pos = particles[j];
+        var vel = particles[j+1];
 
-        if(distance(pos, vPos) < rule1Distance) {
+        if(distance(pos, pPos) < rule1Distance) {
             cMass += pos;
             cMassCount++;
         }
-        if (distance(pos, vPos) < params.rule2Distance) {
-            colVel -= pos - vPos;
+        if (distance(pos, pPos) < rule2Distance) {
+            colVel -= pos - pPos;
         }
-        if (distance(pos, vPos) < params.rule3Distance) {
+        if (distance(pos, pPos) < rule3Distance) {
             cVel += vel;
             cVelCount++;
         }
     }
     if (cMassCount > 0) {
-        cMass = (cMass / vec2(f32(cMassCount))) - vPos;
+        cMass = (cMass / vec2f(f32(cMassCount))) - pPos;
     }
     if (cVelCount > 0) {
         cVel /= f32(cVelCount);
     }
 
-    vVel += (cMass * rule1Scale) + (colVel * rule2Scale) + (cVel * rule3Scale);
+    pVel += (cMass * rule1Scale) + (colVel * rule2Scale) + (cVel * rule3Scale);
 
-    vVel = normalize(vVel) * clamp(length(vVel), 0.0, 0.1);
-    vPos = vPos + (vVel * deltaT);
+    pVel = normalize(pVel) * clamp(length(pVel), 0.0, 0.1);
+    pPos = pPos + (pVel * deltaT);
 
-    if(vPos.x < -1.0) {
-        vPos.x = 1.0;
+    if(pPos.x < -1.0) {
+        pPos.x = 1.0;
     }
-    if(vPos.x > 1.0) {
-        vPos.x = -1.0;
+    if(pPos.x > 1.0) {
+        pPos.x = -1.0;
     }
-    if (vPos.y < -1.0) {
-        vPos.y = 1.0;
+    if (pPos.y < -1.0) {
+        pPos.y = 1.0;
       }
-    if (vPos.y > 1.0) {
-        vPos.y = -1.0;
+    if (pPos.y > 1.0) {
+        pPos.y = -1.0;
     }
 
-    particlesB[index] = vPos;
-    particlesB[index+1] = vVel;
+    //update particle buffer for rendering, should only have to set initial conditions
+    particles[index] = pPos;
+    particles[index+1] = pVel;
 
 }
 
-function boidsVertex(
-    particlesB = 'array<vec2f>'
-) {
-    const sprite = [
-        vec2f(-0.01, -0.02), 
-        vec2f(0.01,  -0.02),
-        vec2f(0.0,    0.02), 
-    ];
 
+function boidsVertex() {
+
+    let angle = -atan2(vVelIn.x, vVelIn.y);
+    let pos = vec2(
+        (a_posIn.x * cos(angle)) - (a_posIn.y * sin(angle)),
+        (a_posIn.x * sin(angle)) + (a_posIn.y * cos(angle))
+    );
     
+    position = vec4f(pos + vPosIn, 0.0, 1.0);
+    color = vec4f(
+        1.0 - sin(angle + 1.0) - vVelIn.y,
+        pos.x * 100.0 - vVelIn.y + 0.1,
+        vVelIn.x + cos(angle + 0.5),
+        1.0);
 
 }
 
 function boidsFragment() {
     return color;
 }
+
+let canvas3 = document.createElement('canvas');
+
+canvas3.width = 500;
+canvas3.height = 500;
+
+const numParticles = 1500;
+
+WebGPUjs.createPipeline({
+    compute:boidsCompute,
+    vertex:boidsVertex,
+    fragment:boidsFragment
+},{
+    canvas:canvas3,
+
+    workGroupSize:64,
+    computePass:{
+        workgroupsX:numParticles/64
+    },
+
+    renderPass:{ //tell it to make an initial render pass with these inputs
+        vbos:[ //we can upload vbos
+            {
+                vVel:'vec2f',
+                vPos:'vec2f',
+
+                stepMode:'instance' //speeds up rendering, can execute vertex and instance counts with different values
+            },
+            {
+                a_pos:'vec2f'
+            },
+            { 
+                color:'vec4f'
+            } 
+        ]
+    },
+
+    // bindings:{ //binding overrides (assigned to our custom-generated layout)
+    //     image:{
+    //         texture:{viewDimension:'2d', sampleType:'float'} 
+    //     }
+    // },
+
+    //overrides for pipeline descriptor will be assigned so you can add or rewrite what you need over the defaults
+    renderPipelineDescriptor:{ primitive: {topology:'triangle-list'}},
+    //additional render or compute pass inputs (just the UBO update in this case)
+}).then((pipeline) => {
+
+    console.log('Boids pipeline', pipeline,
+        pipeline.compute.code,
+        pipeline.fragment.code,
+        pipeline.vertex.code
+    )
+
+    const particleBuffer = new Float32Array(numParticles * 4);
+    //vec2f + vec2f buffer packed together
+
+    for(let i = 0; i < numParticles; i+=4) {
+
+        //random particle starting positions
+        particleBuffer[i] = Math.random();
+        particleBuffer[i+1] = Math.random();
+
+        //velocity start can be zero or random
+        //particleBuffer[i+2] = Math.random();
+        //particleBuffer[i+3] = Math.random();
+    }
+
+    //buffer positions with initial values
+    pipeline.compute.buffer(
+        undefined,
+        particleBuffer,
+        //also include uniforms
+        0.04,  //deltaT
+        0.1,   //rule1Distance
+        0.025, //rule2Distance
+        0.025, //rule3Distance
+        0.02,  //rule1Scale
+        0.05,  //rule2Scale
+        0.005  //rule3Scale
+    );
+
+    //set the position buffer as the instance VBO
+    pipeline.fragment.updateVBO(
+        pipeline.compute.bufferGroup.inputBuffers[0],
+        0
+    );
+
+    //upload sprite arrow to second vbo
+    pipeline.fragment.updateVBO(
+        new Float32Array([
+            -0.01, -0.02, 
+            0.01, -0.02, 
+            0.0, 0.02
+        ]),
+        1
+    );
+
+    pipeline.fragment.updateVBO(
+        new Float32Array([
+            0,0,0,0,
+            0,0,0,0,
+            0,0,0,0
+        ]),
+        2
+    );
+
+    //buffering complete, now animate
+
+    pipeline.process();
+    pipeline.render({
+        vertexCount:3,
+        instanceCount:numParticles
+    });
+
+});
 
 
 

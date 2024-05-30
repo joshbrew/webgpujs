@@ -155,7 +155,9 @@ export class WGSLTranspiler {
         returnedVars = this.flattenStrings(returnedVars);
 
         if(typeof vertexBufferOptions?.[0] === 'object') vertexBufferOptions.forEach((opt) => {
-            const keys = Object.keys(opt);
+            const keys = Object.keys(opt).filter((n) => {
+                if(n !== 'stepMode' && n !== '__COUNT') return true;
+            });
 
             keys.forEach((k) => {
                 if(!(k in this.excludedNames)) {
@@ -186,10 +188,19 @@ export class WGSLTranspiler {
                     else return true;
                 }
             });
-            let isModified = new RegExp(`\\b${token.split('=')[0]}\\b(\\[\\w+\\])?\\s*=`).test(functionBody);
+
+            let variableName = token.split('=')[0].trim();
+            if(variableName.includes(' ')) {
+                let spl = variableName.split(' ');
+                variableName = spl[1] ? spl[1] : spl[0];
+            } //get rid of the prefix
+               
+            let isModified = new RegExp(`(?<!\\blet\\s+|\\bvar\\s+|\\bconst\\s+)\\b${variableName}\\b(?:\\[[^\\]]*\\])?\\s*=`).test(functionBody);
 
             if (token.includes('=')) {
                 const variableMatch = token.match(/(const|let|var)?\s*(\w+)\s*=\s*(.+)/);
+           
+  
                 if (variableMatch && (variableMatch[3].startsWith('new') || variableMatch[3].startsWith('['))) {
                     let length;
                     if (variableMatch[3].startsWith('new Array(')) {
@@ -240,15 +251,27 @@ export class WGSLTranspiler {
                         });
                     }
                 } else {
-                    ast.push({
-                        type: 'variable',
-                        name: variableMatch[2],
-                        value: variableMatch[3],
-                        isUniform:true,
-                        isInput,
-                        isReturned: returnedVars ? returnedVars?.includes(variableMatch[2]) : isInput ? true : false,
-                        isModified
-                    });
+
+                    if(variableMatch[3].includes('array')) {
+                        ast.push({
+                            type: 'array',
+                            name: variableMatch[2],
+                            value: variableMatch[3],
+                            isInput,
+                            isReturned: returnedVars ? returnedVars?.includes(variableMatch[2]) : isInput ? true : false,
+                            isModified
+                        });
+                    } else {
+                        ast.push({
+                            type: 'variable',
+                            name: variableMatch[2],
+                            value: variableMatch[3],
+                            isUniform:true,
+                            isInput,
+                            isReturned: returnedVars ? returnedVars?.includes(variableMatch[2]) : isInput ? true : false,
+                            isModified
+                        });
+                    }
                 }
             } else {
                 // This is a function parameter without a default value
@@ -361,7 +384,7 @@ export class WGSLTranspiler {
             return 'array<u16>';
         } else if (value.startsWith('new Uint32Array')) {
             return 'array<u32>';
-        } else if (value.includes('.')) {
+        } else if (value.includes('.') || value.includes('e-')) {
             return 'f32';  // Float type for values with decimals
         } else if (!isNaN(value)) {
             return 'i32';  // Int type for whole numbers
@@ -573,7 +596,7 @@ export class WGSLTranspiler {
                     code += `struct ${capitalizeFirstLetter(node.name)}Struct {\n    values: ${elementType}\n};\n\n`;
                     code += `@group(${bindGroup}) @binding(${bindingIncr})\n`;
                     
-                    if (!returnedVars || returnedVars?.includes(node.name) || node.isModified) { //assume arrays are read_write?
+                    if (!returnedVars || returnedVars?.includes(node.name) || (node.isModified && !node.isUniform)) { //assume arrays are read_write?
                         code += `var<storage, read_write> ${node.name}: ${capitalizeFirstLetter(node.name)}Struct;\n\n`;
                     } else {
                         code += `var<storage, read> ${node.name}: ${capitalizeFirstLetter(node.name)}Struct;\n\n`;
@@ -683,10 +706,13 @@ export class WGSLTranspiler {
         ast:any, 
         params:any, 
         shaderType ='compute', 
-        vertexBufferOptions:{[key:string]:string}[]=[{
+        vertexBufferOptions:{
+            stepMode?:'instance'|'vertex',
+            [key:string]:string
+        }[]=[{
             color:'vec4<f32>'
         }], 
-        workGroupSize=256, 
+        workGroupSize=64, 
         gpuFuncs:(Function|string)[]
     ) {
         let code = '';
@@ -716,16 +742,19 @@ export class WGSLTranspiler {
                 });
                 
                 let loc = 0;
+                let idx = 0;
                 for(const key of keys) {
-                    const type = types[loc];
-
+                    const type = types[idx];
+                    idx++;
+                    if(key === 'stepMode' || key === '__COUNT') continue; //except special parameters we might end up with
+                
                     vboStrings.push(
-                        `@location(${loc}) ${key}: ${type}${loc === keys.length-1 ? '' : ','}`
+                        `@location(${loc}) ${key}: ${type}${idx === keys.length ? '' : ','}`
                     );
                     
                     if(shaderType === 'vertex') {   
                         vboInputStrings.push(
-                            `@location(${loc}) ${key}In: ${type}${loc === keys.length-1 ? '' : ','}`
+                            `@location(${loc}) ${key}In: ${type}${idx === keys.length ? '' : ','}`
                         );
                     }
                     
@@ -855,7 +884,7 @@ fn frag_main(
 
             let names = ['position'];
             vertexBufferOptions.forEach((opt) => {
-                names.push(...Object.keys(opt));
+                names.push(...Object.keys(opt).filter((n) => { if(n !== 'stepMode' && n !== '__COUNT') return true;}));
             })
 
             // Create a regular expression pattern from the names array
@@ -1387,8 +1416,11 @@ fn frag_main(
         func:Function|string,  
         shaderType:'compute'|'vertex'|'fragment'='compute', 
         bindGroupNumber=0, 
-        workGroupSize=256, 
-        vertexBufferOptions:{[key:string]:string}[]=[{
+        workGroupSize=64, 
+        vertexBufferOptions:{
+            stepMode?:'instance'|'vertex',
+            [key:string]:string
+        }[]=[{
             color:'vec4<f32>'
         }],
         gpuFuncs?:(Function|string)[],

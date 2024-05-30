@@ -99,7 +99,7 @@
     static tokenize(funcStr) {
       let head = this.getFunctionHead(funcStr);
       let paramString = head.substring(head.indexOf("(") + 1, head.lastIndexOf(")"));
-      let params2 = this.splitIgnoringBrackets(paramString).map((param) => ({
+      let params = this.splitIgnoringBrackets(paramString).map((param) => ({
         token: param,
         isInput: true
       }));
@@ -125,10 +125,10 @@
           return { token: arg, isInput: false };
         }).filter((arg) => arg !== null);
       });
-      params2 = params2.concat(assignmentTokens);
-      params2 = params2.concat(builtInUniformsTokens);
-      params2 = params2.concat(textureCallTokens);
-      return params2;
+      params = params.concat(assignmentTokens);
+      params = params.concat(builtInUniformsTokens);
+      params = params.concat(textureCallTokens);
+      return params;
     }
     static excludedNames = {
       "position": true,
@@ -140,7 +140,9 @@
       let returnedVars = returnMatches ? returnMatches.map((match) => match.replace(/^[ \t]*return /, "").replace(";", "")) : void 0;
       returnedVars = this.flattenStrings(returnedVars);
       if (typeof vertexBufferOptions?.[0] === "object") vertexBufferOptions.forEach((opt) => {
-        const keys = Object.keys(opt);
+        const keys = Object.keys(opt).filter((n) => {
+          if (n !== "stepMode" && n !== "__COUNT") return true;
+        });
         keys.forEach((k) => {
           if (!(k in this.excludedNames)) {
             this.excludedNames[k] = true;
@@ -161,7 +163,12 @@
             } else return true;
           }
         });
-        let isModified = new RegExp(`\\b${token.split("=")[0]}\\b(\\[\\w+\\])?\\s*=`).test(functionBody);
+        let variableName = token.split("=")[0].trim();
+        if (variableName.includes(" ")) {
+          let spl = variableName.split(" ");
+          variableName = spl[1] ? spl[1] : spl[0];
+        }
+        let isModified = new RegExp(`(?<!\\blet\\s+|\\bvar\\s+|\\bconst\\s+)\\b${variableName}\\b(?:\\[[^\\]]*\\])?\\s*=`).test(functionBody);
         if (token.includes("=")) {
           const variableMatch = token.match(/(const|let|var)?\s*(\w+)\s*=\s*(.+)/);
           if (variableMatch && (variableMatch[3].startsWith("new") || variableMatch[3].startsWith("["))) {
@@ -219,15 +226,26 @@
               });
             }
           } else {
-            ast.push({
-              type: "variable",
-              name: variableMatch[2],
-              value: variableMatch[3],
-              isUniform: true,
-              isInput,
-              isReturned: returnedVars ? returnedVars?.includes(variableMatch[2]) : isInput ? true : false,
-              isModified
-            });
+            if (variableMatch[3].includes("array")) {
+              ast.push({
+                type: "array",
+                name: variableMatch[2],
+                value: variableMatch[3],
+                isInput,
+                isReturned: returnedVars ? returnedVars?.includes(variableMatch[2]) : isInput ? true : false,
+                isModified
+              });
+            } else {
+              ast.push({
+                type: "variable",
+                name: variableMatch[2],
+                value: variableMatch[3],
+                isUniform: true,
+                isInput,
+                isReturned: returnedVars ? returnedVars?.includes(variableMatch[2]) : isInput ? true : false,
+                isModified
+              });
+            }
           }
         } else {
           ast.push({
@@ -335,7 +353,7 @@
         return "array<u16>";
       } else if (value.startsWith("new Uint32Array")) {
         return "array<u32>";
-      } else if (value.includes(".")) {
+      } else if (value.includes(".") || value.includes("e-")) {
         return "f32";
       } else if (!isNaN(value)) {
         return "i32";
@@ -378,7 +396,7 @@
       let defaultsStruct = "";
       let hasUniforms = false;
       let defaultUniforms;
-      const params2 = [];
+      const params = [];
       let bindingIncr = minBinding;
       let names = {};
       let prevTextureBinding;
@@ -438,17 +456,17 @@
 `;
             node.type = variableTypes[node.name];
             bindingIncr++;
-            params2.push(node);
+            params.push(node);
           } else if (typeof variableTypes[node.name] === "object") {
             code += `@group(${bindGroup}) @binding(${bindingIncr}) ${variableTypes[node.name].prefix || "var"} ${node.name}: ${variableTypes[node.name].type};
 
 `;
             node.type = variableTypes[node.name].type;
             bindingIncr++;
-            params2.push(node);
+            params.push(node);
           }
         } else if (node.isTexture) {
-          params2.push(node);
+          params.push(node);
           let format = node.name.includes("i32") ? "i32" : node.name.includes("u32") ? "u32" : "f32";
           let typ;
           if (node.isDepthTextureArray) typ = "texture_depth_2d_array";
@@ -476,7 +494,7 @@
           else if (node.is1dStorageTexture) typ = "texture_storage_3d<" + format + ",write>";
           else if (node.is2dStorageTextureArray) typ = "texture_storage_2d_array<" + format + ",write>";
           else typ = "texture_storage_2d<" + format + ",write>";
-          params2.push(node);
+          params.push(node);
           code += `@group(${bindGroup}) @binding(${bindingIncr}) var ${node.name}: ${typ};
 `;
           if (typeof prevTextureBinding === "undefined")
@@ -486,7 +504,7 @@
           let typ;
           if (node.isComparisonSampler) typ = "sampler_comparison";
           else typ = "sampler";
-          params2.push(node);
+          params.push(node);
           code += `@group(${bindGroup}) @binding(${bindingIncr}) var ${node.name}: ${typ};
 
 `;
@@ -495,7 +513,7 @@
           if (node.type === "array") {
             const elementType = this.inferTypeFromValue(node.value.split(",")[0], funcStr, ast);
             node.type = elementType;
-            params2.push(node);
+            params.push(node);
             code += `struct ${capitalizeFirstLetter(node.name)}Struct {
     values: ${elementType}
 };
@@ -503,7 +521,7 @@
 `;
             code += `@group(${bindGroup}) @binding(${bindingIncr})
 `;
-            if (!returnedVars || returnedVars?.includes(node.name) || node.isModified) {
+            if (!returnedVars || returnedVars?.includes(node.name) || node.isModified && !node.isUniform) {
               code += `var<storage, read_write> ${node.name}: ${capitalizeFirstLetter(node.name)}Struct;
 
 `;
@@ -522,7 +540,7 @@
             }
             const uniformType = this.inferTypeFromValue(node.value, funcStr, ast);
             node.type = uniformType;
-            params2.push(node);
+            params.push(node);
             uniformsStruct += `    ${node.name}: ${uniformType},
 `;
           }
@@ -553,9 +571,9 @@
 
 `;
       }
-      return { code, params: params2, defaultUniforms, lastBinding: bindingIncr };
+      return { code, params, defaultUniforms, lastBinding: bindingIncr };
     }
-    static extractAndTransposeInnerFunctions = (body, extract = true, ast, params2, shaderType, vertexBufferOptions) => {
+    static extractAndTransposeInnerFunctions = (body, extract = true, ast, params, shaderType, vertexBufferOptions) => {
       const functionRegex = /function (\w+)\(([^()]*|\((?:[^()]*|\([^()]*\))*\))*\) \{([\s\S]*?)\}/g;
       let match;
       let extractedFunctions = "";
@@ -573,32 +591,32 @@
             outputParam = inferredType;
           }
         }
-        let params3 = this.splitIgnoringBrackets(paramString).map((p) => {
+        let params2 = this.splitIgnoringBrackets(paramString).map((p) => {
           let split = p.split("=");
           let vname = split[0];
           let inferredType = this.inferTypeFromValue(split[1], body, ast);
           if (!outputParam) outputParam = inferredType;
           return vname + ": " + inferredType;
         });
-        const transposedBody = this.transposeBody(funcBody, funcBody, params3, shaderType, true, void 0, false, vertexBufferOptions).code;
-        extractedFunctions += `fn ${funcName}(${params3}) -> ${outputParam} {${transposedBody}}
+        const transposedBody = this.transposeBody(funcBody, funcBody, params2, shaderType, true, void 0, false, vertexBufferOptions).code;
+        extractedFunctions += `fn ${funcName}(${params2}) -> ${outputParam} {${transposedBody}}
 
 `;
       }
       if (extract) body = body.replace(functionRegex, "");
       return { body, extractedFunctions };
     };
-    static generateMainFunctionWorkGroup(funcStr, ast, params2, shaderType = "compute", vertexBufferOptions = [{
+    static generateMainFunctionWorkGroup(funcStr, ast, params, shaderType = "compute", vertexBufferOptions = [{
       color: "vec4<f32>"
-    }], workGroupSize = 256, gpuFuncs) {
+    }], workGroupSize = 64, gpuFuncs) {
       let code = "";
       if (gpuFuncs) {
         gpuFuncs.forEach((f) => {
-          let result = this.extractAndTransposeInnerFunctions(typeof f === "function" ? f.toString() : f, false, ast, params2, shaderType, vertexBufferOptions);
+          let result = this.extractAndTransposeInnerFunctions(typeof f === "function" ? f.toString() : f, false, ast, params, shaderType, vertexBufferOptions);
           if (result.extractedFunctions) code += result.extractedFunctions;
         });
       }
-      const { body: mainBody, extractedFunctions } = this.extractAndTransposeInnerFunctions(funcStr.match(/{([\s\S]+)}/)[1], true, ast, params2, shaderType, vertexBufferOptions);
+      const { body: mainBody, extractedFunctions } = this.extractAndTransposeInnerFunctions(funcStr.match(/{([\s\S]+)}/)[1], true, ast, params, shaderType, vertexBufferOptions);
       code += extractedFunctions;
       let vtxInps;
       let vboInputStrings = [];
@@ -612,14 +630,17 @@
             types.push(...Object.values(obj));
           });
           let loc = 0;
+          let idx = 0;
           for (const key of keys) {
-            const type = types[loc];
+            const type = types[idx];
+            idx++;
+            if (key === "stepMode" || key === "__COUNT") continue;
             vboStrings.push(
-              `@location(${loc}) ${key}: ${type}${loc === keys.length - 1 ? "" : ","}`
+              `@location(${loc}) ${key}: ${type}${idx === keys.length ? "" : ","}`
             );
             if (shaderType === "vertex") {
               vboInputStrings.push(
-                `@location(${loc}) ${key}In: ${type}${loc === keys.length - 1 ? "" : ","}`
+                `@location(${loc}) ${key}In: ${type}${idx === keys.length ? "" : ","}`
               );
             }
             loc++;
@@ -668,7 +689,7 @@ fn frag_main(
 `;
       }
       let shaderHead = code;
-      let transposed = this.transposeBody(mainBody, funcStr, params2, shaderType, shaderType === "fragment", shaderHead, true, vertexBufferOptions);
+      let transposed = this.transposeBody(mainBody, funcStr, params, shaderType, shaderType === "fragment", shaderHead, true, vertexBufferOptions);
       code += transposed.code;
       if (transposed.consts?.length > 0)
         code = transposed.consts.join("\n") + "\n\n" + code;
@@ -678,7 +699,7 @@ fn frag_main(
       code += "\n}\n";
       return code;
     }
-    static transposeBody = (body, funcStr, params2, shaderType, returns = false, shaderHead = "", extractConsts = false, vertexBufferOptions) => {
+    static transposeBody = (body, funcStr, params, shaderType, returns = false, shaderHead = "", extractConsts = false, vertexBufferOptions) => {
       let code = "";
       const commentPlaceholders = {};
       let placeholderIndex = 0;
@@ -715,7 +736,9 @@ fn frag_main(
       } else {
         let names = ["position"];
         vertexBufferOptions.forEach((opt) => {
-          names.push(...Object.keys(opt));
+          names.push(...Object.keys(opt).filter((n) => {
+            if (n !== "stepMode" && n !== "__COUNT") return true;
+          }));
         });
         let namesPattern = names.join("|");
         code = code.replace(new RegExp(`(${namesPattern})|(\\w+)\\[([\\w\\s+\\-*\\/]+)\\]`, "gm"), (match, p1, p2, p3) => {
@@ -855,7 +878,7 @@ for (var i: i32 = 0; i < ${size}; i = i + 1) {
           return `${type}<${inferredType}>(${argArray.join(", ")})`;
         }
       });
-      params2.forEach((param) => {
+      params.forEach((param) => {
         if (param.isUniform) {
           const regex = new RegExp(`(?<![a-zA-Z0-9])${param.name}(?![a-zA-Z0-9])`, "gm");
           code = code.replace(regex, `uniforms.${param.name}`);
@@ -1101,7 +1124,7 @@ for (var i: i32 = 0; i < ${size}; i = i + 1) {
       shader2Obj.params = combinedParams;
     }
     //this pipeline is set to only use javascript functions so it can generate asts and infer all of the necessary buffering orders and types
-    static convertToWebGPU(func, shaderType = "compute", bindGroupNumber = 0, workGroupSize = 256, vertexBufferOptions = [{
+    static convertToWebGPU(func, shaderType = "compute", bindGroupNumber = 0, workGroupSize = 64, vertexBufferOptions = [{
       color: "vec4<f32>"
     }], gpuFuncs, variableTypes, lastBinding = 0) {
       let funcStr = typeof func === "string" ? func : func.toString();
@@ -1585,10 +1608,12 @@ for (var i: i32 = 0; i < ${size}; i = i + 1) {
       }
       if (this.fragment) {
         this.fragment.bufferGroups = this.bufferGroups;
+        this.fragment.bindGroups = this.bindGroups;
         this.fragment.bindGroupLayouts = this.bindGroupLayouts;
-        const entries = this.fragment.createBindGroupEntries(options?.renderPass?.textures, void 0, GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT);
+        let entries = this.fragment.createBindGroupEntries(options?.renderPass?.textures, void 0, GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT);
         this.fragment.bindGroupLayoutEntries = entries;
         this.fragment.bindGroupLayout = this.device.createBindGroupLayout({
+          label: "fragmentLayout",
           entries
         });
         this.fragment.setBindGroupLayout(entries, options.bindGroupNumber);
@@ -1599,6 +1624,7 @@ for (var i: i32 = 0; i < ${size}; i = i + 1) {
         });
         if (this.bindGroupLayouts.length > 0) {
           this.compute.pipelineLayout = this.device.createPipelineLayout({
+            label: "computeRenderPipelineDescriptor",
             bindGroupLayouts: this.bindGroupLayouts.filter((v) => {
               if (v) return true;
             })
@@ -1629,6 +1655,7 @@ for (var i: i32 = 0; i < ${size}; i = i + 1) {
         this.fragment.vertex = this.vertex;
         if (this.bindGroupLayouts.length > 0) {
           this.fragment.pipelineLayout = this.device.createPipelineLayout({
+            label: "fragmentRenderPipelineDescriptor",
             bindGroupLayouts: this.bindGroupLayouts.filter((v) => {
               if (v) return true;
             })
@@ -1644,6 +1671,7 @@ for (var i: i32 = 0; i < ${size}; i = i + 1) {
       } else if (this.vertex) {
         if (this.bindGroupLayouts.length > 0) {
           this.vertex.pipelineLayout = this.device.createPipelineLayout({
+            label: "vertexRenderPipelineDescriptor",
             bindGroupLayouts: this.bindGroupLayouts.filter((v) => {
               if (v) return true;
             })
@@ -1837,6 +1865,7 @@ fn vtx_main(
     contextSettings;
     altBindings;
     builtInUniforms;
+    bufferGroup;
     bufferGroups = [];
     bindings;
     bindGroups = [];
@@ -2005,29 +2034,30 @@ fn vtx_main(
       }
       if (vertices) {
         if (vertices instanceof GPUBuffer) {
-          if (!bufferGroup.vertexBuffers) bufferGroup.vertexBuffers = [];
-          bufferGroup.vertexBuffers[index] = vertices;
-        } else {
-          if (!isTypedArray(vertices)) {
-            if (!Array.isArray(vertices)) {
-              vertices = ShaderHelper.combineVertices(
-                typeof vertices.vertex?.[0] === "object" ? ShaderHelper.flattenArray(vertices.vertex) : vertices.vertex,
-                typeof vertices.color?.[0] === "object" ? ShaderHelper.flattenArray(vertices.color) : vertices.color,
-                typeof vertices.uv?.[0] === "object" ? ShaderHelper.flattenArray(vertices.uv) : vertices.uv,
-                typeof vertices.normal?.[0] === "object" ? ShaderHelper.flattenArray(vertices.normal) : vertices.normal
-              );
-            } else
-              vertices = new Float32Array(typeof vertices === "object" ? ShaderHelper.flattenArray(vertices) : vertices);
+          if (indexBuffer) {
+            if (!bufferGroup.indexCount) bufferGroup.indexCount = 1;
+            bufferGroup.indexBuffer = vertices;
+          } else {
+            if (!bufferGroup.vertexBuffers) bufferGroup.vertexBuffers = [];
+            bufferGroup.vertexBuffers[index] = vertices;
           }
+        } else {
+          if (Array.isArray(vertices)) {
+            vertices = new Float32Array(
+              ShaderHelper.flattenArray(vertices)
+            );
+          }
+          if (!isTypedArray(vertices)) return;
           if (indexBuffer || bufferGroup.vertexBuffers?.[index]?.size !== vertices.byteLength) {
             if (indexBuffer) {
               if (!bufferGroup.indexCount) bufferGroup.indexCount = vertices.length;
             } else {
               if (!bufferGroup.vertexBuffers) bufferGroup.vertexBuffers = [];
-              if (!bufferGroup.vertexCount) bufferGroup.vertexCount = vertices.length / (this.vertexBufferOptions[index]?.COUNT || 4);
+              if (!bufferGroup.vertexCount) bufferGroup.vertexCount = vertices.length ? vertices.length / (this.vertexBufferOptions[index]?.__COUNT || 4) : 1;
             }
             if (indexBuffer) {
               const vertexBuffer = this.device.createBuffer({
+                label: "indexBuffer",
                 size: vertices.byteLength,
                 usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC | GPUBufferUsage.INDEX
                 //assume read/write
@@ -2035,6 +2065,7 @@ fn vtx_main(
               bufferGroup.indexBuffer = vertexBuffer;
             } else {
               const vertexBuffer = this.device.createBuffer({
+                label: "vbo" + index,
                 size: vertices.byteLength,
                 usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC
                 //assume read/write
@@ -2206,6 +2237,7 @@ fn vtx_main(
         const attributes = [];
         let ct = 0;
         for (const key in opt) {
+          if (key === "stepMode" || key === "__COUNT") continue;
           const typeInfo = WGSLTypeSizes[opt[key]];
           const format = Object.keys(typeInfo.vertexFormats).find((f) => {
             if (f.startsWith("float32")) return true;
@@ -2219,14 +2251,18 @@ fn vtx_main(
           arrayStride += typeInfo.size;
           loc++;
         }
-        vertexBufferOptions[i].COUNT = ct;
-        vertexBuffers.push({
+        vertexBufferOptions[i].__COUNT = ct;
+        const vtxState = {
           arrayStride,
           attributes
-        });
+        };
+        if (opt.stepMode)
+          vtxState.stepMode = opt.stepMode;
+        vertexBuffers.push(vtxState);
       });
       let desc = {
         //https://developer.mozilla.org/en-US/docs/Web/API/GPUDevice/createRenderPipeline
+        label: "renderPipeline",
         layout: this.pipelineLayout ? this.pipelineLayout : "auto",
         vertex: this.vertex ? {
           module: this.vertex.shaderModule,
@@ -2315,6 +2351,7 @@ fn vtx_main(
       bufferGroup.uniformBuffer = void 0;
       bufferGroup.bindGroupLayoutEntries = this.bindGroupLayoutEntries;
       this.bufferGroups[bindGroupNumber] = bufferGroup;
+      if (!this.bufferGroup) this.bufferGroup = bufferGroup;
       return bufferGroup;
     };
     firstRun = true;
@@ -2356,7 +2393,7 @@ fn vtx_main(
       const inputBuffers = bufferGroup.inputBuffers;
       let uniformBuffer = bufferGroup.uniformBuffer;
       const outputBuffers = bufferGroup.outputBuffers;
-      const params2 = bufferGroup.params;
+      const params = bufferGroup.params;
       const inputTypes = bufferGroup.inputTypes;
       let newBindGroupBuffer = newBindings;
       if (inputBuffers?.length > 0) {
@@ -2367,7 +2404,7 @@ fn vtx_main(
             }
           }
         });
-      } else newBindGroupBuffer = true;
+      } else if (!bufferGroup.bindGroup) newBindGroupBuffer = true;
       if (textures) {
         const entries = this.createBindGroupEntries(
           textures,
@@ -2389,9 +2426,9 @@ fn vtx_main(
       let uBufferSet = false;
       let bindGroupAlts = [];
       let uniformValues = [];
-      if (params2) for (let i = 0; i < params2.length; i++) {
-        const node = params2[i];
-        if (typeof inputs[inpBuf_i] !== "undefined" && this.altBindings?.[node.name] && this.altBindings?.[node.name].group !== bindGroupNumber) {
+      if (params) for (let i = 0; i < params.length; i++) {
+        const node = params[i];
+        if (typeof inputs[inpBuf_i] !== "undefined" && this.altBindings?.[node.name] && parseInt(this.altBindings?.[node.name].group) !== bindGroupNumber) {
           if (!bindGroupAlts[this.altBindings?.[node.name].group]) {
             bindGroupAlts[this.altBindings?.[node.name].group] = [];
           }
@@ -2403,7 +2440,7 @@ fn vtx_main(
             if (!bufferGroup.uniformBuffer || !uBufferSet && inputs[inpBuf_i] !== void 0) {
               if (!bufferGroup.totalUniformBufferSize) {
                 let totalUniformBufferSize = 0;
-                params2.forEach((node2, j) => {
+                params.forEach((node2, j) => {
                   if (node2.isInput && node2.isUniform) {
                     if (inputTypes[j]) {
                       let size;
@@ -2421,6 +2458,7 @@ fn vtx_main(
                 bufferGroup.totalUniformBufferSize = totalUniformBufferSize;
               }
               uniformBuffer = this.device.createBuffer({
+                label: "uniform",
                 size: bufferGroup.totalUniformBufferSize ? bufferGroup.totalUniformBufferSize : 8,
                 // This should be the sum of byte sizes of all uniforms
                 usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_SRC,
@@ -2453,6 +2491,7 @@ fn vtx_main(
                   inputBuffers[inpBuf_i] = inputs[inpBuf_i];
                 } else {
                   inputBuffers[inpBuf_i] = this.device.createBuffer({
+                    label: `arrayBuffer${inpBuf_i}`,
                     size: inputs[inpBuf_i] ? inputs[inpBuf_i].byteLength ? inputs[inpBuf_i].byteLength : inputs[inpBuf_i]?.length ? inputs[inpBuf_i].length * 4 : 8 : 8,
                     usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST | GPUBufferUsage.VERTEX,
                     mappedAtCreation: true
@@ -2499,6 +2538,7 @@ fn vtx_main(
           bufferGroup.totalDefaultUniformBufferSize = totalUniformBufferSize;
         }
         bufferGroup.defaultUniformBuffer = this.device.createBuffer({
+          label: "defaultUniforms",
           size: bufferGroup.totalDefaultUniformBufferSize,
           // This should be the sum of byte sizes of all uniforms
           usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_SRC,
@@ -2516,23 +2556,32 @@ fn vtx_main(
           let inpBufi = 0;
           bufferGroup.bindGroupLayoutEntries.forEach((entry, i) => {
             let type = entry.buffer?.type;
-            if (type && (type.includes("storage") || type.includes("uniform")) && inputBuffers[inpBufi]) {
-              entry.resource = { buffer: inputBuffers[inpBufi] };
-              inpBufi++;
+            if (type) {
+              if (type.includes("storage") && inputBuffers[inpBufi] && inputBuffers[inpBufi].label !== "uniform") {
+                entry.resource = { buffer: inputBuffers[inpBufi] };
+                inpBufi++;
+              } else if (type.includes("uniform") && bufferGroup.uniformBuffer) {
+                entry.resource = { buffer: bufferGroup.uniformBuffer };
+                inpBufi++;
+              }
             }
           });
-          if (bufferGroup.defaultUniformBuffer) bindGroupEntries[bindGroupEntries.length - 1].resource = { buffer: bufferGroup.defaultUniformBuffer };
+          if (bufferGroup.defaultUniformBuffer) bindGroupEntries[bindGroupEntries.length - 1].resource = {
+            buffer: bufferGroup.defaultUniformBuffer
+          };
         } else if (inputBuffers) {
           bindGroupEntries.push(...inputBuffers.map((buffer, index) => ({
             binding: index,
             resource: { buffer }
           })));
-          if (bufferGroup.defaultUniformBuffer) bindGroupEntries.push({
-            binding: bufferGroup.defaultUniformBinding,
-            resource: { buffer: bufferGroup.defaultUniformBuffer }
-          });
+          if (bufferGroup.defaultUniformBuffer)
+            bindGroupEntries.push({
+              binding: bufferGroup.defaultUniformBinding,
+              resource: { buffer: bufferGroup.defaultUniformBuffer }
+            });
         }
         const bindGroup = this.device.createBindGroup({
+          label: `bindGroup${bindGroupNumber}`,
           layout: this.bindGroupLayouts[bindGroupNumber],
           entries: bindGroupEntries
         });
@@ -2674,7 +2723,8 @@ fn vtx_main(
               renderPass.setBindGroup(i, group);
             };
             this.bindGroups.forEach(withBindGroup);
-            if (!bufferGroup.vertexBuffers) this.updateVBO({ color: new Array(bufferGroup.vertexCount * 4).fill(0) }, 0);
+            if (!bufferGroup.vertexBuffers?.length)
+              this.updateVBO(new Float32Array(bufferGroup.vertexCount * 4), 0);
             if (bufferGroup.vertexBuffers)
               bufferGroup.vertexBuffers.forEach((vbo, i) => {
                 renderPass.setVertexBuffer(i, vbo);
@@ -2905,7 +2955,7 @@ fn vtx_main(
             if (options.inputs && shaderPipeline["compute"]) {
               shaderPipeline.process(...inps);
             }
-            if (shaderPipeline["fragment"]) {
+            if (shaderPipeline["fragment"] || shaderPipeline["vertex"]) {
               let opts;
               if (options.renderPass) {
                 opts = { ...options.renderPass, newBindings: true };
@@ -5138,4 +5188,184 @@ fn vtx_main(
     });
   };
   createImageExample();
+  function boidsCompute(particles = "array<vec2f>", deltaT = 0.04, rule1Distance = 0.1, rule2Distance = 0.025, rule3Distance = 0.025, rule1Scale = 0.02, rule2Scale = 0.05, rule3Scale = 5e-3) {
+    let index = i32(threadId.x * 2);
+    var pPos = particles[index];
+    var pVel = particles[index + 1];
+    var plen = i32(f32(particles.length) * 0.5);
+    var cMass = vec2f(0, 0);
+    var cVel = vec2f(0, 0);
+    var colVel = vec2f(0, 0);
+    var cMassCount = 0;
+    var cVelCount = 0;
+    for (let i = 0; i < plen; i++) {
+      if (i == index) {
+        continue;
+      }
+      let j = i * 2;
+      var pos = particles[j];
+      var vel = particles[j + 1];
+      if (distance(pos, pPos) < rule1Distance) {
+        cMass += pos;
+        cMassCount++;
+      }
+      if (distance(pos, pPos) < rule2Distance) {
+        colVel -= pos - pPos;
+      }
+      if (distance(pos, pPos) < rule3Distance) {
+        cVel += vel;
+        cVelCount++;
+      }
+    }
+    if (cMassCount > 0) {
+      cMass = cMass / vec2f(f32(cMassCount)) - pPos;
+    }
+    if (cVelCount > 0) {
+      cVel /= f32(cVelCount);
+    }
+    pVel += cMass * rule1Scale + colVel * rule2Scale + cVel * rule3Scale;
+    pVel = normalize(pVel) * clamp(length(pVel), 0, 0.1);
+    pPos = pPos + pVel * deltaT;
+    if (pPos.x < -1) {
+      pPos.x = 1;
+    }
+    if (pPos.x > 1) {
+      pPos.x = -1;
+    }
+    if (pPos.y < -1) {
+      pPos.y = 1;
+    }
+    if (pPos.y > 1) {
+      pPos.y = -1;
+    }
+    particles[index] = pPos;
+    particles[index + 1] = pVel;
+  }
+  function boidsVertex() {
+    let angle = -atan2(vVelIn.x, vVelIn.y);
+    let pos = vec2(
+      a_posIn.x * cos(angle) - a_posIn.y * sin(angle),
+      a_posIn.x * sin(angle) + a_posIn.y * cos(angle)
+    );
+    position = vec4f(pos + vPosIn, 0, 1);
+    color = vec4f(
+      1 - sin(angle + 1) - vVelIn.y,
+      pos.x * 100 - vVelIn.y + 0.1,
+      vVelIn.x + cos(angle + 0.5),
+      1
+    );
+  }
+  function boidsFragment() {
+    return color;
+  }
+  var canvas3 = document.createElement("canvas");
+  canvas3.width = 500;
+  canvas3.height = 500;
+  var numParticles = 1500;
+  WebGPUjs.createPipeline({
+    compute: boidsCompute,
+    vertex: boidsVertex,
+    fragment: boidsFragment
+  }, {
+    canvas: canvas3,
+    workGroupSize: 64,
+    computePass: {
+      workgroupsX: numParticles / 64
+    },
+    renderPass: {
+      //tell it to make an initial render pass with these inputs
+      vbos: [
+        //we can upload vbos
+        {
+          vVel: "vec2f",
+          vPos: "vec2f",
+          stepMode: "instance"
+          //speeds up rendering, can execute vertex and instance counts with different values
+        },
+        {
+          a_pos: "vec2f"
+        },
+        {
+          color: "vec4f"
+        }
+      ]
+    },
+    // bindings:{ //binding overrides (assigned to our custom-generated layout)
+    //     image:{
+    //         texture:{viewDimension:'2d', sampleType:'float'} 
+    //     }
+    // },
+    //overrides for pipeline descriptor will be assigned so you can add or rewrite what you need over the defaults
+    renderPipelineDescriptor: { primitive: { topology: "triangle-list" } }
+    //additional render or compute pass inputs (just the UBO update in this case)
+  }).then((pipeline) => {
+    console.log(
+      "Boids pipeline",
+      pipeline,
+      pipeline.compute.code,
+      pipeline.fragment.code,
+      pipeline.vertex.code
+    );
+    const particleBuffer = new Float32Array(numParticles * 4);
+    for (let i = 0; i < numParticles; i += 4) {
+      particleBuffer[i] = Math.random();
+      particleBuffer[i + 1] = Math.random();
+    }
+    pipeline.compute.buffer(
+      void 0,
+      particleBuffer,
+      //also include uniforms
+      0.04,
+      //deltaT
+      0.1,
+      //rule1Distance
+      0.025,
+      //rule2Distance
+      0.025,
+      //rule3Distance
+      0.02,
+      //rule1Scale
+      0.05,
+      //rule2Scale
+      5e-3
+      //rule3Scale
+    );
+    pipeline.fragment.updateVBO(
+      pipeline.compute.bufferGroup.inputBuffers[0],
+      0
+    );
+    pipeline.fragment.updateVBO(
+      new Float32Array([
+        -0.01,
+        -0.02,
+        0.01,
+        -0.02,
+        0,
+        0.02
+      ]),
+      1
+    );
+    pipeline.fragment.updateVBO(
+      new Float32Array([
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]),
+      2
+    );
+    pipeline.process();
+    pipeline.render({
+      vertexCount: 3,
+      instanceCount: numParticles
+    });
+  });
 })();

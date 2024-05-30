@@ -59,6 +59,7 @@ export declare class WGSLTranspiler {
         extractedFunctions: string;
     };
     static generateMainFunctionWorkGroup(funcStr: string, ast: any, params: any, shaderType: string, vertexBufferOptions: {
+        stepMode?: 'instance' | 'vertex';
         [key: string]: string;
     }[], workGroupSize: number, gpuFuncs: (Function | string)[]): string;
     static transposeBody: (body: any, funcStr: any, params: any, shaderType: any, returns: boolean, shaderHead: string, extractConsts: boolean, vertexBufferOptions: any) => {
@@ -75,6 +76,7 @@ export declare class WGSLTranspiler {
     };
     static combineShaderParams(shader1Obj: TranspiledShader, shader2Obj: TranspiledShader): void;
     static convertToWebGPU(func: Function | string, shaderType?: 'compute' | 'vertex' | 'fragment', bindGroupNumber?: number, workGroupSize?: number, vertexBufferOptions?: {
+        stepMode?: 'instance' | 'vertex';
         [key: string]: string;
     }[], gpuFuncs?: (Function | string)[], variableTypes?: {
         [key: string]: string | {

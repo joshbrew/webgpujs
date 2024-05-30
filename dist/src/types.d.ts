@@ -11,9 +11,6 @@ export type ShaderOptions = {
             type: string;
         };
     };
-    vboTypes?: {
-        [key: string]: string;
-    };
     inputs?: any[];
     bindGroupLayouts?: GPUBindGroupLayout[];
     bindGroups?: GPUBindGroup[];
@@ -55,12 +52,10 @@ export type RenderPassSettings = {
     indexFormat?: 'uint16' | 'uint32';
     firstIndex?: number;
     useRenderBundle?: any;
-    vbos?: (Float32Array | {
-        vertex?: number[] | (number[][]);
-        color?: number[] | (number[][]);
-        uv?: number[] | (number[][]);
-        normal?: number[] | (number[][]);
-    })[];
+    vbos?: ({
+        stepMode?: 'instance' | 'vertex';
+        [key: string]: string;
+    } | Float32Array | GPUBuffer)[];
     outputVBOs?: boolean;
     textures?: {
         [key: string]: {

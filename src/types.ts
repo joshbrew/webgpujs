@@ -5,7 +5,6 @@ export type ShaderOptions = {
     getPrevShaderBindGroups?:string,
     functions?:Function[],
     variableTypes?:{[key:string]:string|{ prefix?: string; type: string; }}, //we can skip the implicit typing of the bindings and set them ourselves e.g. tex1:'texture_2d' or tex1:{prefix:'var', type:'texture_2d'} etc.
-    vboTypes?:{[key:string]:string}, //e.g. 'vertexIn:"float32x4"'
     inputs?:any[],
     bindGroupLayouts?:GPUBindGroupLayout[],
     bindGroups?:GPUBindGroup[],
@@ -49,12 +48,11 @@ export type RenderPassSettings = {
     indexFormat?:'uint16'|'uint32', //uint16 or uint32
     firstIndex?:number,
     useRenderBundle?:any,
-    vbos?:(Float32Array|{
-        vertex?:number[]|(number[][]), //vec4f
-        color?:number[]|(number[][]), //vec4f
-        uv?:number[]|(number[][]),      //vec2f
-        normal?:number[]|(number[][]) //vec3f
-    })[],
+    vbos?:({
+        //option spec
+        stepMode?:'instance'|'vertex',
+        [key:string]:string
+    }|Float32Array|GPUBuffer)[],
     outputVBOs?:boolean,
     textures?:{
         [key:string]:{

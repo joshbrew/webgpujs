@@ -226,7 +226,7 @@ export class WebGPUjs {
                     if(options.inputs && shaderPipeline['compute']) {
                         shaderPipeline.process(...inps as any[]);
                     }
-                    if(shaderPipeline['fragment']) {
+                    if(shaderPipeline['fragment'] || shaderPipeline['vertex']) {
                         let opts; 
                         if(options.renderPass) {
                             opts = {...options.renderPass, newBindings:true}; 
