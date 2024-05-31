@@ -18,11 +18,11 @@ export class ShaderHelper {
     process = (...inputs:any[]) => { 
         const shader = this.compute;
         if(shader)
-            return this.compute?.run(this.compute.computePass, ...inputs)
+            return shader.run(this.compute.computePass, ...inputs)
     };
 
     render = (renderPass?:RenderPassSettings, ...inputs:any[]) => { 
-        let shader = this.fragment ? this.fragment : this.vertex;
+        const shader = this.fragment ? this.fragment : this.vertex;
         if(shader) 
             return shader.run(renderPass ? renderPass : shader.renderPass ? shader.renderPass : {vertexCount:1}, ...inputs);
     };
@@ -77,23 +77,23 @@ export class ShaderHelper {
             if(shaders.compute && shaders.vertex) {
                 let combined = WGSLTranspiler.combineBindings(shaders.compute.code, shaders.vertex.code);
                 shaders.compute.code = combined.code1;
-                shaders.compute.altBindings = combined.changes1;
+                shaders.compute.altBindings = Object.keys(combined.changes1).length > 0 ? combined.changes1 : undefined;
                 shaders.vertex.code = combined.code2; 
-                shaders.vertex.altBindings = combined.changes2;
+                shaders.vertex.altBindings = Object.keys(combined.changes2).length > 0 ? combined.changes2 : undefined;
             }
             if(shaders.compute && shaders.fragment) {
                 let combined = WGSLTranspiler.combineBindings(shaders.compute.code, shaders.fragment.code);
                 shaders.compute.code = combined.code1;
-                shaders.compute.altBindings = combined.changes1;
+                shaders.compute.altBindings = Object.keys(combined.changes1).length > 0 ? combined.changes1 : undefined;
                 shaders.fragment.code = combined.code2; 
-                shaders.fragment.altBindings = combined.changes2;
+                shaders.fragment.altBindings = Object.keys(combined.changes2).length > 0 ? combined.changes2 : undefined;
             }
             if(shaders.vertex && shaders.fragment) { 
                 let combined = WGSLTranspiler.combineBindings(shaders.vertex.code, shaders.fragment.code);
                 shaders.vertex.code = combined.code1;
-                shaders.vertex.altBindings = combined.changes1;
+                shaders.vertex.altBindings = Object.keys(combined.changes1).length > 0 ? combined.changes1 : undefined;
                 shaders.fragment.code = combined.code2;
-                shaders.fragment.altBindings = combined.changes2;   
+                shaders.fragment.altBindings = Object.keys(combined.changes2).length > 0 ? combined.changes2 : undefined; 
             }
             if(shaders.vertex?.params && shaders.fragment){
                 if(shaders.fragment.params) shaders.vertex.params.push(...shaders.fragment.params); //make sure the vertex and fragment bindings are combined
@@ -127,22 +127,33 @@ export class ShaderHelper {
             this.compute.bindGroups = this.bindGroups;
             this.compute.bufferGroups = this.bufferGroups;
             const entries = this.compute.createBindGroupEntries(options?.renderPass?.textures);
-            this.compute.bindGroupLayoutEntries = entries;
+            this.compute.bindGroupLayoutEntries = entries.length > 0 ? entries : undefined;
             this.compute.setBindGroupLayout(entries, options.bindGroupNumber);
         }
         if(this.fragment) {
             this.fragment.bufferGroups = this.bufferGroups;
             this.fragment.bindGroups = this.bindGroups;
             this.fragment.bindGroupLayouts = this.bindGroupLayouts;
-            let entries = this.fragment.createBindGroupEntries(options?.renderPass?.textures, undefined, GPUShaderStage.VERTEX |GPUShaderStage.FRAGMENT);
-            //if(this.compute?.bindGroupLayoutEntries) entries = [...this.compute.bindGroupLayoutEntries,...entries];
-            this.fragment.bindGroupLayoutEntries = entries;
-            this.fragment.bindGroupLayout = this.device.createBindGroupLayout({
-                label:'fragmentLayout',
-                entries: entries
-            });
+            const entries = this.fragment.createBindGroupEntries(
+                options?.renderPass?.textures, 
+                undefined, 
+                GPUShaderStage.VERTEX |GPUShaderStage.FRAGMENT
+            );
+            this.fragment.bindGroupLayoutEntries = entries.length > 0 ? entries : undefined;
 
             this.fragment.setBindGroupLayout(entries, options.bindGroupNumber);
+        } else if (this.vertex) {
+            this.vertex.bufferGroups = this.bufferGroups;
+            this.vertex.bindGroups = this.bindGroups;
+            this.vertex.bindGroupLayouts = this.bindGroupLayouts;
+            const entries = this.vertex.createBindGroupEntries(
+                options?.renderPass?.textures, 
+                undefined, 
+                GPUShaderStage.VERTEX |GPUShaderStage.FRAGMENT
+            );
+            this.vertex.bindGroupLayoutEntries = entries.length > 0 ? entries : undefined;
+
+            this.vertex.setBindGroupLayout(entries, options.bindGroupNumber);
         }
 
         //create shader modules
@@ -152,7 +163,7 @@ export class ShaderHelper {
                 code: shaders.compute.code
             });
 
-            if(this.bindGroupLayouts.length > 0) {
+            if((this.compute.bindGroupLayoutEntries || this.compute.altBindings) && this.bindGroupLayouts.length > 0) {
                 this.compute.pipelineLayout = this.device.createPipelineLayout({
                     label:'computeRenderPipelineDescriptor',
                     bindGroupLayouts:this.bindGroupLayouts.filter(v => {if(v) return true;}) //this should have the combined compute and vertex/fragment (and accumulated) layouts
@@ -188,7 +199,8 @@ export class ShaderHelper {
 
             this.fragment.vertex = this.vertex;
 
-            if(this.bindGroupLayouts.length > 0) {
+            if((this.fragment.bindGroupLayoutEntries || this.fragment.altBindings) && this.bindGroupLayouts.length > 0) {
+
                 this.fragment.pipelineLayout = this.device.createPipelineLayout({
                     label:'fragmentRenderPipelineDescriptor',
                     bindGroupLayouts:this.bindGroupLayouts.filter(v => {if(v) return true;}) //this should have the combined compute and vertex/fragment (and accumulated) layouts
@@ -203,7 +215,7 @@ export class ShaderHelper {
             );
         } else if (this.vertex) {
             
-            if(this.bindGroupLayouts.length > 0) {
+            if((this.vertex.bindGroupLayoutEntries || this.vertex.altBindings) && this.bindGroupLayouts.length > 0) {
                 this.vertex.pipelineLayout = this.device.createPipelineLayout({
                     label:'vertexRenderPipelineDescriptor',
                     bindGroupLayouts:this.bindGroupLayouts.filter(v => {if(v) return true;}) //this should have the combined compute and vertex/fragment (and accumulated) layouts
@@ -1161,7 +1173,6 @@ export class ShaderContext {
     ) => {
         if(!bindGroupNumber) bindGroupNumber = this.bindGroupNumber;
 
-        
         // Create or recreate input buffers      // Extract all returned variables from the function string
         // Separate input and output AST nodes
  
@@ -1535,7 +1546,7 @@ export class ShaderContext {
                 computePass.setPipeline(this.computePipeline);
 
                 const withBindGroup = (group,i) => {
-                    computePass.setBindGroup(i,group);
+                    if(i === this.bindGroupNumber || this.altBindings) computePass.setBindGroup(i,group);
                 }
                 
                 this.bindGroups.forEach(withBindGroup);
@@ -1546,7 +1557,6 @@ export class ShaderContext {
                 computePass.end();
             } 
             if (this.graphicsPipeline) { // If graphics pipeline is defined
-
                 let renderPass:GPURenderPassEncoder|GPURenderBundleEncoder;
                 //faster repeat calls with useRenderBundle if input array buffers don't change size and are instead simply written to when needed. Our system handles the sizing and writing for us
                 if(useRenderBundle && (newInputBuffer || !bufferGroup.renderBundle)) { 
@@ -1583,12 +1593,13 @@ export class ShaderContext {
                     renderPass.setPipeline(this.graphicsPipeline);
                     
                     const withBindGroup = (group,i) => {
-                        renderPass.setBindGroup(i,group);
+                        if(i === this.bindGroupNumber || this.altBindings) 
+                            renderPass.setBindGroup(i,group);
                     }
 
                     //todo: we need to deal with alt bindings in a way that allows VBOs shared with compute array buffers to be indexed, this is a bandaid
-                    if(this.bindGroups[this.bindGroupNumber]) 
-                        this.bindGroups.forEach(withBindGroup);
+                    // if(this.bindGroups[this.bindGroupNumber]) 
+                    this.bindGroups.forEach(withBindGroup);
                     
                     if(!bufferGroup.vertexBuffers?.length) 
                         this.updateVBO(new Float32Array(bufferGroup.vertexCount*4), 0); //put a default in to force it to run a single pass

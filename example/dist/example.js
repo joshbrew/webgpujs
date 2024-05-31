@@ -1522,10 +1522,10 @@ for (var i: i32 = 0; i < ${size}; i = i + 1) {
     process = (...inputs) => {
       const shader = this.compute;
       if (shader)
-        return this.compute?.run(this.compute.computePass, ...inputs);
+        return shader.run(this.compute.computePass, ...inputs);
     };
     render = (renderPass, ...inputs) => {
-      let shader = this.fragment ? this.fragment : this.vertex;
+      const shader = this.fragment ? this.fragment : this.vertex;
       if (shader)
         return shader.run(renderPass ? renderPass : shader.renderPass ? shader.renderPass : { vertexCount: 1 }, ...inputs);
     };
@@ -1558,23 +1558,23 @@ for (var i: i32 = 0; i < ${size}; i = i + 1) {
         if (shaders.compute && shaders.vertex) {
           let combined = WGSLTranspiler.combineBindings(shaders.compute.code, shaders.vertex.code);
           shaders.compute.code = combined.code1;
-          shaders.compute.altBindings = combined.changes1;
+          shaders.compute.altBindings = Object.keys(combined.changes1).length > 0 ? combined.changes1 : void 0;
           shaders.vertex.code = combined.code2;
-          shaders.vertex.altBindings = combined.changes2;
+          shaders.vertex.altBindings = Object.keys(combined.changes2).length > 0 ? combined.changes2 : void 0;
         }
         if (shaders.compute && shaders.fragment) {
           let combined = WGSLTranspiler.combineBindings(shaders.compute.code, shaders.fragment.code);
           shaders.compute.code = combined.code1;
-          shaders.compute.altBindings = combined.changes1;
+          shaders.compute.altBindings = Object.keys(combined.changes1).length > 0 ? combined.changes1 : void 0;
           shaders.fragment.code = combined.code2;
-          shaders.fragment.altBindings = combined.changes2;
+          shaders.fragment.altBindings = Object.keys(combined.changes2).length > 0 ? combined.changes2 : void 0;
         }
         if (shaders.vertex && shaders.fragment) {
           let combined = WGSLTranspiler.combineBindings(shaders.vertex.code, shaders.fragment.code);
           shaders.vertex.code = combined.code1;
-          shaders.vertex.altBindings = combined.changes1;
+          shaders.vertex.altBindings = Object.keys(combined.changes1).length > 0 ? combined.changes1 : void 0;
           shaders.fragment.code = combined.code2;
-          shaders.fragment.altBindings = combined.changes2;
+          shaders.fragment.altBindings = Object.keys(combined.changes2).length > 0 ? combined.changes2 : void 0;
         }
         if (shaders.vertex?.params && shaders.fragment) {
           if (shaders.fragment.params) shaders.vertex.params.push(...shaders.fragment.params);
@@ -1603,26 +1603,37 @@ for (var i: i32 = 0; i < ${size}; i = i + 1) {
         this.compute.bindGroups = this.bindGroups;
         this.compute.bufferGroups = this.bufferGroups;
         const entries = this.compute.createBindGroupEntries(options?.renderPass?.textures);
-        this.compute.bindGroupLayoutEntries = entries;
+        this.compute.bindGroupLayoutEntries = entries.length > 0 ? entries : void 0;
         this.compute.setBindGroupLayout(entries, options.bindGroupNumber);
       }
       if (this.fragment) {
         this.fragment.bufferGroups = this.bufferGroups;
         this.fragment.bindGroups = this.bindGroups;
         this.fragment.bindGroupLayouts = this.bindGroupLayouts;
-        let entries = this.fragment.createBindGroupEntries(options?.renderPass?.textures, void 0, GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT);
-        this.fragment.bindGroupLayoutEntries = entries;
-        this.fragment.bindGroupLayout = this.device.createBindGroupLayout({
-          label: "fragmentLayout",
-          entries
-        });
+        const entries = this.fragment.createBindGroupEntries(
+          options?.renderPass?.textures,
+          void 0,
+          GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT
+        );
+        this.fragment.bindGroupLayoutEntries = entries.length > 0 ? entries : void 0;
         this.fragment.setBindGroupLayout(entries, options.bindGroupNumber);
+      } else if (this.vertex) {
+        this.vertex.bufferGroups = this.bufferGroups;
+        this.vertex.bindGroups = this.bindGroups;
+        this.vertex.bindGroupLayouts = this.bindGroupLayouts;
+        const entries = this.vertex.createBindGroupEntries(
+          options?.renderPass?.textures,
+          void 0,
+          GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT
+        );
+        this.vertex.bindGroupLayoutEntries = entries.length > 0 ? entries : void 0;
+        this.vertex.setBindGroupLayout(entries, options.bindGroupNumber);
       }
       if (this.compute) {
         this.compute.shaderModule = this.device.createShaderModule({
           code: shaders.compute.code
         });
-        if (this.bindGroupLayouts.length > 0) {
+        if ((this.compute.bindGroupLayoutEntries || this.compute.altBindings) && this.bindGroupLayouts.length > 0) {
           this.compute.pipelineLayout = this.device.createPipelineLayout({
             label: "computeRenderPipelineDescriptor",
             bindGroupLayouts: this.bindGroupLayouts.filter((v) => {
@@ -1653,7 +1664,7 @@ for (var i: i32 = 0; i < ${size}; i = i + 1) {
       }
       if (this.vertex && this.fragment) {
         this.fragment.vertex = this.vertex;
-        if (this.bindGroupLayouts.length > 0) {
+        if ((this.fragment.bindGroupLayoutEntries || this.fragment.altBindings) && this.bindGroupLayouts.length > 0) {
           this.fragment.pipelineLayout = this.device.createPipelineLayout({
             label: "fragmentRenderPipelineDescriptor",
             bindGroupLayouts: this.bindGroupLayouts.filter((v) => {
@@ -1669,7 +1680,7 @@ for (var i: i32 = 0; i < ${size}; i = i + 1) {
           options?.renderPassDescriptor
         );
       } else if (this.vertex) {
-        if (this.bindGroupLayouts.length > 0) {
+        if ((this.vertex.bindGroupLayoutEntries || this.vertex.altBindings) && this.bindGroupLayouts.length > 0) {
           this.vertex.pipelineLayout = this.device.createPipelineLayout({
             label: "vertexRenderPipelineDescriptor",
             bindGroupLayouts: this.bindGroupLayouts.filter((v) => {
@@ -2683,7 +2694,7 @@ fn vtx_main(
           const computePass = commandEncoder.beginComputePass();
           computePass.setPipeline(this.computePipeline);
           const withBindGroup = (group, i) => {
-            computePass.setBindGroup(i, group);
+            if (i === this.bindGroupNumber || this.altBindings) computePass.setBindGroup(i, group);
           };
           this.bindGroups.forEach(withBindGroup);
           let wX = workgroupsX ? workgroupsX : bufferGroup.inputBuffers?.[0] ? bufferGroup.inputBuffers[0].size / 4 / this.workGroupSize : 1;
@@ -2720,10 +2731,10 @@ fn vtx_main(
           if (!useRenderBundle || !bufferGroup.renderBundle) {
             renderPass.setPipeline(this.graphicsPipeline);
             const withBindGroup = (group, i) => {
-              renderPass.setBindGroup(i, group);
+              if (i === this.bindGroupNumber || this.altBindings)
+                renderPass.setBindGroup(i, group);
             };
-            if (this.bindGroups[this.bindGroupNumber])
-              this.bindGroups.forEach(withBindGroup);
+            this.bindGroups.forEach(withBindGroup);
             if (!bufferGroup.vertexBuffers?.length)
               this.updateVBO(new Float32Array(bufferGroup.vertexCount * 4), 0);
             if (bufferGroup.vertexBuffers)
@@ -2858,15 +2869,6 @@ fn vtx_main(
         } else {
           shaderPipeline = new ShaderHelper({ fragment: shader }, options);
         }
-        if (options.inputs || options.renderPass) {
-          if (shaderPipeline["compute"]) {
-            shaderPipeline.process(...options.inputs);
-          }
-          if (shaderPipeline["fragment"]) {
-            let inps = options.inputs ? [...options.inputs] : [];
-            shaderPipeline.render({ ...options.renderPass }, ...inps);
-          }
-        }
         return shaderPipeline;
       } else {
         const block = shaders;
@@ -2889,15 +2891,6 @@ fn vtx_main(
             block.altBindings = combined.changes1;
           }
           const shaderPipeline = this.init(block, options);
-          if (options.inputs || options.renderPass) {
-            if (shaderPipeline["compute"]) {
-              shaderPipeline.process(...options.inputs);
-            }
-            if (shaderPipeline["fragment"]) {
-              let inps = options.inputs ? [...options.inputs] : [];
-              shaderPipeline.render({ ...options.renderPass }, ...inps);
-            }
-          }
           return shaderPipeline;
         } else {
           if (block.compute) {
@@ -2951,20 +2944,6 @@ fn vtx_main(
             }
           }
           const shaderPipeline = new ShaderHelper(block, options);
-          if (options.inputs || options.renderPass) {
-            let inps = options.inputs ? [...options.inputs] : [];
-            if (options.inputs && shaderPipeline["compute"]) {
-              shaderPipeline.process(...inps);
-            }
-            if (shaderPipeline["fragment"] || shaderPipeline["vertex"]) {
-              let opts;
-              if (options.renderPass) {
-                opts = { ...options.renderPass, newBindings: true };
-                delete opts.textures;
-              }
-              shaderPipeline.render(opts, ...inps);
-            }
-          }
           return shaderPipeline;
         }
       }
@@ -5262,6 +5241,7 @@ fn vtx_main(
   var canvas3 = document.createElement("canvas");
   canvas3.width = 500;
   canvas3.height = 500;
+  document.getElementById("ex4").insertAdjacentElement("afterbegin", canvas3);
   var numParticles = 1500;
   WebGPUjs.createPipeline({
     compute: boidsCompute,
@@ -5300,13 +5280,6 @@ fn vtx_main(
     renderPipelineDescriptor: { primitive: { topology: "triangle-list" } }
     //additional render or compute pass inputs (just the UBO update in this case)
   }).then((pipeline) => {
-    console.log(
-      "Boids pipeline",
-      pipeline,
-      pipeline.compute.code,
-      pipeline.fragment.code,
-      pipeline.vertex.code
-    );
     const particleBuffer = new Float32Array(numParticles * 4);
     for (let i = 0; i < numParticles; i += 4) {
       particleBuffer[i] = Math.random();
@@ -5363,10 +5336,14 @@ fn vtx_main(
       ]),
       2
     );
-    pipeline.process();
-    pipeline.render({
-      vertexCount: 3,
-      instanceCount: numParticles
-    });
+    const loop = () => {
+      pipeline.process();
+      pipeline.render({
+        vertexCount: 3,
+        instanceCount: numParticles
+      });
+      requestAnimationFrame(loop);
+    };
+    requestAnimationFrame(loop);
   });
 })();

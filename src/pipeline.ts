@@ -118,15 +118,15 @@ export class WebGPUjs {
                 shaderPipeline = new ShaderHelper({fragment:shader}, options);
             }
 
-            if(options.inputs || options.renderPass) {
-                if(shaderPipeline['compute']) {
-                    shaderPipeline.process(...options.inputs as any[]);
-                }
-                if(shaderPipeline['fragment']) {
-                    let inps = options.inputs? [...options.inputs] : [];
-                    shaderPipeline.render({...options.renderPass}, ...inps);
-                }
-            }
+            // if(options.inputs || options.renderPass) {
+            //     if(shaderPipeline['compute']) {
+            //         shaderPipeline.process(...options.inputs as any[]);
+            //     }
+            //     if(shaderPipeline['fragment']) {
+            //         let inps = options.inputs? [...options.inputs] : [];
+            //         shaderPipeline.render({...options.renderPass}, ...inps);
+            //     }
+            // }
     
             return shaderPipeline;
 
@@ -154,15 +154,15 @@ export class WebGPUjs {
 
                 const shaderPipeline = this.init(block,options);
 
-                if(options.inputs || options.renderPass) {
-                    if(shaderPipeline['compute']) {
-                        shaderPipeline.process(...options.inputs as any[]);
-                    }
-                    if(shaderPipeline['fragment']) {
-                        let inps = options.inputs? [...options.inputs] : [];
-                        shaderPipeline.render({...options.renderPass}, ...inps);
-                    }
-                }
+                // if(options.inputs || options.renderPass) {
+                //     if(shaderPipeline['compute']) {
+                //         shaderPipeline.process(...options.inputs as any[]);
+                //     }
+                //     if(shaderPipeline['fragment']) {
+                //         let inps = options.inputs? [...options.inputs] : [];
+                //         shaderPipeline.render({...options.renderPass}, ...inps);
+                //     }
+                // }
                 
                 return shaderPipeline;
             } else {
@@ -221,20 +221,20 @@ export class WebGPUjs {
 
                 const shaderPipeline = new ShaderHelper(block,options);
 
-                if(options.inputs || options.renderPass) {
-                    let inps = options.inputs? [...options.inputs] : [];
-                    if(options.inputs && shaderPipeline['compute']) {
-                        shaderPipeline.process(...inps as any[]);
-                    }
-                    if(shaderPipeline['fragment'] || shaderPipeline['vertex']) {
-                        let opts; 
-                        if(options.renderPass) {
-                            opts = {...options.renderPass, newBindings:true}; 
-                            delete opts.textures; //prevent rewriting textures
-                        }
-                        shaderPipeline.render(opts, ...inps);
-                    }
-                }
+                // if(options.inputs || options.renderPass) {
+                //     let inps = options.inputs? [...options.inputs] : [];
+                //     if(options.inputs && shaderPipeline['compute']) {
+                //         shaderPipeline.process(...inps as any[]);
+                //     }
+                //     if(shaderPipeline['fragment'] || shaderPipeline['vertex']) {
+                //         let opts; 
+                //         if(options.renderPass) {
+                //             opts = {...options.renderPass, newBindings:true}; 
+                //             delete opts.textures; //prevent rewriting textures
+                //         }
+                //         shaderPipeline.render(opts, ...inps);
+                //     }
+                // }
         
                 return shaderPipeline;
                 

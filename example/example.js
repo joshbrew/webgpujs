@@ -474,6 +474,8 @@ let canvas3 = document.createElement('canvas');
 canvas3.width = 500;
 canvas3.height = 500;
 
+document.getElementById('ex4').insertAdjacentElement('afterbegin',canvas3);
+
 const numParticles = 1500;
 
 WebGPUjs.createPipeline({
@@ -516,11 +518,11 @@ WebGPUjs.createPipeline({
     //additional render or compute pass inputs (just the UBO update in this case)
 }).then((pipeline) => {
 
-    console.log('Boids pipeline', pipeline,
-        pipeline.compute.code,
-        pipeline.fragment.code,
-        pipeline.vertex.code
-    )
+    // console.log('Boids pipeline', pipeline,
+    //     pipeline.compute.code,
+    //     pipeline.fragment.code,
+    //     pipeline.vertex.code
+    // )
 
     const particleBuffer = new Float32Array(numParticles * 4);
     //vec2f + vec2f buffer packed together
@@ -577,11 +579,17 @@ WebGPUjs.createPipeline({
 
     //buffering complete, now animate
 
-    pipeline.process();
-    pipeline.render({
-        vertexCount:3,
-        instanceCount:numParticles
-    });
+    const loop = () => {
+        
+        pipeline.process();
+        pipeline.render({
+            vertexCount:3,
+            instanceCount:numParticles
+        });
+        requestAnimationFrame(loop)
+    }
+
+    requestAnimationFrame(loop)
 
 });
 
