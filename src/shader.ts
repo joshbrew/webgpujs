@@ -1301,7 +1301,6 @@ export class ShaderContext {
                             inputBuffers[inpBuf_i].unmap();
                         }
                         else {
-
                             if(inputs[inpBuf_i] instanceof GPUBuffer) {
                                 inputBuffers[inpBuf_i] = inputs[inpBuf_i]; //preallocated
                             } else {
@@ -1545,7 +1544,6 @@ export class ShaderContext {
                 bufferGroup.inputBuffers?.[0] ? (bufferGroup.inputBuffers[0].size/4) / this.workGroupSize : 1;
                 computePass.dispatchWorkgroups(wX, workgroupsY, workgroupsZ); 
                 computePass.end();
-
             } 
             if (this.graphicsPipeline) { // If graphics pipeline is defined
 
@@ -1588,7 +1586,9 @@ export class ShaderContext {
                         renderPass.setBindGroup(i,group);
                     }
 
-                    this.bindGroups.forEach(withBindGroup);
+                    //todo: we need to deal with alt bindings in a way that allows VBOs shared with compute array buffers to be indexed, this is a bandaid
+                    if(this.bindGroups[this.bindGroupNumber]) 
+                        this.bindGroups.forEach(withBindGroup);
                     
                     if(!bufferGroup.vertexBuffers?.length) 
                         this.updateVBO(new Float32Array(bufferGroup.vertexCount*4), 0); //put a default in to force it to run a single pass

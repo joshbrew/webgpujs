@@ -2722,7 +2722,8 @@ fn vtx_main(
             const withBindGroup = (group, i) => {
               renderPass.setBindGroup(i, group);
             };
-            this.bindGroups.forEach(withBindGroup);
+            if (this.bindGroups[this.bindGroupNumber])
+              this.bindGroups.forEach(withBindGroup);
             if (!bufferGroup.vertexBuffers?.length)
               this.updateVBO(new Float32Array(bufferGroup.vertexCount * 4), 0);
             if (bufferGroup.vertexBuffers)
