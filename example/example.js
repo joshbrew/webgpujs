@@ -365,21 +365,12 @@ const createImageExample = async () => {
     });
 
 }
-//createImageExample
+
 createImageExample();
 
 //load texture data as unint8array or we can specify with _rgba8unorm etc
 //set cubeVertices as the vbo
 
-let boidsRules = [
-    0.04,  //deltaT
-    0.1,   //rule1Distance
-    0.025, //rule2Distance
-    0.025, //rule3Distance
-    0.02,  //rule1Scale
-    0.05,  //rule2Scale
-    0.005  //rule3Scale
-];
 
 //https://webgpu.github.io/webgpu-samples/samples/computeBoids adaptation
 //we need to add some stuff to our transpiler to make this more doable methinks.
@@ -494,9 +485,25 @@ canvas3.height = 500;
 canvas3.style.width = '500px';
 canvas3.style.height = '500px';
 
-document.getElementById('ex4').insertAdjacentElement('afterbegin',canvas3);
+document.getElementById('ex4').appendChild(canvas3);
 
 const numParticles = 1500;
+
+const boidVBOS = [ //we can upload vbos
+{
+    vPos:'vec2f',
+    vVel:'vec2f',
+
+    stepMode:'instance' //speeds up rendering, can execute vertex and instance counts with different values
+},
+{
+    sprite_pos:'vec2f'
+},
+{ 
+    color:'vec4f'
+} 
+]
+  
 
 WebGPUjs.createPipeline({
     compute:boidsCompute,
@@ -538,11 +545,64 @@ WebGPUjs.createPipeline({
     //additional render or compute pass inputs (just the UBO update in this case)
 }).then((pipeline) => {
 
-    console.log('Boids pipeline', pipeline,
-        pipeline.compute.code,
-        pipeline.vertex.code,
-        pipeline.fragment.code
-    )
+    // console.log('Boids pipeline', pipeline,
+    //     pipeline.compute.code,
+    //     pipeline.vertex.code,
+    //     pipeline.fragment.code
+    // )
+
+    let boidsRules = [
+        0.04,  //deltaT
+        0.1,   //rule1Distance
+        0.025, //rule2Distance
+        0.025, //rule3Distance
+        0.02,  //rule1Scale
+        0.05,  //rule2Scale
+        0.005  //rule3Scale
+    ];
+    
+    const ex4 = document.getElementById('ex4');
+    ex4.style.width = '100%';
+
+    let controls = document.createElement('span');
+
+    controls.innerHTML = `
+        <div id='boidcontrols'>
+            <label>deltaT (Index 0): <input type="number" step="0.001" value="${boidsRules[0]}" id="deltaT" data-index="0" /></label><br/>
+            <label>rule1Distance (Index 1): <input type="number" step="0.001" value="${boidsRules[1]}" id="rule1Distance" data-index="1" /></label><br/>
+            <label>rule2Distance (Index 2): <input type="number" step="0.001" value="${boidsRules[2]}" id="rule2Distance" data-index="2" /></label><br/>
+            <label>rule3Distance (Index 3): <input type="number" step="0.001" value="${boidsRules[3]}" id="rule3Distance" data-index="3" /></label><br/>
+            <label>rule1Scale (Index 4): <input type="number" step="0.001" value="${boidsRules[4]}" id="rule1Scale" data-index="4" /></label><br/>
+            <label>rule2Scale (Index 5): <input type="number" step="0.001" value="${boidsRules[5]}" id="rule2Scale" data-index="5" /></label><br/>
+            <label>rule3Scale (Index 6): <input type="number" step="0.001" value="${boidsRules[6]}" id="rule3Scale" data-index="6" /></label><br/>
+        </div>
+    `;
+
+    document.getElementById('ex4').appendChild(controls);
+
+    const parentDiv = document.getElementById('boidcontrols');
+
+    const inps = Array.from(parentDiv.getElementsByTagName('input'));
+
+    let onchange = (ev) => {
+        const input = ev.target;
+        const index = parseInt(input.getAttribute('data-index'));
+        boidsRules[index] = parseFloat(input.value);
+
+        const data = {[input.id]:boidsRules[index]}; //can update UBOs by variable name
+        
+        // Assuming pipeline.fragment.updateUBO is a function to update the UBO
+        pipeline.compute.updateUBO(data, true); 
+    }
+
+    inps.forEach((inp) => {
+        inp.onchange = onchange;
+    });
+
+    let ex4Id1 = setupWebGPUConverterUI(boidsCompute, ex4, 'compute');
+    let ex4Id2 = setupWebGPUConverterUI(boidsVertex, ex4, 'vertex', ex4Id1.webGPUCode.lastBinding, boidVBOS);
+    let ex4Id3 = setupWebGPUConverterUI(boidsFragment, ex4, 'fragment', ex4Id1.webGPUCode.lastBinding, boidVBOS);
+  
 
     const particleBuffer = new Float32Array(numParticles * 4);
     //vec2f + vec2f buffer packed together

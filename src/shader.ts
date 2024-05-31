@@ -832,23 +832,23 @@ export class ShaderContext {
         return true; //textures/samplers updated
     }
 
-    setUBOposition = (dataView:DataView, inputTypes, typeInfo, offset, input, inpIdx) => { //utility function, should clean up later (i.e. provide the values instead of objects to reference)
+    setUBOposition = (dataView:DataView, typeInfo:{type:string, size:number, alignment:number}, offset:number, input:any) => { //utility function, should clean up later (i.e. provide the values instead of objects to reference)
         // Ensure the offset is aligned correctly
         offset = Math.ceil(offset / typeInfo.alignment) * typeInfo.alignment;
         if(input !== undefined) {
-            if (inputTypes[inpIdx].type.startsWith('vec')) {
+            if (typeInfo.type.startsWith('vec')) {
                 const vecSize = typeInfo.size / 4;
                 for (let j = 0; j < vecSize; j++) {
-                    if(inputTypes[inpIdx].type.includes('f')) dataView.setFloat32(offset + j * 4, input[j], true);
+                    if(typeInfo.type.includes('f')) dataView.setFloat32(offset + j * 4, input[j], true);
                     else dataView.setInt32(offset + j * 4, input[j], true);
                 }
-            } else if (inputTypes[inpIdx].type.startsWith('mat')) {
+            } else if (typeInfo.type.startsWith('mat')) {
                 const flatMatrix = typeof input[0] === 'object' ? ShaderHelper.flattenArray(input) : input;
                 for (let j = 0; j < flatMatrix.length; j++) {
                     dataView.setFloat32(offset + j * 4, flatMatrix[j], true); //we don't have Float16 in javascript :-\
                 }
             } else{
-                switch (inputTypes[inpIdx].type) {
+                switch (typeInfo.type) {
                     case 'f32':
                     case 'f':
                         dataView.setFloat32(offset, input, true); // true for little-endian
@@ -883,46 +883,117 @@ export class ShaderContext {
         return offset;
     }
 
+    allocateUBO = (bindGroupNumber=this.bindGroupNumber) => {
 
-
-    updateUBO = (inputs, inputTypes, bindGroupNumber=this.bindGroupNumber) => {
-        if(!inputs || inputs.length === 0) return;
-        
         let bufferGroup = this.bufferGroups[bindGroupNumber];
         if(!bufferGroup) {
             bufferGroup = this.makeBufferGroup(bindGroupNumber);
         }
 
+        if(!bufferGroup.totalUniformBufferSize) {
+            let totalUniformBufferSize = 0;
+            bufferGroup.params.forEach((node,j) => {
+                if(node.isInput && node.isUniform){
+                    if(bufferGroup.inputTypes[j]) {
+                        totalUniformBufferSize += bufferGroup.inputTypes[j].size;
+                        if(totalUniformBufferSize % 8 !== 0) 
+                            totalUniformBufferSize += WGSLTypeSizes[bufferGroup.inputTypes[j].type].alignment;
+                    }
+                }
+            }); 
+
+            if(totalUniformBufferSize < 8) totalUniformBufferSize += 8 - totalUniformBufferSize; 
+            else totalUniformBufferSize -= totalUniformBufferSize % 16; //correct final buffer size (IDK)
+
+            bufferGroup.totalUniformBufferSize = totalUniformBufferSize;
+        }
+
+        const uniformBuffer = this.device.createBuffer({
+            label:'uniform',
+            size: bufferGroup.totalUniformBufferSize ? bufferGroup.totalUniformBufferSize : 8, // This should be the sum of byte sizes of all uniforms
+            usage: GPUBufferUsage.UNIFORM  | GPUBufferUsage.COPY_SRC,
+            mappedAtCreation:true
+        });
+        
+        bufferGroup.uniformBuffer = uniformBuffer;
+        
+        return true;
+        
+    }
+
+    getUBODataView = (bindGroupNumber=this.bindGroupNumber) => {
+
+        let bufferGroup = this.bufferGroups[bindGroupNumber];
+        if(!bufferGroup) {
+            bufferGroup = this.makeBufferGroup(bindGroupNumber);
+        }
+
+        const dataView = bufferGroup.uniformBuffer.mapState === 'mapped' ? 
+        new DataView(bufferGroup.uniformBuffer.getMappedRange()) :
+        new DataView(new ArrayBuffer(bufferGroup.uniformBuffer.size)); //little endian
+
+        return dataView;
+    }
+
+    //right now we just associate one uniform buffer per bind group
+    updateUBO = (inputs:any[]|{[key:string]:any}, reallocate=false, bindGroupNumber=this.bindGroupNumber) => {
+
+        if(!inputs || Object.keys(inputs).length === 0) return;
+
+        if(reallocate) { //must be done when updating the shader outside of the buffer() or run() calls
+            this.allocateUBO(bindGroupNumber);
+            this.updateBindGroup(bindGroupNumber);
+        }
+        
+        let bufferGroup = this.bufferGroups[bindGroupNumber];
+        if(!bufferGroup) {
+            bufferGroup = this.makeBufferGroup(bindGroupNumber);
+        }
+        
+        const inputTypes = this.bufferGroups[this.bindGroupNumber].inputTypes;
+
         if(bufferGroup.uniformBuffer) { //update custom uniforms
             //console.log(bufferGroup.uniformBuffer)
             // Use a DataView to set values at specific byte offsets
-            const dataView = bufferGroup.uniformBuffer.mapState === 'mapped' ? 
-                new DataView(bufferGroup.uniformBuffer.getMappedRange()) :
-                new DataView(new ArrayBuffer(bufferGroup.uniformBuffer.size)); //little endian
-            
+            const dataView = this.getUBODataView(bindGroupNumber);
+            //console.log(dataView);
             let offset = 0; // Initialize the offset
             let inpIdx = 0;
+
+            if(!bufferGroup.uniformBufferInputs) {
+                bufferGroup.uniformBufferInputs = {};
+            }
+
             bufferGroup.params.forEach((node, i) => {
                 if(node.isUniform) {
+
                     let input;
+
                     if(Array.isArray(inputs)) input = inputs[inpIdx];
                     else input = inputs?.[node.name];
+
                     if(typeof input === 'undefined' && typeof bufferGroup.uniformBufferInputs?.[inpIdx] !== 'undefined') 
-                        input = bufferGroup.uniformBufferInputs[inpIdx]; //save data
+                        input = bufferGroup.uniformBufferInputs[inpIdx]; //saved data
                      
                     const typeInfo = WGSLTypeSizes[inputTypes[inpIdx].type];
 
-                    if(!bufferGroup.uniformBufferInputs) {
-                        bufferGroup.uniformBufferInputs = {};
-                    } bufferGroup.uniformBufferInputs[inpIdx] = input;
+                    //console.log(input);
 
-                    offset = this.setUBOposition(dataView, inputTypes, typeInfo, offset, input, inpIdx);
+                    bufferGroup.uniformBufferInputs[inpIdx] = input;
+
+                    offset = this.setUBOposition(
+                        dataView, 
+                        typeInfo, 
+                        offset, 
+                        input
+                    );
                 }
                 if(node.isInput) inpIdx++;
             });
 
 
-            //console.log(inputs, dataView, new Float32Array(dataView.buffer)); //check validity
+            //done writing the buffer, unmap it.
+            //console.log(inputs, dataView, new Float32Array(dataView.buffer)); //check validity (comment out the unmap or it will be empty)
             if(bufferGroup.uniformBuffer.mapState === 'mapped') bufferGroup.uniformBuffer.unmap();
             // else {
             //     this.device.queue.writeBuffer(
@@ -946,10 +1017,12 @@ export class ShaderContext {
             bufferGroup.defaultUniforms.forEach((u,i) => { 
                 let value = this.builtInUniforms[u]?.callback(this);
                 const typeInfo = WGSLTypeSizes[this.builtInUniforms[bufferGroup.defaultUniforms[i]].type];
-                offset = this.setUBOposition(dataView,inputTypes,typeInfo,offset,value,i);
+                offset = this.setUBOposition(dataView,typeInfo,offset,value);
             });
 
+            //done writing the buffer, unmap it.
             if(bufferGroup.defaultUniformBuffer.mapState === 'mapped') bufferGroup.defaultUniformBuffer.unmap();
+            
             // else {
             //     this.device.queue.writeBuffer(
             //         bufferGroup.defaultUniformBuffer,
@@ -1201,6 +1274,7 @@ export class ShaderContext {
                 }
                 return WGSLTypeSizes[type];
             });
+
         const inputBuffers = bufferGroup.inputBuffers;
         let uniformBuffer = bufferGroup.uniformBuffer;
         const outputBuffers = bufferGroup.outputBuffers;
@@ -1208,6 +1282,7 @@ export class ShaderContext {
 
         const inputTypes = bufferGroup.inputTypes;
         let newBindGroupBuffer = newBindings;
+
         if(inputBuffers?.length > 0) {
             inputs.forEach((inp,index) => {
                 if(inp && inp?.length) {
@@ -1242,6 +1317,8 @@ export class ShaderContext {
         let bindGroupAlts = [] as any[];
         let uniformValues = [] as any[];
 
+
+        //todo: break this down for readability and more modularity
         if(params) for(let i = 0; i < params.length; i++ ) {
             const node = params[i];
             if(typeof inputs[inpBuf_i] !== 'undefined' && this.altBindings?.[node.name] && parseInt(this.altBindings?.[node.name].group) !== bindGroupNumber) {
@@ -1250,49 +1327,21 @@ export class ShaderContext {
                 }
                 bindGroupAlts[this.altBindings?.[node.name].group][this.altBindings?.[node.name].group] = inputs[i];
             } else {
-                if(node.isUniform) {
-                    if(inputs[inpIdx] !== undefined) 
-                        uniformValues[inpIdx] = inputs[inpIdx];
-                    // Assuming you've determined the total size of the uniform buffer beforehand
-                    if (!bufferGroup.uniformBuffer || (!uBufferSet && inputs[inpBuf_i] !== undefined)) {
+                if(node.isUniform && inputs[inpIdx] !== undefined) {
+                    
+                    uniformValues[inpIdx] = inputs[inpIdx];
 
-                        if(!bufferGroup.totalUniformBufferSize) {
-                            let totalUniformBufferSize = 0;
-                            params.forEach((node,j) => {
-                                if(node.isInput && node.isUniform){
-                                    if(inputTypes[j]) {
-                                        let size; 
-                                        if(inputs[inpBuf_i]?.byteLength) size = inputs[inpBuf_i].byteLength;
-                                        else if (inputs[inpBuf_i]?.length) size = 4 * inputs[inpBuf_i].length;
-                                        else size = inputTypes[j].size;
-                                        totalUniformBufferSize += inputTypes[j].size;
-                                        if(totalUniformBufferSize % 8 !== 0) 
-                                            totalUniformBufferSize += WGSLTypeSizes[inputTypes[j].type].alignment;
-                                    }
-                                }
-                            }); 
-
-                            if(totalUniformBufferSize < 8) totalUniformBufferSize += 8 - totalUniformBufferSize; 
-                            else totalUniformBufferSize -= totalUniformBufferSize % 16; //correct final buffer size (IDK)
-
-                            bufferGroup.totalUniformBufferSize = totalUniformBufferSize;
-                        }
-
-                        uniformBuffer = this.device.createBuffer({
-                            label:'uniform',
-                            size: bufferGroup.totalUniformBufferSize ? bufferGroup.totalUniformBufferSize : 8, // This should be the sum of byte sizes of all uniforms
-                            usage: GPUBufferUsage.UNIFORM  | GPUBufferUsage.COPY_SRC,
-                            mappedAtCreation:true
-                        });
-                        
-                        inputBuffers[inpBuf_i] = (uniformBuffer);
-                        bufferGroup.uniformBuffer = uniformBuffer;
-                        uBufferSet = true;
+                    if (!bufferGroup.uniformBuffer || !uBufferSet) {
+                        uBufferSet = this.allocateUBO(bindGroupNumber);
+                        inputBuffers[inpBuf_i] = (bufferGroup.uniformBuffer);
+                        bufferGroup.uniformBufferIndex = inpBuf_i;
                     }
+
                     if(!hasUniformBuffer) {
                         hasUniformBuffer = 1;
                         inpBuf_i++;
                     }
+
                     inpIdx++;
                 }
                 // Create or recreate input buffers
@@ -1344,7 +1393,7 @@ export class ShaderContext {
                         outputBuffers[inpBuf_i-1] = (inputBuffers[inpBuf_i-1]);
                     } else if(!uBufferPushed) {
                         uBufferPushed = true;
-                        outputBuffers[inpBuf_i-1] = (uniformBuffer);
+                        outputBuffers[inpBuf_i-1] = (bufferGroup.uniformBuffer);
                     }
                 }
             }
@@ -1395,9 +1444,27 @@ export class ShaderContext {
         }
         
         //console.log(uniformValues)
-        if(uniformValues.length > 0) this.updateUBO(uniformValues, inputTypes, bindGroupNumber);
+        if(uniformValues.length > 0) this.updateUBO(uniformValues, false, bindGroupNumber);
         
         if(this.bindGroupLayouts[bindGroupNumber] && newBindGroupBuffer) {
+            this.updateBindGroup(bindGroupNumber);
+        }
+
+        return newBindGroupBuffer;
+        
+    }
+
+    updateBindGroup = (bindGroupNumber=this.bindGroupNumber) => {
+
+        let bufferGroup = this.bufferGroups[bindGroupNumber];        
+
+        if(!bufferGroup) {
+            bufferGroup = this.makeBufferGroup(bindGroupNumber);
+        }
+
+        const inputBuffers = bufferGroup.inputBuffers;
+
+        if(this.bindGroupLayouts?.[bindGroupNumber]) {
             // Update bind group creation to include input buffer resources
             let bindGroupEntries = [];
             //console.log(bufferGroup.bindGroupLayoutEntries);
@@ -1444,9 +1511,6 @@ export class ShaderContext {
             this.bindGroups[bindGroupNumber] = bindGroup;
 
         }
-
-        return newBindGroupBuffer;
-        
     }
 
     getOutputData = (commandEncoder:GPUCommandEncoder, outputBuffers?) => {

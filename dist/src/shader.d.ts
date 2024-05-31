@@ -100,8 +100,16 @@ export declare class ShaderContext {
         layout?: GPUImageDataLayout | GPUImageCopyExternalImage;
         isStorage?: boolean;
     } | ImageBitmap | any, name: string, bindGroupNumber?: number) => boolean;
-    setUBOposition: (dataView: DataView, inputTypes: any, typeInfo: any, offset: any, input: any, inpIdx: any) => any;
-    updateUBO: (inputs: any, inputTypes: any, bindGroupNumber?: number) => void;
+    setUBOposition: (dataView: DataView, typeInfo: {
+        type: string;
+        size: number;
+        alignment: number;
+    }, offset: number, input: any) => number;
+    allocateUBO: (bindGroupNumber?: number) => boolean;
+    getUBODataView: (bindGroupNumber?: number) => DataView;
+    updateUBO: (inputs: any[] | {
+        [key: string]: any;
+    }, reallocate?: boolean, bindGroupNumber?: number) => void;
     createRenderPipelineDescriptor: (vertexBufferOptions?: {
         stepMode?: 'vertex' | 'instance';
         [key: string]: string;
@@ -152,6 +160,7 @@ export declare class ShaderContext {
         workgroupsY?: number;
         workgroupsZ?: number;
     }>, ...inputs: any[]) => boolean;
+    updateBindGroup: (bindGroupNumber?: number) => void;
     getOutputData: (commandEncoder: GPUCommandEncoder, outputBuffers?: any) => any;
     run: ({ vertexCount, instanceCount, firstVertex, firstInstance, vbos, outputVBOs, textures, outputTextures, bufferOnly, skipOutputDef, bindGroupNumber, viewport, scissorRect, blendConstant, indexBuffer, indexFormat, firstIndex, useRenderBundle, workgroupsX, workgroupsY, workgroupsZ, newBindings }?: {
         vertexCount?: number;

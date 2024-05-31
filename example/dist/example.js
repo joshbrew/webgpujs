@@ -2149,22 +2149,22 @@ fn vtx_main(
         );
       return true;
     };
-    setUBOposition = (dataView, inputTypes, typeInfo, offset, input, inpIdx) => {
+    setUBOposition = (dataView, typeInfo, offset, input) => {
       offset = Math.ceil(offset / typeInfo.alignment) * typeInfo.alignment;
       if (input !== void 0) {
-        if (inputTypes[inpIdx].type.startsWith("vec")) {
+        if (typeInfo.type.startsWith("vec")) {
           const vecSize = typeInfo.size / 4;
           for (let j = 0; j < vecSize; j++) {
-            if (inputTypes[inpIdx].type.includes("f")) dataView.setFloat32(offset + j * 4, input[j], true);
+            if (typeInfo.type.includes("f")) dataView.setFloat32(offset + j * 4, input[j], true);
             else dataView.setInt32(offset + j * 4, input[j], true);
           }
-        } else if (inputTypes[inpIdx].type.startsWith("mat")) {
+        } else if (typeInfo.type.startsWith("mat")) {
           const flatMatrix = typeof input[0] === "object" ? ShaderHelper.flattenArray(input) : input;
           for (let j = 0; j < flatMatrix.length; j++) {
             dataView.setFloat32(offset + j * 4, flatMatrix[j], true);
           }
         } else {
-          switch (inputTypes[inpIdx].type) {
+          switch (typeInfo.type) {
             case "f32":
             case "f":
               dataView.setFloat32(offset, input, true);
@@ -2198,16 +2198,63 @@ fn vtx_main(
       offset += typeInfo.size;
       return offset;
     };
-    updateUBO = (inputs, inputTypes, bindGroupNumber = this.bindGroupNumber) => {
-      if (!inputs || inputs.length === 0) return;
+    allocateUBO = (bindGroupNumber = this.bindGroupNumber) => {
       let bufferGroup = this.bufferGroups[bindGroupNumber];
       if (!bufferGroup) {
         bufferGroup = this.makeBufferGroup(bindGroupNumber);
       }
+      if (!bufferGroup.totalUniformBufferSize) {
+        let totalUniformBufferSize = 0;
+        bufferGroup.params.forEach((node, j) => {
+          if (node.isInput && node.isUniform) {
+            if (bufferGroup.inputTypes[j]) {
+              totalUniformBufferSize += bufferGroup.inputTypes[j].size;
+              if (totalUniformBufferSize % 8 !== 0)
+                totalUniformBufferSize += WGSLTypeSizes[bufferGroup.inputTypes[j].type].alignment;
+            }
+          }
+        });
+        if (totalUniformBufferSize < 8) totalUniformBufferSize += 8 - totalUniformBufferSize;
+        else totalUniformBufferSize -= totalUniformBufferSize % 16;
+        bufferGroup.totalUniformBufferSize = totalUniformBufferSize;
+      }
+      const uniformBuffer = this.device.createBuffer({
+        label: "uniform",
+        size: bufferGroup.totalUniformBufferSize ? bufferGroup.totalUniformBufferSize : 8,
+        // This should be the sum of byte sizes of all uniforms
+        usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_SRC,
+        mappedAtCreation: true
+      });
+      bufferGroup.uniformBuffer = uniformBuffer;
+      return true;
+    };
+    getUBODataView = (bindGroupNumber = this.bindGroupNumber) => {
+      let bufferGroup = this.bufferGroups[bindGroupNumber];
+      if (!bufferGroup) {
+        bufferGroup = this.makeBufferGroup(bindGroupNumber);
+      }
+      const dataView = bufferGroup.uniformBuffer.mapState === "mapped" ? new DataView(bufferGroup.uniformBuffer.getMappedRange()) : new DataView(new ArrayBuffer(bufferGroup.uniformBuffer.size));
+      return dataView;
+    };
+    //right now we just associate one uniform buffer per bind group
+    updateUBO = (inputs, reallocate = false, bindGroupNumber = this.bindGroupNumber) => {
+      if (!inputs || Object.keys(inputs).length === 0) return;
+      if (reallocate) {
+        this.allocateUBO(bindGroupNumber);
+        this.updateBindGroup(bindGroupNumber);
+      }
+      let bufferGroup = this.bufferGroups[bindGroupNumber];
+      if (!bufferGroup) {
+        bufferGroup = this.makeBufferGroup(bindGroupNumber);
+      }
+      const inputTypes = this.bufferGroups[this.bindGroupNumber].inputTypes;
       if (bufferGroup.uniformBuffer) {
-        const dataView = bufferGroup.uniformBuffer.mapState === "mapped" ? new DataView(bufferGroup.uniformBuffer.getMappedRange()) : new DataView(new ArrayBuffer(bufferGroup.uniformBuffer.size));
+        const dataView = this.getUBODataView(bindGroupNumber);
         let offset = 0;
         let inpIdx = 0;
+        if (!bufferGroup.uniformBufferInputs) {
+          bufferGroup.uniformBufferInputs = {};
+        }
         bufferGroup.params.forEach((node, i) => {
           if (node.isUniform) {
             let input;
@@ -2216,11 +2263,13 @@ fn vtx_main(
             if (typeof input === "undefined" && typeof bufferGroup.uniformBufferInputs?.[inpIdx] !== "undefined")
               input = bufferGroup.uniformBufferInputs[inpIdx];
             const typeInfo = WGSLTypeSizes[inputTypes[inpIdx].type];
-            if (!bufferGroup.uniformBufferInputs) {
-              bufferGroup.uniformBufferInputs = {};
-            }
             bufferGroup.uniformBufferInputs[inpIdx] = input;
-            offset = this.setUBOposition(dataView, inputTypes, typeInfo, offset, input, inpIdx);
+            offset = this.setUBOposition(
+              dataView,
+              typeInfo,
+              offset,
+              input
+            );
           }
           if (node.isInput) inpIdx++;
         });
@@ -2232,7 +2281,7 @@ fn vtx_main(
         bufferGroup.defaultUniforms.forEach((u, i) => {
           let value = this.builtInUniforms[u]?.callback(this);
           const typeInfo = WGSLTypeSizes[this.builtInUniforms[bufferGroup.defaultUniforms[i]].type];
-          offset = this.setUBOposition(dataView, inputTypes, typeInfo, offset, value, i);
+          offset = this.setUBOposition(dataView, typeInfo, offset, value);
         });
         if (bufferGroup.defaultUniformBuffer.mapState === "mapped") bufferGroup.defaultUniformBuffer.unmap();
       }
@@ -2445,39 +2494,12 @@ fn vtx_main(
           }
           bindGroupAlts[this.altBindings?.[node.name].group][this.altBindings?.[node.name].group] = inputs[i];
         } else {
-          if (node.isUniform) {
-            if (inputs[inpIdx] !== void 0)
-              uniformValues[inpIdx] = inputs[inpIdx];
-            if (!bufferGroup.uniformBuffer || !uBufferSet && inputs[inpBuf_i] !== void 0) {
-              if (!bufferGroup.totalUniformBufferSize) {
-                let totalUniformBufferSize = 0;
-                params.forEach((node2, j) => {
-                  if (node2.isInput && node2.isUniform) {
-                    if (inputTypes[j]) {
-                      let size;
-                      if (inputs[inpBuf_i]?.byteLength) size = inputs[inpBuf_i].byteLength;
-                      else if (inputs[inpBuf_i]?.length) size = 4 * inputs[inpBuf_i].length;
-                      else size = inputTypes[j].size;
-                      totalUniformBufferSize += inputTypes[j].size;
-                      if (totalUniformBufferSize % 8 !== 0)
-                        totalUniformBufferSize += WGSLTypeSizes[inputTypes[j].type].alignment;
-                    }
-                  }
-                });
-                if (totalUniformBufferSize < 8) totalUniformBufferSize += 8 - totalUniformBufferSize;
-                else totalUniformBufferSize -= totalUniformBufferSize % 16;
-                bufferGroup.totalUniformBufferSize = totalUniformBufferSize;
-              }
-              uniformBuffer = this.device.createBuffer({
-                label: "uniform",
-                size: bufferGroup.totalUniformBufferSize ? bufferGroup.totalUniformBufferSize : 8,
-                // This should be the sum of byte sizes of all uniforms
-                usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_SRC,
-                mappedAtCreation: true
-              });
-              inputBuffers[inpBuf_i] = uniformBuffer;
-              bufferGroup.uniformBuffer = uniformBuffer;
-              uBufferSet = true;
+          if (node.isUniform && inputs[inpIdx] !== void 0) {
+            uniformValues[inpIdx] = inputs[inpIdx];
+            if (!bufferGroup.uniformBuffer || !uBufferSet) {
+              uBufferSet = this.allocateUBO(bindGroupNumber);
+              inputBuffers[inpBuf_i] = bufferGroup.uniformBuffer;
+              bufferGroup.uniformBufferIndex = inpBuf_i;
             }
             if (!hasUniformBuffer) {
               hasUniformBuffer = 1;
@@ -2520,7 +2542,7 @@ fn vtx_main(
               outputBuffers[inpBuf_i - 1] = inputBuffers[inpBuf_i - 1];
             } else if (!uBufferPushed) {
               uBufferPushed = true;
-              outputBuffers[inpBuf_i - 1] = uniformBuffer;
+              outputBuffers[inpBuf_i - 1] = bufferGroup.uniformBuffer;
             }
           }
         }
@@ -2559,8 +2581,19 @@ fn vtx_main(
           bufferGroup.defaultUniformBinding = inputBuffers.length;
         }
       }
-      if (uniformValues.length > 0) this.updateUBO(uniformValues, inputTypes, bindGroupNumber);
+      if (uniformValues.length > 0) this.updateUBO(uniformValues, false, bindGroupNumber);
       if (this.bindGroupLayouts[bindGroupNumber] && newBindGroupBuffer) {
+        this.updateBindGroup(bindGroupNumber);
+      }
+      return newBindGroupBuffer;
+    };
+    updateBindGroup = (bindGroupNumber = this.bindGroupNumber) => {
+      let bufferGroup = this.bufferGroups[bindGroupNumber];
+      if (!bufferGroup) {
+        bufferGroup = this.makeBufferGroup(bindGroupNumber);
+      }
+      const inputBuffers = bufferGroup.inputBuffers;
+      if (this.bindGroupLayouts?.[bindGroupNumber]) {
         let bindGroupEntries = [];
         if (bufferGroup.bindGroupLayoutEntries) {
           bindGroupEntries.push(...bufferGroup.bindGroupLayoutEntries);
@@ -2599,7 +2632,6 @@ fn vtx_main(
         bufferGroup.bindGroup = bindGroup;
         this.bindGroups[bindGroupNumber] = bindGroup;
       }
-      return newBindGroupBuffer;
     };
     getOutputData = (commandEncoder, outputBuffers) => {
       if (!outputBuffers) outputBuffers = this.bufferGroups[this.bindGroupNumber].outputBuffers;
@@ -5169,22 +5201,6 @@ fn vtx_main(
     });
   };
   createImageExample();
-  var boidsRules = [
-    0.04,
-    //deltaT
-    0.1,
-    //rule1Distance
-    0.025,
-    //rule2Distance
-    0.025,
-    //rule3Distance
-    0.02,
-    //rule1Scale
-    0.05,
-    //rule2Scale
-    5e-3
-    //rule3Scale
-  ];
   function boidsCompute(particles = "array<vec2f>", deltaT = "f32", rule1Distance = "f32", rule2Distance = "f32", rule3Distance = "f32", rule1Scale = "f32", rule2Scale = "f32", rule3Scale = "f32") {
     let index = i32(threadId.x);
     var nParticles = i32(particles.length / 2);
@@ -5263,8 +5279,23 @@ fn vtx_main(
   canvas3.height = 500;
   canvas3.style.width = "500px";
   canvas3.style.height = "500px";
-  document.getElementById("ex4").insertAdjacentElement("afterbegin", canvas3);
+  document.getElementById("ex4").appendChild(canvas3);
   var numParticles = 1500;
+  var boidVBOS = [
+    //we can upload vbos
+    {
+      vPos: "vec2f",
+      vVel: "vec2f",
+      stepMode: "instance"
+      //speeds up rendering, can execute vertex and instance counts with different values
+    },
+    {
+      sprite_pos: "vec2f"
+    },
+    {
+      color: "vec4f"
+    }
+  ];
   WebGPUjs.createPipeline({
     compute: boidsCompute,
     vertex: boidsVertex,
@@ -5302,13 +5333,52 @@ fn vtx_main(
     renderPipelineDescriptor: { primitive: { topology: "triangle-list" } }
     //additional render or compute pass inputs (just the UBO update in this case)
   }).then((pipeline) => {
-    console.log(
-      "Boids pipeline",
-      pipeline,
-      pipeline.compute.code,
-      pipeline.vertex.code,
-      pipeline.fragment.code
-    );
+    let boidsRules = [
+      0.04,
+      //deltaT
+      0.1,
+      //rule1Distance
+      0.025,
+      //rule2Distance
+      0.025,
+      //rule3Distance
+      0.02,
+      //rule1Scale
+      0.05,
+      //rule2Scale
+      5e-3
+      //rule3Scale
+    ];
+    const ex4 = document.getElementById("ex4");
+    ex4.style.width = "100%";
+    let controls = document.createElement("span");
+    controls.innerHTML = `
+        <div id='boidcontrols'>
+            <label>deltaT (Index 0): <input type="number" step="0.001" value="${boidsRules[0]}" id="deltaT" data-index="0" /></label><br/>
+            <label>rule1Distance (Index 1): <input type="number" step="0.001" value="${boidsRules[1]}" id="rule1Distance" data-index="1" /></label><br/>
+            <label>rule2Distance (Index 2): <input type="number" step="0.001" value="${boidsRules[2]}" id="rule2Distance" data-index="2" /></label><br/>
+            <label>rule3Distance (Index 3): <input type="number" step="0.001" value="${boidsRules[3]}" id="rule3Distance" data-index="3" /></label><br/>
+            <label>rule1Scale (Index 4): <input type="number" step="0.001" value="${boidsRules[4]}" id="rule1Scale" data-index="4" /></label><br/>
+            <label>rule2Scale (Index 5): <input type="number" step="0.001" value="${boidsRules[5]}" id="rule2Scale" data-index="5" /></label><br/>
+            <label>rule3Scale (Index 6): <input type="number" step="0.001" value="${boidsRules[6]}" id="rule3Scale" data-index="6" /></label><br/>
+        </div>
+    `;
+    document.getElementById("ex4").appendChild(controls);
+    const parentDiv = document.getElementById("boidcontrols");
+    const inps = Array.from(parentDiv.getElementsByTagName("input"));
+    let onchange = (ev) => {
+      const input = ev.target;
+      const index = parseInt(input.getAttribute("data-index"));
+      boidsRules[index] = parseFloat(input.value);
+      const data = { [input.id]: boidsRules[index] };
+      pipeline.compute.updateUBO(data, true);
+    };
+    inps.forEach((inp) => {
+      inp.onchange = onchange;
+    });
+    let ex4Id1 = setupWebGPUConverterUI(boidsCompute, ex4, "compute");
+    let ex4Id2 = setupWebGPUConverterUI(boidsVertex, ex4, "vertex", ex4Id1.webGPUCode.lastBinding, boidVBOS);
+    let ex4Id3 = setupWebGPUConverterUI(boidsFragment, ex4, "fragment", ex4Id1.webGPUCode.lastBinding, boidVBOS);
     const particleBuffer = new Float32Array(numParticles * 4);
     for (let i = 0; i < numParticles; i += 4) {
       particleBuffer[i] = 2 * Math.random() - 1;
