@@ -5273,7 +5273,7 @@ fn vtx_main(
     canvas: canvas3,
     workGroupSize: 64,
     computePass: {
-      workgroupsX: numParticles / 64
+      workgroupsX: Math.ceil(numParticles / 64)
     },
     renderPass: {
       //tell it to make an initial render pass with these inputs
