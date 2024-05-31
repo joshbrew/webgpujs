@@ -5042,6 +5042,7 @@ fn vtx_main(
         ]
       }
     }).then((pipeline) => {
+      pipeline.render();
       console.timeEnd("createRenderPipeline and render triangle");
       console.log(pipeline);
     });
