@@ -5242,6 +5242,8 @@ fn vtx_main(
   var canvas3 = document.createElement("canvas");
   canvas3.width = 500;
   canvas3.height = 500;
+  canvas3.style.width = "500px";
+  canvas3.style.height = "500px";
   document.getElementById("ex4").insertAdjacentElement("afterbegin", canvas3);
   var numParticles = 1500;
   WebGPUjs.createPipeline({
@@ -5283,8 +5285,10 @@ fn vtx_main(
   }).then((pipeline) => {
     const particleBuffer = new Float32Array(numParticles * 4);
     for (let i = 0; i < numParticles; i += 4) {
-      particleBuffer[i] = Math.random();
-      particleBuffer[i + 1] = Math.random();
+      particleBuffer[i] = 2 * Math.random() - 1;
+      particleBuffer[i + 1] = 2 * Math.random() - 1;
+      particleBuffer[i + 2] = 2 * (Math.random() - 0.5) * 0.1;
+      particleBuffer[i + 3] = 2 * (Math.random() - 0.5) * 0.1;
     }
     pipeline.compute.buffer(
       void 0,
@@ -5337,7 +5341,17 @@ fn vtx_main(
       ]),
       2
     );
+    let now = performance.now();
+    let fps = [];
+    let fpsticker = document.getElementById("ex4fps");
     const loop = () => {
+      let time = performance.now();
+      let f = 1e3 / (time - now);
+      fps.push(f);
+      let frameTimeAvg = fps.reduce((a, b) => a + b) / fps.length;
+      fpsticker.innerText = frameTimeAvg.toFixed(1);
+      if (fps.length > 10) fps.shift();
+      now = time;
       pipeline.process();
       pipeline.render({
         vertexCount: 3,

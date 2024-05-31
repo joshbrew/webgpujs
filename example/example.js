@@ -475,6 +475,8 @@ let canvas3 = document.createElement('canvas');
 
 canvas3.width = 500;
 canvas3.height = 500;
+canvas3.style.width = '500px';
+canvas3.style.height = '500px';
 
 document.getElementById('ex4').insertAdjacentElement('afterbegin',canvas3);
 
@@ -532,8 +534,10 @@ WebGPUjs.createPipeline({
     for(let i = 0; i < numParticles; i+=4) {
 
         //random particle starting positions
-        particleBuffer[i] = Math.random();
-        particleBuffer[i+1] = Math.random();
+        particleBuffer[i] =    2 * Math.random()-1;
+        particleBuffer[i+1] =  2 * Math.random()-1;
+        particleBuffer[i+2] =  2 * (Math.random() - 0.5) * 0.1;
+        particleBuffer[i+3] =  2 * (Math.random() - 0.5) * 0.1;
 
         //velocity start can be zero or random
         //particleBuffer[i+2] = Math.random();
@@ -581,8 +585,20 @@ WebGPUjs.createPipeline({
 
     //buffering complete, now animate
 
+    
+    let now = performance.now();
+    let fps = [];
+    let fpsticker = document.getElementById('ex4fps');
     const loop = () => {
-        
+        let time = performance.now();
+        let f = 1000/(time-now);
+        fps.push(f);
+        let frameTimeAvg = fps.reduce((a,b) => a+b)/(fps.length);
+        //console.log(frameTimeAvg.toFixed(1));
+        fpsticker.innerText = frameTimeAvg.toFixed(1);
+        if(fps.length > 10) fps.shift();
+        now = time;
+
         pipeline.process();
         pipeline.render({
             vertexCount:3,
