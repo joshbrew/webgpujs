@@ -886,7 +886,7 @@ export class ShaderContext {
 
 
     updateUBO = (inputs, inputTypes, bindGroupNumber=this.bindGroupNumber) => {
-        if(!inputs) return;
+        if(!inputs || inputs.length === 0) return;
         
         let bufferGroup = this.bufferGroups[bindGroupNumber];
         if(!bufferGroup) {
@@ -898,8 +898,8 @@ export class ShaderContext {
             // Use a DataView to set values at specific byte offsets
             const dataView = bufferGroup.uniformBuffer.mapState === 'mapped' ? 
                 new DataView(bufferGroup.uniformBuffer.getMappedRange()) :
-                new DataView(new Float32Array(bufferGroup.uniformBuffer.size/4).buffer); //little endian
-    
+                new DataView(new ArrayBuffer(bufferGroup.uniformBuffer.size)); //little endian
+            
             let offset = 0; // Initialize the offset
             let inpIdx = 0;
             bufferGroup.params.forEach((node, i) => {
@@ -921,7 +921,8 @@ export class ShaderContext {
                 if(node.isInput) inpIdx++;
             });
 
-            //console.log(inputs, new Float32Array(dataView.buffer)); //check validity
+
+            //console.log(inputs, dataView, new Float32Array(dataView.buffer)); //check validity
             if(bufferGroup.uniformBuffer.mapState === 'mapped') bufferGroup.uniformBuffer.unmap();
             // else {
             //     this.device.queue.writeBuffer(
@@ -939,7 +940,7 @@ export class ShaderContext {
             // Use a DataView to set values at specific byte offsets
             const dataView = bufferGroup.defaultUniformBuffer.mapState === 'mapped' ? 
                 new DataView(bufferGroup.defaultUniformBuffer.getMappedRange()) :
-                new DataView(new Float32Array(bufferGroup.defaultUniformBuffer.size).buffer); //little endian
+                new DataView(new ArrayBuffer(bufferGroup.defaultUniformBuffer.size)); //little endian
             let offset = 0; // Initialize the offset
 
             bufferGroup.defaultUniforms.forEach((u,i) => { 

@@ -2199,13 +2199,13 @@ fn vtx_main(
       return offset;
     };
     updateUBO = (inputs, inputTypes, bindGroupNumber = this.bindGroupNumber) => {
-      if (!inputs) return;
+      if (!inputs || inputs.length === 0) return;
       let bufferGroup = this.bufferGroups[bindGroupNumber];
       if (!bufferGroup) {
         bufferGroup = this.makeBufferGroup(bindGroupNumber);
       }
       if (bufferGroup.uniformBuffer) {
-        const dataView = bufferGroup.uniformBuffer.mapState === "mapped" ? new DataView(bufferGroup.uniformBuffer.getMappedRange()) : new DataView(new Float32Array(bufferGroup.uniformBuffer.size / 4).buffer);
+        const dataView = bufferGroup.uniformBuffer.mapState === "mapped" ? new DataView(bufferGroup.uniformBuffer.getMappedRange()) : new DataView(new ArrayBuffer(bufferGroup.uniformBuffer.size));
         let offset = 0;
         let inpIdx = 0;
         bufferGroup.params.forEach((node, i) => {
@@ -2227,7 +2227,7 @@ fn vtx_main(
         if (bufferGroup.uniformBuffer.mapState === "mapped") bufferGroup.uniformBuffer.unmap();
       }
       if (bufferGroup.defaultUniforms) {
-        const dataView = bufferGroup.defaultUniformBuffer.mapState === "mapped" ? new DataView(bufferGroup.defaultUniformBuffer.getMappedRange()) : new DataView(new Float32Array(bufferGroup.defaultUniformBuffer.size).buffer);
+        const dataView = bufferGroup.defaultUniformBuffer.mapState === "mapped" ? new DataView(bufferGroup.defaultUniformBuffer.getMappedRange()) : new DataView(new ArrayBuffer(bufferGroup.defaultUniformBuffer.size));
         let offset = 0;
         bufferGroup.defaultUniforms.forEach((u, i) => {
           let value = this.builtInUniforms[u]?.callback(this);
@@ -5169,7 +5169,7 @@ fn vtx_main(
     });
   };
   createImageExample();
-  function boidsCompute(particles = "array<vec2f>", deltaT = 0.04, rule1Distance = 0.1, rule2Distance = 0.025, rule3Distance = 0.025, rule1Scale = 0.02, rule2Scale = 0.05, rule3Scale = 5e-3) {
+  function boidsCompute(particles = "array<vec2f>", deltaT = "f32", rule1Distance = "f32", rule2Distance = "f32", rule3Distance = "f32", rule1Scale = "f32", rule2Scale = "f32", rule3Scale = "f32") {
     let index = i32(threadId.x * 2);
     var pPos = particles[index];
     var pVel = particles[index + 1];
@@ -5225,8 +5225,8 @@ fn vtx_main(
   function boidsVertex() {
     let angle = -atan2(vVelIn.x, vVelIn.y);
     let pos = vec2(
-      a_posIn.x * cos(angle) - a_posIn.y * sin(angle),
-      a_posIn.x * sin(angle) + a_posIn.y * cos(angle)
+      sprite_posIn.x * cos(angle) - sprite_posIn.y * sin(angle),
+      sprite_posIn.x * sin(angle) + sprite_posIn.y * cos(angle)
     );
     position = vec4f(pos + vPosIn, 0, 1);
     color = vec4f(
@@ -5267,7 +5267,7 @@ fn vtx_main(
           //speeds up rendering, can execute vertex and instance counts with different values
         },
         {
-          a_pos: "vec2f"
+          sprite_pos: "vec2f"
         },
         {
           color: "vec4f"
