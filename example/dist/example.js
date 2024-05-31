@@ -5169,17 +5169,36 @@ fn vtx_main(
     });
   };
   createImageExample();
+  var boidsRules = [
+    0.04,
+    //deltaT
+    0.1,
+    //rule1Distance
+    0.025,
+    //rule2Distance
+    0.025,
+    //rule3Distance
+    0.02,
+    //rule1Scale
+    0.05,
+    //rule2Scale
+    5e-3
+    //rule3Scale
+  ];
   function boidsCompute(particles = "array<vec2f>", deltaT = "f32", rule1Distance = "f32", rule2Distance = "f32", rule3Distance = "f32", rule1Scale = "f32", rule2Scale = "f32", rule3Scale = "f32") {
-    let index = i32(threadId.x * 2);
-    var pPos = particles[index];
-    var pVel = particles[index + 1];
-    var plen = i32(f32(particles.length) * 0.5);
+    let index = i32(threadId.x);
+    var nParticles = i32(particles.length / 2);
+    if (index >= nParticles) {
+      return;
+    }
+    var pPos = particles[2 * index];
+    var pVel = particles[2 * index + 1];
     var cMass = vec2f(0, 0);
     var cVel = vec2f(0, 0);
     var colVel = vec2f(0, 0);
     var cMassCount = 0;
     var cVelCount = 0;
-    for (let i = 0; i < plen; i++) {
+    for (let i = 0; i < nParticles; i++) {
       if (i == index) {
         continue;
       }
@@ -5219,8 +5238,8 @@ fn vtx_main(
     if (pPos.y > 1) {
       pPos.y = -1;
     }
-    particles[index] = pPos;
-    particles[index + 1] = pVel;
+    particles[2 * index] = pPos;
+    particles[2 * index + 1] = pVel;
   }
   function boidsVertex() {
     let angle = -atan2(vVelIn.x, vVelIn.y);
@@ -5261,8 +5280,8 @@ fn vtx_main(
       vbos: [
         //we can upload vbos
         {
-          vVel: "vec2f",
           vPos: "vec2f",
+          vVel: "vec2f",
           stepMode: "instance"
           //speeds up rendering, can execute vertex and instance counts with different values
         },
@@ -5283,6 +5302,13 @@ fn vtx_main(
     renderPipelineDescriptor: { primitive: { topology: "triangle-list" } }
     //additional render or compute pass inputs (just the UBO update in this case)
   }).then((pipeline) => {
+    console.log(
+      "Boids pipeline",
+      pipeline,
+      pipeline.compute.code,
+      pipeline.vertex.code,
+      pipeline.fragment.code
+    );
     const particleBuffer = new Float32Array(numParticles * 4);
     for (let i = 0; i < numParticles; i += 4) {
       particleBuffer[i] = 2 * Math.random() - 1;
@@ -5293,21 +5319,7 @@ fn vtx_main(
     pipeline.compute.buffer(
       void 0,
       particleBuffer,
-      //also include uniforms
-      0.04,
-      //deltaT
-      0.1,
-      //rule1Distance
-      0.025,
-      //rule2Distance
-      0.025,
-      //rule3Distance
-      0.02,
-      //rule1Scale
-      0.05,
-      //rule2Scale
-      5e-3
-      //rule3Scale
+      ...boidsRules
     );
     pipeline.fragment.updateVBO(
       pipeline.compute.bufferGroup.inputBuffers[0],

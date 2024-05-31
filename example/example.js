@@ -371,6 +371,15 @@ createImageExample();
 //load texture data as unint8array or we can specify with _rgba8unorm etc
 //set cubeVertices as the vbo
 
+let boidsRules = [
+    0.04,  //deltaT
+    0.1,   //rule1Distance
+    0.025, //rule2Distance
+    0.025, //rule3Distance
+    0.02,  //rule1Scale
+    0.05,  //rule2Scale
+    0.005  //rule3Scale
+];
 
 //https://webgpu.github.io/webgpu-samples/samples/computeBoids adaptation
 //we need to add some stuff to our transpiler to make this more doable methinks.
@@ -386,10 +395,17 @@ function boidsCompute(
     rule2Scale = 'f32',
     rule3Scale = 'f32'
 ) {
-    let index = i32(threadId.x*2); 
-    var pPos = particles[index];
-    var pVel = particles[index+1];
-    var plen = i32(f32(particles.length) * 0.5); //should be counted as a vec2 array
+    let index = i32(threadId.x); 
+
+    var nParticles = i32(particles.length/2); //should be counted as a vec2 array
+
+    if(index >= nParticles) {
+        return;
+    }
+
+    var pPos = particles[2*index];
+    var pVel = particles[2*index+1];
+    
     var cMass = vec2f(0,0);
     var cVel = vec2f(0,0);
     var colVel = vec2f(0,0);
@@ -397,14 +413,14 @@ function boidsCompute(
     var cVelCount = 0;
 
 
-    for(let i = 0; i < plen; i++) {
+    for(let i = 0; i < nParticles; i++) {
         if(i == index) {
             continue;
         }
-        let j = i * 2;
 
+        let j = i * 2;
         var pos = particles[j];
-        var vel = particles[j+1];
+        var vel = particles[j + 1];
 
         if(distance(pos, pPos) < rule1Distance) {
             cMass += pos;
@@ -444,8 +460,8 @@ function boidsCompute(
     }
 
     //update particle buffer for rendering, should only have to set initial conditions
-    particles[index] = pPos;
-    particles[index+1] = pVel;
+    particles[2*index] = pPos;
+    particles[2*index+1] = pVel;
 
 }
 
@@ -497,8 +513,8 @@ WebGPUjs.createPipeline({
     renderPass:{ //tell it to make an initial render pass with these inputs
         vbos:[ //we can upload vbos
             {
-                vVel:'vec2f',
                 vPos:'vec2f',
+                vVel:'vec2f',
 
                 stepMode:'instance' //speeds up rendering, can execute vertex and instance counts with different values
             },
@@ -522,11 +538,11 @@ WebGPUjs.createPipeline({
     //additional render or compute pass inputs (just the UBO update in this case)
 }).then((pipeline) => {
 
-    // console.log('Boids pipeline', pipeline,
-    //     pipeline.compute.code,
-    //     pipeline.fragment.code,
-    //     pipeline.vertex.code
-    // )
+    console.log('Boids pipeline', pipeline,
+        pipeline.compute.code,
+        pipeline.vertex.code,
+        pipeline.fragment.code
+    )
 
     const particleBuffer = new Float32Array(numParticles * 4);
     //vec2f + vec2f buffer packed together
@@ -534,14 +550,14 @@ WebGPUjs.createPipeline({
     for(let i = 0; i < numParticles; i+=4) {
 
         //random particle starting positions
-        particleBuffer[i] =    2 * Math.random()-1;
+        
+        //position
+        particleBuffer[i]   =  2 * Math.random()-1;
         particleBuffer[i+1] =  2 * Math.random()-1;
+        //velocity
         particleBuffer[i+2] =  2 * (Math.random() - 0.5) * 0.1;
         particleBuffer[i+3] =  2 * (Math.random() - 0.5) * 0.1;
 
-        //velocity start can be zero or random
-        //particleBuffer[i+2] = Math.random();
-        //particleBuffer[i+3] = Math.random();
     }
 
     //buffer positions with initial values
@@ -549,13 +565,7 @@ WebGPUjs.createPipeline({
         undefined,
         particleBuffer,
         //also include uniforms
-        0.04,  //deltaT
-        0.1,   //rule1Distance
-        0.025, //rule2Distance
-        0.025, //rule3Distance
-        0.02,  //rule1Scale
-        0.05,  //rule2Scale
-        0.005  //rule3Scale
+        ...boidsRules
     );
 
     //set the position buffer as the instance VBO
