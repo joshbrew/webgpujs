@@ -106,7 +106,6 @@ export class ShaderHelper {
         if(shaders.compute) {
             this.compute = new ShaderContext(Object.assign({},shaders.compute, options));
             this.compute.helper = this;
-            Object.assign(this.compute, options);
         }
         if(shaders.fragment && shaders.vertex) {
             WGSLTranspiler.combineShaderParams(shaders.vertex, shaders.fragment);
@@ -126,34 +125,44 @@ export class ShaderHelper {
             this.compute.bindGroupLayouts = this.bindGroupLayouts;
             this.compute.bindGroups = this.bindGroups;
             this.compute.bufferGroups = this.bufferGroups;
+
             const entries = this.compute.createBindGroupEntries(options?.renderPass?.textures);
+
             this.compute.bindGroupLayoutEntries = entries.length > 0 ? entries : undefined;
             this.compute.setBindGroupLayout(entries, options.bindGroupNumber);
+
         }
         if(this.fragment) {
             this.fragment.bufferGroups = this.bufferGroups;
             this.fragment.bindGroups = this.bindGroups;
             this.fragment.bindGroupLayouts = this.bindGroupLayouts;
+
             const entries = this.fragment.createBindGroupEntries(
                 options?.renderPass?.textures, 
                 undefined, 
                 GPUShaderStage.VERTEX |GPUShaderStage.FRAGMENT
             );
+
             this.fragment.bindGroupLayoutEntries = entries.length > 0 ? entries : undefined;
 
             this.fragment.setBindGroupLayout(entries, options.bindGroupNumber);
+
         } else if (this.vertex) {
+
             this.vertex.bufferGroups = this.bufferGroups;
             this.vertex.bindGroups = this.bindGroups;
             this.vertex.bindGroupLayouts = this.bindGroupLayouts;
+
             const entries = this.vertex.createBindGroupEntries(
                 options?.renderPass?.textures, 
                 undefined, 
                 GPUShaderStage.VERTEX |GPUShaderStage.FRAGMENT
             );
+
             this.vertex.bindGroupLayoutEntries = entries.length > 0 ? entries : undefined;
 
             this.vertex.setBindGroupLayout(entries, options.bindGroupNumber);
+
         }
 
         //create shader modules
@@ -195,7 +204,7 @@ export class ShaderHelper {
             });
         }
         //todo: make vertex independent (but not fragment)
-        if (this.vertex && this.fragment) { // If both vertex and fragment shaders are provided
+        if (this.fragment) { // If both vertex and fragment shaders are provided
 
             this.fragment.vertex = this.vertex;
 
@@ -213,6 +222,7 @@ export class ShaderHelper {
                 options?.renderPipelineDescriptor,
                 options?.renderPassDescriptor
             );
+
         } else if (this.vertex) {
             
             if((this.vertex.bindGroupLayoutEntries || this.vertex.altBindings) && this.bindGroupLayouts.length > 0) {
@@ -226,10 +236,10 @@ export class ShaderHelper {
                 options?.renderPass?.vbos as any,  
                 options?.contextSettings,  
                 options?.renderPipelineDescriptor,
-                options?.renderPassDescriptor
+                options?.renderPassDescriptor,
+                'vertex'
             );
         }
-        //eof
     }
 
     addFunction = (func:Function|string) => {
@@ -741,27 +751,20 @@ export class ShaderContext {
                     }
                 }
     
-    
+                let buffer;
                 if(indexBuffer) {
-                    // Copy the vertex data over to the GPUBuffer using the writeBuffer() utility function
-                    this.device.queue.writeBuffer(
-                        bufferGroup.indexBuffer, 
-                        bufferOffset, 
-                        vertices, 
-                        dataOffset, 
-                        vertices.length
-                    );
+                    buffer = bufferGroup.indexBuffer; // Copy the vertex data over to the GPUBuffer using the writeBuffer() utility function
                 }
                 else {
-                    // Copy the vertex data over to the GPUBuffer using the writeBuffer() utility function
-                    this.device.queue.writeBuffer(
-                        bufferGroup.vertexBuffers[index], 
-                        bufferOffset, 
-                        vertices, 
-                        dataOffset, 
-                        vertices.length
-                    );
+                    buffer = bufferGroup.vertexbuffers[index];
                 }
+                this.device.queue.writeBuffer(
+                    buffer, 
+                    bufferOffset, 
+                    vertices, 
+                    dataOffset, 
+                    vertices.length
+                );
             }
         }
     }
@@ -1110,7 +1113,8 @@ export class ShaderContext {
             color:'vec4<f32>'
         }], 
         swapChainFormat = navigator.gpu.getPreferredCanvasFormat(),
-        renderPipelineDescriptor:Partial<GPURenderPipelineDescriptor>={}
+        renderPipelineDescriptor:Partial<GPURenderPipelineDescriptor>={},
+        shaderType:'fragment'|'vertex'='fragment'
     ) => {
 
         //remember to just use your own render pipeline descriptor to avoid the assumptions we make;
@@ -1174,7 +1178,7 @@ export class ShaderContext {
         let desc = { //https://developer.mozilla.org/en-US/docs/Web/API/GPUDevice/createRenderPipeline
             label:'renderPipeline',
             layout: this.pipelineLayout ? this.pipelineLayout : 'auto',
-            vertex: this.vertex ? {
+            vertex: shaderType === 'fragment' ? { //if using only the vertex buffer use a different descriptor
                 module: this.vertex.shaderModule,
                 entryPoint: 'vtx_main',
                 buffers: vertexBuffers
@@ -1185,7 +1189,7 @@ export class ShaderContext {
                     format: swapChainFormat
                 }]
             },
-            fragment: this.vertex ? {
+            fragment: shaderType === 'fragment' ? {
                 module: this.shaderModule,
                 entryPoint: 'frag_main',
                 targets: [{
@@ -1242,7 +1246,8 @@ export class ShaderContext {
         }],
         contextSettings?:GPUCanvasConfiguration, 
         renderPipelineDescriptor?:Partial<GPURenderPipelineDescriptor>,
-        renderPassDescriptor?:GPURenderPassDescriptor
+        renderPassDescriptor?:GPURenderPassDescriptor,
+        shaderType:'fragment'|'vertex'='fragment'
     ) => {
         // Setup render outputs
         const swapChainFormat = navigator.gpu.getPreferredCanvasFormat();
@@ -1254,7 +1259,9 @@ export class ShaderContext {
             alphaMode: 'premultiplied'
         });
 
-        renderPipelineDescriptor = this.createRenderPipelineDescriptor(vertexBufferOptions, swapChainFormat, renderPipelineDescriptor);
+        renderPipelineDescriptor = this.createRenderPipelineDescriptor(
+            vertexBufferOptions, swapChainFormat, renderPipelineDescriptor, shaderType
+        );
 
         if(!renderPassDescriptor)
             renderPassDescriptor = this.createRenderPassDescriptor();

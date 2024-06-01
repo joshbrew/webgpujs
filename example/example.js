@@ -645,6 +645,95 @@ WebGPUjs.createPipeline({
 });
 
 
+//Example 5, multiple compute shaders then a render, w/ storage texture usage like a boss
+
+function texCompute() {
+    let coords = vec2f(threadId.xy) / vec2f(textureDimensions(outputTex));
+    let color = vec4f(0.5 + 0.5 * sin(coords.x + utcTime), 0.5 + 0.5*cos(coords.y + utcTime), 0.5, 1.0);
+    textureStore(outputTex, vec2i(threadId.xy), color);
+}
+
+function texCompute2() {
+    let size = vec2i(textureDimensions(inputTex));
+    //let uv = vec2f(threadId.xy) / vec2f(size);
+    
+    var sum = vec4f(0.0);
+    for (var dx = -1; dx <= 1; dx++) {
+        for (var dy = -1; dy <= 1; dy++) {
+            let offset = vec2i(dx, dy);
+            let samplePos = vec2i(id.xy) + offset;
+            if (samplePos.x >= 0 && samplePos.y >= 0 && samplePos.x < size.x && samplePos.y < size.y) {
+                sum += textureLoad(inputTex, samplePos, 0);
+            }
+        }
+    }
+    let color = sum / 9.0;
+    textureStore(outputTex, vec2i(threadId.xy), color);
+}
+
+function texVertex() {
+    const tri = array(
+        vec2f(-1.0, -1.0),
+        vec2f(3.0, -1.0),
+        vec2f(-1.0, 3.0)
+    );
+
+    position = vec4f(tri[vertexIndex], 0.0, 1.0);
+}
+
+function texFragment() {
+    let texColor = textureLoad(outputTex, vec2f(position.xy), 0);
+    //let gray = dot(color.xyz, vec3f(0.299, 0.587, 0.114));
+    return vec4f(texColor, 1.0);
+}
+
+async function createTexPipeline() {
+
+    const canvas4 = document.createElement('canvas');
+
+    const pipeline1 = await WebGPUjs.createPipeline(
+        {
+            compute:texCompute
+        },
+        {
+            workGroupSize:64,
+            textures:{
+                inputTex:{
+                    source:await createImageBitmap(canvas4),
+                    width:canvas4.width,
+                    height:canvas4.height
+                },
+                outputTex:{
+                    buffer:new Float32Array(canvas4.width*canvas4.height*4).buffer, //placeholder for setting the storage texture
+                    width:canvas4.width,
+                    height:canvas4.height,
+                    isStorage:true
+                }
+            }
+        }
+    );
+
+    const combinedPipeline = await WebGPUjs.combineShaders(
+        {
+            compute:texCompute2,
+            vertex:texVertex,
+            fragmnet:texFragment
+        },
+        {
+            workGroupSize:64,
+            canvas:canvas4
+        },
+        pipeline1
+    )
+
+    //now we should be able to run shader set 1 then shader set 2 and buffers will be shared
+
+}
+
+
+//Example 6 storage texture usage via compute
+
+//Example 7, multiple vertex shaders for shadowing and render example
 
 
 

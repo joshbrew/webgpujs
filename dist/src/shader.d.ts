@@ -118,11 +118,11 @@ export declare class ShaderContext {
     createRenderPipelineDescriptor: (vertexBufferOptions?: {
         stepMode?: 'vertex' | 'instance';
         [key: string]: string;
-    }[], swapChainFormat?: GPUTextureFormat, renderPipelineDescriptor?: Partial<GPURenderPipelineDescriptor>) => Partial<GPURenderPipelineDescriptor>;
+    }[], swapChainFormat?: GPUTextureFormat, renderPipelineDescriptor?: Partial<GPURenderPipelineDescriptor>, shaderType?: 'fragment' | 'vertex') => Partial<GPURenderPipelineDescriptor>;
     createRenderPassDescriptor: () => GPURenderPassDescriptor;
     updateGraphicsPipeline: (vertexBufferOptions?: {
         [key: string]: string;
-    }[], contextSettings?: GPUCanvasConfiguration, renderPipelineDescriptor?: Partial<GPURenderPipelineDescriptor>, renderPassDescriptor?: GPURenderPassDescriptor) => void;
+    }[], contextSettings?: GPUCanvasConfiguration, renderPipelineDescriptor?: Partial<GPURenderPipelineDescriptor>, renderPassDescriptor?: GPURenderPassDescriptor, shaderType?: 'fragment' | 'vertex') => void;
     makeBufferGroup: (bindGroupNumber?: number) => any;
     firstRun: boolean;
     buffer: ({ vbos, textures, indexBuffer, indexFormat, skipOutputDef, bindGroupNumber, outputVBOs, outputTextures, newBindings, }?: Partial<{
