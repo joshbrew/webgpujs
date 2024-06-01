@@ -165,7 +165,7 @@ export declare class ShaderContext {
         workgroupsY?: number;
         workgroupsZ?: number;
     }>, ...inputs: any[]) => boolean;
-    updateBindGroup: (bindGroupNumber?: number) => void;
+    updateBindGroup: (bindGroupNumber?: number, customBindGroupEntries?: GPUBindGroupEntry[]) => void;
     getOutputData: (commandEncoder: GPUCommandEncoder, outputBuffers?: any) => any;
     run: ({ vertexCount, instanceCount, firstVertex, firstInstance, vbos, outputVBOs, textures, outputTextures, bufferOnly, skipOutputDef, bindGroupNumber, viewport, scissorRect, blendConstant, indexBuffer, indexFormat, firstIndex, useRenderBundle, workgroupsX, workgroupsY, workgroupsZ, newBindings }?: {
         vertexCount?: number;

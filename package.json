@@ -1,6 +1,6 @@
 {
   "name": "webgpujs",
-  "version": "0.0.17",
+  "version": "0.0.18",
   "description": "Write full featured WGSL pipelines in plain javascript",
   "main": "./webgpujs.js",
   "module": "./dist/webgpujs.esm.js",

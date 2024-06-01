@@ -665,6 +665,8 @@ export class ShaderContext {
         return this.bindGroupLayout;
     }
 
+    
+
     updateVBO = (
         vertices, 
         index=0, 
@@ -1515,7 +1517,7 @@ export class ShaderContext {
         
     }
 
-    updateBindGroup = (bindGroupNumber=this.bindGroupNumber) => {
+    updateBindGroup = (bindGroupNumber=this.bindGroupNumber, customBindGroupEntries?:GPUBindGroupEntry[]) => {
 
         let bufferGroup = this.bufferGroups[bindGroupNumber];        
 
@@ -1526,7 +1528,7 @@ export class ShaderContext {
         const inputBuffers = bufferGroup.inputBuffers;
 
 
-        if(this.bindGroupLayouts?.[bindGroupNumber]) {
+        if(customBindGroupEntries || !this.bindGroupLayouts?.[bindGroupNumber]) {
             // Update bind group creation to include input buffer resources
             let bindGroupEntries = [];
             //console.log(bufferGroup.bindGroupLayoutEntries);
@@ -1553,7 +1555,7 @@ export class ShaderContext {
                     buffer:bufferGroup.defaultUniformBuffer
                 };
             } else if(inputBuffers) {
-                bindGroupEntries.push(...Object.values(inputBuffers).map((buffer, index) => ({
+                bindGroupEntries.push(...Object.values(inputBuffers).map((buffer:GPUBuffer, index) => ({
                     binding: index,
                     resource: { buffer }
                 }))); 
@@ -1564,6 +1566,13 @@ export class ShaderContext {
                     });
             }
             
+            if(customBindGroupEntries) {
+                customBindGroupEntries.forEach((entry,i) => {
+                    if(entry) {
+                        bindGroupEntries[i] = entry; //overwrite
+                    }
+                })
+            }
 
             const bindGroup = this.device.createBindGroup({
                 label:`group_${bindGroupNumber}`,
