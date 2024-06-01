@@ -24,3 +24,5 @@ To run the example: `npm i -g tinybuild` then `npm run example`
 
 
 ### Looking 4 contributors 
+
+It's fun I guess
