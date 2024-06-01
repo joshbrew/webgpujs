@@ -2622,13 +2622,13 @@ fn vtx_main(
       }
       return newBindGroupBuffer;
     };
-    updateBindGroup = (bindGroupNumber = this.bindGroupNumber) => {
+    updateBindGroup = (bindGroupNumber = this.bindGroupNumber, customBindGroupEntries) => {
       let bufferGroup = this.bufferGroups[bindGroupNumber];
       if (!bufferGroup) {
         bufferGroup = this.makeBufferGroup(bindGroupNumber);
       }
       const inputBuffers = bufferGroup.inputBuffers;
-      if (this.bindGroupLayouts?.[bindGroupNumber]) {
+      if (customBindGroupEntries || this.bindGroupLayouts?.[bindGroupNumber]) {
         let bindGroupEntries = [];
         if (bufferGroup.bindGroupLayoutEntries) {
           bindGroupEntries.push(...bufferGroup.bindGroupLayoutEntries);
@@ -2659,6 +2659,13 @@ fn vtx_main(
               binding: bufferGroup.defaultUniformBinding,
               resource: { buffer: bufferGroup.defaultUniformBuffer }
             });
+        }
+        if (customBindGroupEntries) {
+          customBindGroupEntries.forEach((entry, i) => {
+            if (entry) {
+              bindGroupEntries[i] = entry;
+            }
+          });
         }
         const bindGroup = this.device.createBindGroup({
           label: `group_${bindGroupNumber}`,

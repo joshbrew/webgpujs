@@ -1528,7 +1528,7 @@ export class ShaderContext {
         const inputBuffers = bufferGroup.inputBuffers;
 
 
-        if(customBindGroupEntries || !this.bindGroupLayouts?.[bindGroupNumber]) {
+        if(customBindGroupEntries || this.bindGroupLayouts?.[bindGroupNumber]) {
             // Update bind group creation to include input buffer resources
             let bindGroupEntries = [];
             //console.log(bufferGroup.bindGroupLayoutEntries);
@@ -1573,6 +1573,7 @@ export class ShaderContext {
                     }
                 })
             }
+
 
             const bindGroup = this.device.createBindGroup({
                 label:`group_${bindGroupNumber}`,
