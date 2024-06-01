@@ -10,4 +10,6 @@ To run the example: `npm i -g tinybuild` then `npm run example`
 
 
 ![cap](./example/compute_.PNG)
+![cap2](./example/boids.PNG)
+![cap3](./example/texture.PNG)
 
