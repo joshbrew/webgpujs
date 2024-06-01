@@ -7,6 +7,8 @@ SupportS:
 - Compile compute, vertex, Fragment shaders and any chain together combinations thereof.
 - Render to canvases.
 - Array buffers, uniforms, VBOs, Index Buffers, Textures (incl storage texture specification).
+- Specify instance vbos (see boids example)
+- boilerplate access to builtins or for doing read/writes to vertex buffer objects across vertex/fragment 
 - The transpiler will attempt to combine bindings when using shared naming conventions for easy shared buffer allocation across multiple shader programs.
 - Lots more but we are testing things out still and trying to bring it up to something extremely common sense before we fully document the API. 
  
