@@ -1,9 +1,15 @@
 ## WebGPUjs
 
-Write full featured WGSL pipelines in plain javascript.
+Write full featured WGSL pipelines in plain(ish) javascript.
 
-We are using some boilerplate conventions but things like vertex buffer allocation or type inferencing for textures etc and so on could be a lot better. Nothing is documented yet until we're happy with it so just try to play with the examples if you are feeling motivated. 
-
+SupportS:
+- Write functional compute shaders etc. and output one or multiple resulting buffers. 
+- Compile compute, vertex, Fragment shaders and any chain together combinations thereof.
+- Render to canvases.
+- Array buffers, uniforms, VBOs, Index Buffers, Textures (incl storage texture specification).
+- The transpiler will attempt to combine bindings when using shared naming conventions for easy shared buffer allocation across multiple shader programs.
+- Lots more but we are testing things out still before we fully document the API and trying to bring it up to something extremely common sense. 
+ 
 **Work in Progress**
 
 To run the example: `npm i -g tinybuild` then `npm run example`
@@ -13,3 +19,6 @@ To run the example: `npm i -g tinybuild` then `npm run example`
 ![cap2](./example/boids.PNG)
 ![cap3](./example/texture.PNG)
 
+
+
+### Looking 4 contributors 
