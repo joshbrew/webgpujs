@@ -7,51 +7,12 @@ import { mat4 as m4, vec3 as v3 } from 'wgpu-matrix' //they'll transform the dum
 //dft is an O(n^2) example, plus a bunch of other nonsense just to test the transpiler out, we'll do this proper soon
 function dft(
     inputData = new Float32Array(), 
-    outputData = [], 
-    //dummy inputs
-    outp3 = mat2x2(vec2(1.0,1.0),vec2(1.0,1.0)), //approximate data structure wrappers will infer float or int from decimal usage
-    outp4 = "i32",
-    outp5 = vec3(1,2,3),
-    outp6 = [vec2(1.0,1.0)]
+    outputData = []
 ) {
 
-    function add(a=vec2f(0.0,0.0),b=vec2f(0.0,0.0)) { //transpiled out of main body
-        return a + b;
-    }
-
-    let x = new Float32Array(32); //float32 array<f32, 32> (default)
-    let x2 = new Array(32).fill(inputData[0]); //array<i32, 32> array (no decimal)
-    const x3 = [1,2,3]; // array<i32, 3>
-    let x4 = new Array(100).fill(vec3(0,0,0)) //array<vec3<i32>, 100>
-    let x5 = new Array(100).fill(mat2x2(vec2(1,1),vec2(1,1)));
-    //let x6 = new Array(inputData.length).fill(0.0) //cannot dynamically size const arrays
-
-
-
-    let width = resX;
-
-    const b = 3 + outp4;
-
-    `const bb : array<f32, 5> = array(1,2,3,4,5)`; //write-in
-
-    var M = mat4x4(
-        vec4f(1.0,0.0,0.0,0.0),
-        vec4f(0.0,1.0,0.0,0.0),
-        vec4f(0.0,0.0,1.0,0.0),
-        vec4f(0.0,0.0,0.0,1.0)
-    ); //identity matrix
-
-    let D = M + M;
-
-    var Z = outp3 * mat2x2(vec2f(4.0,-1.0),vec2f(3.0,2.0));
-
-    var Zz = outp5 + vec3(4,5,6);
-    
     const N = i32(inputData.length);
     const k = threadId.x;
     let sum = vec2f(0.0, 0.0); //will be replaced with var
-
-    var sum2 = add(sum,sum);
 
     for (let n = 0; n < N; n++) {
         const phase = 2.0 * Math.PI * f32(k) * f32(n) / f32(N);
@@ -173,7 +134,7 @@ console.time('createComputePipeline');
 
 
 function vertexExample() {
-    const tri = array(
+    const tri = array( //consts get extracted
         vec2f( 0.0,  0.5),  
         vec2f(-0.5, -0.5),  
         vec2f( 0.5, -0.5)   
@@ -272,7 +233,7 @@ const createImageExample = async () => {
             color:'vec4f',
             uv:'vec2f',
             //normal:'vec3f'
-        } //the shader system will set the draw call count based on the number of rows (assumed to be position4,color4,uv2,normal3 or vertexCount = len/13) in the vertices of the first supplied vbo
+        } 
     ]
 
     let ex3Id1 = setupWebGPUConverterUI(cubeExampleVert, document.getElementById('ex3'), 'vertex', undefined, vbos);
@@ -312,12 +273,12 @@ const createImageExample = async () => {
         renderPass:{ //tell it to make an initial render pass with these inputs
             vertexCount:cubeVertices.length/10,
             vbos:[ //we can upload vbos
-                { //named variables for this VBO that we will upload in interleaved format (i.e. [pos vec4 0,color vec4 0,uv vec2 0,norm vec3 0, pos vec4 1, ...])
+                { //named variables for this VBO that we will upload in interleaved format (i.e. Float32Array([pos vec4 0,color vec4 0,uv vec2 0,norm vec3 0, pos vec4 1, ...]))
                     vertex:'vec4f',
                     color:'vec4f',
                     uv:'vec2f',
                     //normal:'vec3f'
-                } //the shader system will set the draw call count based on the number of rows (assumed to be position4,color4,uv2,normal3 or vertexCount = len/13) in the vertices of the first supplied vbo
+                } 
             ],
             textures:{
                 image:textureData //corresponds to the variable which is defined implicitly by usage with texture calls
@@ -591,7 +552,7 @@ WebGPUjs.createPipeline({
 
         const data = {[input.id]:boidsRules[index]}; //can update UBOs by variable name
         
-        // Assuming pipeline.fragment.updateUBO is a function to update the UBO
+        // Assuming pipeline.fragment.updateUBO is a function to update the UBO, and update the resource
         pipeline.compute.updateUBO(data, true); 
     }
 
@@ -746,3 +707,81 @@ WebGPUjs.createPipeline({
 //     return matrixA
 // }
 
+
+
+
+/****
+ * //dft is an O(n^2) example, plus a bunch of other nonsense just to test the transpiler out, we'll do this proper soon
+function dft(
+    inputData = new Float32Array(), 
+    outputData = [], 
+    //dummy inputs
+    outp3 = mat2x2(vec2(1.0,1.0),vec2(1.0,1.0)), //approximate data structure wrappers will infer float or int from decimal usage
+    outp4 = "i32",
+    outp5 = vec3(1,2,3),
+    outp6 = [vec2(1.0,1.0)]
+) {
+
+    function add(a=vec2f(0.0,0.0),b=vec2f(0.0,0.0)) { //transpiled out of main body
+        return a + b;
+    }
+
+    let x = new Float32Array(32); //float32 array<f32, 32> (default)
+    let x2 = new Array(32).fill(inputData[0]); //array<i32, 32> array (no decimal)
+    const x3 = [1,2,3]; // array<i32, 3>
+    let x4 = new Array(100).fill(vec3(0,0,0)) //array<vec3<i32>, 100>
+    let x5 = new Array(100).fill(mat2x2(vec2(1,1),vec2(1,1)));
+    //let x6 = new Array(inputData.length).fill(0.0) //cannot dynamically size const arrays
+
+
+
+    let width = resX;
+
+    const b = 3 + outp4;
+
+    `const bb : array<f32, 5> = array(1,2,3,4,5)`; //write-in
+
+    var M = mat4x4(
+        vec4f(1.0,0.0,0.0,0.0),
+        vec4f(0.0,1.0,0.0,0.0),
+        vec4f(0.0,0.0,1.0,0.0),
+        vec4f(0.0,0.0,0.0,1.0)
+    ); //identity matrix
+
+    let D = M + M;
+
+    var Z = outp3 * mat2x2(vec2f(4.0,-1.0),vec2f(3.0,2.0));
+
+    var Zz = outp5 + vec3(4,5,6);
+    
+    const N = i32(inputData.length);
+    const k = threadId.x;
+    let sum = vec2f(0.0, 0.0); //will be replaced with var
+
+    var sum2 = add(sum,sum);
+
+    for (let n = 0; n < N; n++) {
+        const phase = 2.0 * Math.PI * f32(k) * f32(n) / f32(N);
+        sum = sum + vec2f(
+            inputData[n] * Math.cos(phase),
+            -inputData[n] * Math.sin(phase)
+        );
+    }
+
+    //you should always add semicolons to be in-spec with compute shaders but we will try to add them for you
+
+    const outputIndex = k * 2 //use strict
+    if (outputIndex + 1 < outputData.length) {
+        outputData[outputIndex] = sum.x;
+        outputData[outputIndex + 1] = sum.y;
+    }
+
+    
+    return [inputData, outputData]; //returning an array of inputs lets us return several buffer promises
+    //return outputData;
+    //return outp4; //we can also return the uniform buffer though it is immutable so it's pointless
+}
+ * 
+ * 
+ * 
+ */
