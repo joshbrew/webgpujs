@@ -8,7 +8,7 @@ SupportS:
 - Render to canvases.
 - Array buffers, uniforms, VBOs, Index Buffers, Textures (incl storage texture specification).
 - The transpiler will attempt to combine bindings when using shared naming conventions for easy shared buffer allocation across multiple shader programs.
-- Lots more but we are testing things out still before we fully document the API and trying to bring it up to something extremely common sense. 
+- Lots more but we are testing things out stilland trying to bring it up to something extremely common sense before we fully document the API. 
  
 **Work in Progress**
 
