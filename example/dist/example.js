@@ -5044,7 +5044,7 @@ fn vtx_main(
               return a * b;
             });
             console.timeEnd("addFunction and recompile shader pipeline");
-            console.log(pipeline);
+            console.log("DFT Compute Pipeline", pipeline);
             document.getElementById("t1_" + ex1Id.uniqueID).value = pipeline.compute.code;
           });
         });
@@ -5093,7 +5093,7 @@ fn vtx_main(
     }).then((pipeline) => {
       pipeline.render();
       console.timeEnd("createRenderPipeline and render triangle");
-      console.log(pipeline);
+      console.log("Triangle Pipeline", pipeline);
     });
   }, 500);
   function cubeExampleVert(modelViewProjectionMatrix = "mat4x4<f32>") {
@@ -5192,7 +5192,7 @@ fn vtx_main(
       //placeholder mat4 projection matrix (copy wgsl-matrix library example from webgpu samples)
     }).then((pipeline) => {
       console.timeEnd("createRenderPipeline and render texture");
-      console.log(pipeline);
+      console.log("Cube Pipeline", pipeline);
       pipeline.fragment.updateVBO(cubeVertices, 0);
       let now = performance.now();
       let fps = [];
@@ -5348,6 +5348,7 @@ fn vtx_main(
     renderPipelineDescriptor: { primitive: { topology: "triangle-list" } }
     //additional render or compute pass inputs (just the UBO update in this case)
   }).then((pipeline) => {
+    console.log("Boids Pipeline:", pipeline);
     let boidsRules = [
       0.04,
       //deltaT
