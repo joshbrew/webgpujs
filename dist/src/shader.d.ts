@@ -105,11 +105,16 @@ export declare class ShaderContext {
         size: number;
         alignment: number;
     }, offset: number, input: any) => number;
-    allocateUBO: (bindGroupNumber?: number) => boolean;
-    getUBODataView: (bindGroupNumber?: number) => DataView;
+    updateArrayBuffers(buffers: {
+        [key: string]: any;
+    }, //update by name
+    updateBindGroup?: boolean, bindGroupNumber?: number): void;
     updateUBO: (inputs: any[] | {
         [key: string]: any;
-    }, reallocate?: boolean, bindGroupNumber?: number) => void;
+    }, newBuffer?: boolean, updateBindGroup?: boolean, bindGroupNumber?: number) => void;
+    updateDefaultUBO: (updateBindGroup?: boolean, bindGroupNumber?: number) => void;
+    getUBODataView: (bindGroupNumber?: number) => DataView;
+    allocateUBO: (bindGroupNumber?: number) => boolean;
     createRenderPipelineDescriptor: (vertexBufferOptions?: {
         stepMode?: 'vertex' | 'instance';
         [key: string]: string;

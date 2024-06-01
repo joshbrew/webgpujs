@@ -1922,6 +1922,8 @@ fn vtx_main(
             uniformBufferIdx = i;
             bufferIncr++;
             const buffer = {
+              name: "uniform",
+              //custom label for us to refer to
               binding: uniformBufferIdx,
               visibility,
               buffer: {
@@ -1933,6 +1935,8 @@ fn vtx_main(
           } else return void 0;
         } else if (node.isTexture || node.isStorageTexture) {
           const buffer = {
+            name: node.name,
+            //custom label for us to refer to
             binding: node.binding,
             visibility
           };
@@ -1980,6 +1984,8 @@ fn vtx_main(
             bufferGroup.samplers[node.name] = sampler;
           }
           const buffer = {
+            name: node.name,
+            //custom label for us to refer to
             binding: node.binding,
             visibility,
             sampler: {},
@@ -1992,6 +1998,8 @@ fn vtx_main(
           return buffer;
         } else {
           const buffer = {
+            name: node.name,
+            //custom label for us to refer to
             binding: node.binding,
             visibility,
             buffer: {
@@ -2013,6 +2021,7 @@ fn vtx_main(
       }
       if (bufferGroup.defaultUniforms) {
         entries.push({
+          name: "defaultUniforms",
           binding: bufferIncr,
           visibility,
           buffer: {
@@ -2198,49 +2207,34 @@ fn vtx_main(
       offset += typeInfo.size;
       return offset;
     };
-    allocateUBO = (bindGroupNumber = this.bindGroupNumber) => {
-      let bufferGroup = this.bufferGroups[bindGroupNumber];
-      if (!bufferGroup) {
-        bufferGroup = this.makeBufferGroup(bindGroupNumber);
+    updateArrayBuffers(buffers, updateBindGroup = false, bindGroupNumber = this.bindGroupNumber) {
+      const inputBuffers = this.bufferGroups[bindGroupNumber]?.inputBuffers;
+      for (const key in buffers) {
+        if (buffers[key] instanceof GPUBuffer) {
+          inputBuffers[key] = buffers[key];
+        } else {
+          inputBuffers[key] = this.device.createBuffer({
+            label: key,
+            size: buffers[key] ? buffers[key].byteLength ? buffers[key].byteLength : buffers[key]?.length ? buffers[key].length * 4 : 8 : 8,
+            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST | GPUBufferUsage.VERTEX,
+            mappedAtCreation: true
+          });
+          new Float32Array(inputBuffers[key].getMappedRange()).set(buffers[key]);
+          inputBuffers[key].unmap();
+        }
       }
-      if (!bufferGroup.totalUniformBufferSize) {
-        let totalUniformBufferSize = 0;
-        bufferGroup.params.forEach((node, j) => {
-          if (node.isInput && node.isUniform) {
-            if (bufferGroup.inputTypes[j]) {
-              totalUniformBufferSize += bufferGroup.inputTypes[j].size;
-              if (totalUniformBufferSize % 8 !== 0)
-                totalUniformBufferSize += WGSLTypeSizes[bufferGroup.inputTypes[j].type].alignment;
-            }
-          }
-        });
-        if (totalUniformBufferSize < 8) totalUniformBufferSize += 8 - totalUniformBufferSize;
-        else totalUniformBufferSize -= totalUniformBufferSize % 16;
-        bufferGroup.totalUniformBufferSize = totalUniformBufferSize;
+      if (updateBindGroup) {
+        this.updateBindGroup(bindGroupNumber);
       }
-      const uniformBuffer = this.device.createBuffer({
-        label: "uniform",
-        size: bufferGroup.totalUniformBufferSize ? bufferGroup.totalUniformBufferSize : 8,
-        // This should be the sum of byte sizes of all uniforms
-        usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_SRC,
-        mappedAtCreation: true
-      });
-      bufferGroup.uniformBuffer = uniformBuffer;
-      return true;
-    };
-    getUBODataView = (bindGroupNumber = this.bindGroupNumber) => {
-      let bufferGroup = this.bufferGroups[bindGroupNumber];
-      if (!bufferGroup) {
-        bufferGroup = this.makeBufferGroup(bindGroupNumber);
-      }
-      const dataView = bufferGroup.uniformBuffer.mapState === "mapped" ? new DataView(bufferGroup.uniformBuffer.getMappedRange()) : new DataView(new ArrayBuffer(bufferGroup.uniformBuffer.size));
-      return dataView;
-    };
+    }
     //right now we just associate one uniform buffer per bind group
-    updateUBO = (inputs, reallocate = false, bindGroupNumber = this.bindGroupNumber) => {
+    updateUBO = (inputs, newBuffer = false, updateBindGroup, bindGroupNumber = this.bindGroupNumber) => {
       if (!inputs || Object.keys(inputs).length === 0) return;
-      if (reallocate) {
+      if (newBuffer) {
         this.allocateUBO(bindGroupNumber);
+        if (updateBindGroup !== false) updateBindGroup = true;
+      }
+      if (updateBindGroup) {
         this.updateBindGroup(bindGroupNumber);
       }
       let bufferGroup = this.bufferGroups[bindGroupNumber];
@@ -2275,6 +2269,12 @@ fn vtx_main(
         });
         if (bufferGroup.uniformBuffer.mapState === "mapped") bufferGroup.uniformBuffer.unmap();
       }
+    };
+    updateDefaultUBO = (updateBindGroup = false, bindGroupNumber = this.bindGroupNumber) => {
+      let bufferGroup = this.bufferGroups[bindGroupNumber];
+      if (!bufferGroup) {
+        bufferGroup = this.makeBufferGroup(bindGroupNumber);
+      }
       if (bufferGroup.defaultUniforms) {
         const dataView = bufferGroup.defaultUniformBuffer.mapState === "mapped" ? new DataView(bufferGroup.defaultUniformBuffer.getMappedRange()) : new DataView(new ArrayBuffer(bufferGroup.defaultUniformBuffer.size));
         let offset = 0;
@@ -2284,7 +2284,49 @@ fn vtx_main(
           offset = this.setUBOposition(dataView, typeInfo, offset, value);
         });
         if (bufferGroup.defaultUniformBuffer.mapState === "mapped") bufferGroup.defaultUniformBuffer.unmap();
+        if (updateBindGroup) {
+          this.updateBindGroup(bindGroupNumber);
+        }
       }
+    };
+    getUBODataView = (bindGroupNumber = this.bindGroupNumber) => {
+      let bufferGroup = this.bufferGroups[bindGroupNumber];
+      if (!bufferGroup) {
+        bufferGroup = this.makeBufferGroup(bindGroupNumber);
+      }
+      const dataView = bufferGroup.uniformBuffer.mapState === "mapped" ? new DataView(bufferGroup.uniformBuffer.getMappedRange()) : new DataView(new ArrayBuffer(bufferGroup.uniformBuffer.size));
+      return dataView;
+    };
+    allocateUBO = (bindGroupNumber = this.bindGroupNumber) => {
+      let bufferGroup = this.bufferGroups[bindGroupNumber];
+      if (!bufferGroup) {
+        bufferGroup = this.makeBufferGroup(bindGroupNumber);
+      }
+      if (!bufferGroup.totalUniformBufferSize) {
+        let totalUniformBufferSize = 0;
+        bufferGroup.params.forEach((node, j) => {
+          if (node.isInput && node.isUniform) {
+            if (bufferGroup.inputTypes[j]) {
+              totalUniformBufferSize += bufferGroup.inputTypes[j].size;
+              if (totalUniformBufferSize % 8 !== 0)
+                totalUniformBufferSize += WGSLTypeSizes[bufferGroup.inputTypes[j].type].alignment;
+            }
+          }
+        });
+        if (totalUniformBufferSize < 8) totalUniformBufferSize += 8 - totalUniformBufferSize;
+        else totalUniformBufferSize -= totalUniformBufferSize % 16;
+        bufferGroup.totalUniformBufferSize = totalUniformBufferSize;
+      }
+      const uniformBuffer = this.device.createBuffer({
+        label: "uniform",
+        size: bufferGroup.totalUniformBufferSize ? bufferGroup.totalUniformBufferSize : 8,
+        // This should be the sum of byte sizes of all uniforms
+        usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_SRC,
+        mappedAtCreation: true
+      });
+      bufferGroup.uniformBuffer = uniformBuffer;
+      bufferGroup.inputBuffers.uniform = uniformBuffer;
+      return true;
     };
     createRenderPipelineDescriptor = (vertexBufferOptions = [{
       color: "vec4<f32>"
@@ -2404,7 +2446,7 @@ fn vtx_main(
       bufferGroup.params = this.params;
       bufferGroup.returnedVars = this.returnedVars;
       bufferGroup.defaultUniforms = this.defaultUniforms;
-      bufferGroup.inputBuffers = [];
+      bufferGroup.inputBuffers = {};
       bufferGroup.outputBuffers = [];
       bufferGroup.textures = {};
       bufferGroup.samplers = {};
@@ -2451,19 +2493,11 @@ fn vtx_main(
           return WGSLTypeSizes[type];
         });
       const inputBuffers = bufferGroup.inputBuffers;
-      let uniformBuffer = bufferGroup.uniformBuffer;
       const outputBuffers = bufferGroup.outputBuffers;
       const params = bufferGroup.params;
-      const inputTypes = bufferGroup.inputTypes;
       let newBindGroupBuffer = newBindings;
-      if (inputBuffers?.length > 0) {
-        inputs.forEach((inp, index) => {
-          if (inp && inp?.length) {
-            if (inputBuffers.size !== inp.length * inputTypes[index].byteSize) {
-              newBindGroupBuffer = true;
-            }
-          }
-        });
+      if (inputs.length > 0) {
+        newBindGroupBuffer = true;
       } else if (!bufferGroup.bindGroup) newBindGroupBuffer = true;
       if (textures) {
         const entries = this.createBindGroupEntries(
@@ -2494,11 +2528,10 @@ fn vtx_main(
           }
           bindGroupAlts[this.altBindings?.[node.name].group][this.altBindings?.[node.name].group] = inputs[i];
         } else {
-          if (node.isUniform && inputs[inpIdx] !== void 0) {
+          if (node.isUniform && typeof inputs[inpBuf_i] !== "undefined") {
             uniformValues[inpIdx] = inputs[inpIdx];
             if (!bufferGroup.uniformBuffer || !uBufferSet) {
               uBufferSet = this.allocateUBO(bindGroupNumber);
-              inputBuffers[inpBuf_i] = bufferGroup.uniformBuffer;
               bufferGroup.uniformBufferIndex = inpBuf_i;
             }
             if (!hasUniformBuffer) {
@@ -2507,30 +2540,31 @@ fn vtx_main(
             }
             inpIdx++;
           } else {
-            if (typeof inputs[inpBuf_i] !== "undefined" || typeof inputs[inpBuf_i] !== "undefined" && !inputBuffers[inpBuf_i]) {
-              if (!inputs?.[inpBuf_i]?.byteLength && Array.isArray(inputs[inpBuf_i]?.[0])) inputs[inpBuf_i] = ShaderHelper.flattenArray(inputs[inpBuf_i]);
-              if (inputBuffers[inpBuf_i] && inputs[inpBuf_i].length === inputBuffers[inpBuf_i].size / 4) {
+            if (typeof inputs[inpBuf_i] !== "undefined" || !inputBuffers[node.name]) {
+              if (!inputs?.[inpBuf_i]?.byteLength && Array.isArray(inputs[inpBuf_i]?.[0]))
+                inputs[inpBuf_i] = ShaderHelper.flattenArray(inputs[inpBuf_i]);
+              if (inputBuffers[node.name] && inputs[inpBuf_i].length === inputBuffers[node.name].size / 4) {
                 let buf = new Float32Array(inputs[inpBuf_i]);
                 this.device.queue.writeBuffer(
-                  inputBuffers[inpBuf_i],
+                  inputBuffers[node.name],
                   0,
                   buf,
                   buf.byteOffset,
                   buf.length || 8
                 );
-                inputBuffers[inpBuf_i].unmap();
+                inputBuffers[node.name].unmap();
               } else {
                 if (inputs[inpBuf_i] instanceof GPUBuffer) {
-                  inputBuffers[inpBuf_i] = inputs[inpBuf_i];
+                  inputBuffers[node.name] = inputs[inpBuf_i];
                 } else {
-                  inputBuffers[inpBuf_i] = this.device.createBuffer({
-                    label: `arrayBuffer${inpBuf_i}`,
+                  inputBuffers[node.name] = this.device.createBuffer({
+                    label: node.name,
                     size: inputs[inpBuf_i] ? inputs[inpBuf_i].byteLength ? inputs[inpBuf_i].byteLength : inputs[inpBuf_i]?.length ? inputs[inpBuf_i].length * 4 : 8 : 8,
                     usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST | GPUBufferUsage.VERTEX,
                     mappedAtCreation: true
                   });
-                  new Float32Array(inputBuffers[inpBuf_i].getMappedRange()).set(inputs[inpBuf_i]);
-                  inputBuffers[inpBuf_i].unmap();
+                  new Float32Array(inputBuffers[node.name].getMappedRange()).set(inputs[inpBuf_i] || new Float32Array(1));
+                  inputBuffers[node.name].unmap();
                 }
               }
             }
@@ -2539,7 +2573,7 @@ fn vtx_main(
           }
           if (!skipOutputDef && node.isReturned && (!node.isUniform || node.isUniform && !uBufferPushed)) {
             if (!node.isUniform) {
-              outputBuffers[inpBuf_i - 1] = inputBuffers[inpBuf_i - 1];
+              outputBuffers[inpBuf_i - 1] = inputBuffers[node.name];
             } else if (!uBufferPushed) {
               uBufferPushed = true;
               outputBuffers[inpBuf_i - 1] = bufferGroup.uniformBuffer;
@@ -2578,10 +2612,11 @@ fn vtx_main(
           mappedAtCreation: true
         });
         if (!bufferGroup.defaultUniformBinding) {
-          bufferGroup.defaultUniformBinding = inputBuffers.length;
+          bufferGroup.defaultUniformBinding = Object.keys(inputBuffers).length;
         }
       }
-      if (uniformValues.length > 0) this.updateUBO(uniformValues, false, bindGroupNumber);
+      if (uniformValues.length > 0) this.updateUBO(uniformValues, false, false, bindGroupNumber);
+      this.updateDefaultUBO(false, bindGroupNumber);
       if (this.bindGroupLayouts[bindGroupNumber] && newBindGroupBuffer) {
         this.updateBindGroup(bindGroupNumber);
       }
@@ -2600,9 +2635,10 @@ fn vtx_main(
           let inpBufi = 0;
           bufferGroup.bindGroupLayoutEntries.forEach((entry, i) => {
             let type = entry.buffer?.type;
+            const key = entry.name || i;
             if (type) {
-              if (type.includes("storage") && inputBuffers[inpBufi] && inputBuffers[inpBufi].label !== "uniform") {
-                entry.resource = { buffer: inputBuffers[inpBufi] };
+              if (type.includes("storage") && inputBuffers[key] && inputBuffers[key].label !== "uniform") {
+                entry.resource = { buffer: inputBuffers[key] };
                 inpBufi++;
               } else if (type.includes("uniform") && bufferGroup.uniformBuffer) {
                 entry.resource = { buffer: bufferGroup.uniformBuffer };
@@ -2614,7 +2650,7 @@ fn vtx_main(
             buffer: bufferGroup.defaultUniformBuffer
           };
         } else if (inputBuffers) {
-          bindGroupEntries.push(...inputBuffers.map((buffer, index) => ({
+          bindGroupEntries.push(...Object.values(inputBuffers).map((buffer, index) => ({
             binding: index,
             resource: { buffer }
           })));
@@ -2625,7 +2661,7 @@ fn vtx_main(
             });
         }
         const bindGroup = this.device.createBindGroup({
-          label: `bindGroup${bindGroupNumber}`,
+          label: `group_${bindGroupNumber}`,
           layout: this.bindGroupLayouts[bindGroupNumber],
           entries: bindGroupEntries
         });
@@ -2702,7 +2738,7 @@ fn vtx_main(
       newBindings
     } = {}, ...inputs) => {
       if (!bindGroupNumber) bindGroupNumber = this.bindGroupNumber;
-      const newInputBuffer = this.buffer(
+      const newInputBuffer = (inputs.length > 0 || vbos || textures || indexBuffer) && this.buffer(
         {
           vbos,
           //[{vertices:[]}]
@@ -2729,7 +2765,8 @@ fn vtx_main(
             if (i === this.bindGroupNumber || this.altBindings) computePass.setBindGroup(i, group);
           };
           this.bindGroups.forEach(withBindGroup);
-          let wX = workgroupsX ? workgroupsX : bufferGroup.inputBuffers?.[0] ? bufferGroup.inputBuffers[0].size / 4 / this.workGroupSize : 1;
+          const firstinp = Object.values(bufferGroup.inputBuffers)[0];
+          let wX = workgroupsX ? workgroupsX : firstinp ? firstinp?.size / 4 / this.workGroupSize : 1;
           computePass.dispatchWorkgroups(wX, workgroupsY, workgroupsZ);
           computePass.end();
         }
@@ -5392,7 +5429,7 @@ fn vtx_main(
       ...boidsRules
     );
     pipeline.fragment.updateVBO(
-      pipeline.compute.bufferGroup.inputBuffers[0],
+      pipeline.compute.bufferGroup.inputBuffers.particles,
       0
     );
     pipeline.fragment.updateVBO(

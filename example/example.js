@@ -630,7 +630,7 @@ WebGPUjs.createPipeline({
 
     //set the position buffer as the instance VBO
     pipeline.fragment.updateVBO(
-        pipeline.compute.bufferGroup.inputBuffers[0],
+        pipeline.compute.bufferGroup.inputBuffers.particles,
         0
     );
 
