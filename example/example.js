@@ -38,7 +38,7 @@ function dft(
 
 //explicit return statements will define only that variable as an output (i.e. a mutable read_write buffer)
 
-function setupWebGPUConverterUI(fn, target=document.body, shaderType, lastBinding, vbos) {
+function setupWebGPUConverterUI(fn, target=document.body, shaderType, lastBinding, vbos, textures) {
     let webGPUCode = WGSLTranspiler.convertToWebGPU(
         fn, 
         shaderType,
@@ -47,6 +47,7 @@ function setupWebGPUConverterUI(fn, target=document.body, shaderType, lastBindin
         vbos,
         undefined,
         undefined,
+        textures,
         lastBinding
     );
     const uniqueID = Date.now();
@@ -697,17 +698,24 @@ async function createTexPipeline() {
         },
         {
             workGroupSize:64,
-            textures:{
-                inputTex:{
-                    source:await createImageBitmap(canvas4),
-                    width:canvas4.width,
-                    height:canvas4.height
-                },
-                outputTex:{
-                    buffer:new Float32Array(canvas4.width*canvas4.height*4).buffer, //placeholder for setting the storage texture
-                    width:canvas4.width,
-                    height:canvas4.height,
-                    isStorage:true
+            computePass:{
+                workgroupsX:canvas4.width/64,
+                workgroupsY:canvas4.height/64
+            },
+            renderPass:{
+                textures:{
+                    inputTex:{ //when storage texture read_write is available we can do away with this
+                        source:await createImageBitmap(canvas4),
+                        width:canvas4.width,
+                        height:canvas4.height
+                    },
+                    outputTex:{
+                        buffer:new Float32Array(canvas4.width*canvas4.height*4).buffer, //placeholder for setting the storage texture
+                        width:canvas4.width,
+                        height:canvas4.height,
+                        isStorage:true,
+                        binding:'inputTex' //make sure it uses the same binding as the input texture
+                    }
                 }
             }
         }
@@ -720,16 +728,22 @@ async function createTexPipeline() {
             fragmnet:texFragment
         },
         {
+            canvas:canvas4,
+
             workGroupSize:64,
-            canvas:canvas4
+            computePass:{
+                workgroupsX:canvas4.width/64,
+                workgroupsY:canvas4.height/64
+            }
         },
         pipeline1
     )
 
     //now we should be able to run shader set 1 then shader set 2 and buffers will be shared
-
+    pipeline1.process()
 }
 
+//createTexPipeline();
 
 //Example 6 storage texture usage via compute
 

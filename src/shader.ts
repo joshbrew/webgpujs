@@ -8,8 +8,10 @@ export class ShaderHelper {
     prototypes:{
         compute?:TranspiledShader,
         fragment?:TranspiledShader,
-        vertex?:TranspiledShader
+        vertex?:TranspiledShader,
     }={};
+
+    options:any = {};
 
     compute?:ShaderContext;
     vertex?:ShaderContext;
@@ -102,6 +104,7 @@ export class ShaderHelper {
         }
         
         Object.assign(this.prototypes,shaders);
+        Object.assign(this.options,options);
 
         if(shaders.compute) {
             this.compute = new ShaderContext(Object.assign({},shaders.compute, options));
@@ -247,13 +250,15 @@ export class ShaderHelper {
         for(const key of ['compute','fragment','vertex']) {
             if(this.prototypes[key])
                 Object.assign(this.prototypes[key], 
-                    WGSLTranspiler.convertToWebGPU(
+                    WGSLTranspiler.convertToWebGPU( //just recompile the pipeline with current settings
                         this.prototypes[key].funcStr, 
                         key as any, 
                         this.prototypes[key].bindGroupNumber, 
-                        this.prototypes[key].vbos, 
-                        this.prototypes[key].workGroupSize ? this.prototypes[key].workGroupSize : undefined,
-                        this.functions
+                        this.options?.renderPass?.vbos, 
+                        this.options?.workGroupSize,
+                        this.functions,
+                        this.options?.variableTypes,
+                        this.options?.renderPass?.textures
                     )
                     ); 
         }
@@ -461,7 +466,7 @@ export class ShaderContext {
     funcStr: string;
     defaultUniforms: any;
     type: "compute" | "vertex" | "fragment";
-    workGroupSize?: number;
+    workGroupSize: number = 64;
     returnedVars?:any[];
 
     functions;
@@ -525,12 +530,16 @@ export class ShaderContext {
             bufferGroup = this.makeBufferGroup(bindGroupNumber);
         }
 
+        let texturesUpdated = false;
         if(textures) for(const key in textures) {
             let isStorage = bufferGroup.params.find((node, i) => { 
                 if(node.name === key && node.isStorageTexture) return true;
             }); //assign storage texture primitives
             if(isStorage) textures[key].isStorage = true;
-            this.updateTexture(textures[key], key, bindGroupNumber); //generate texture buffers and samplers
+            if(textures[key].source || textures[key].buffer || textures[key] instanceof ImageBitmap) {
+                this.updateTexture(textures[key], key, bindGroupNumber); //generate texture buffers and samplers
+                texturesUpdated = true;
+            }   
         }
 
         let texKeys; let texKeyRot = 0; let baseMipLevel = 0;
@@ -756,7 +765,7 @@ export class ShaderContext {
                     buffer = bufferGroup.indexBuffer; // Copy the vertex data over to the GPUBuffer using the writeBuffer() utility function
                 }
                 else {
-                    buffer = bufferGroup.vertexbuffers[index];
+                    buffer = bufferGroup.vertexBuffers[index];
                 }
                 this.device.queue.writeBuffer(
                     buffer, 
@@ -1358,7 +1367,7 @@ export class ShaderContext {
             newBindGroupBuffer = true;
         } else if(!bufferGroup.bindGroup) newBindGroupBuffer = true; //will trigger bindGroups to be set
 
-        if(textures) {
+        if(textures && Object.values(textures).find((t) => {if((t as any).source || (t as any).buffer || t instanceof ImageBitmap) return true;})) {
             const entries = this.createBindGroupEntries(
                 textures, 
                 bindGroupNumber, 

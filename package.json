@@ -1,6 +1,6 @@
 {
   "name": "webgpujs",
-  "version": "0.0.20",
+  "version": "0.0.21",
   "description": "Write full featured WGSL pipelines in plain javascript",
   "main": "./webgpujs.js",
   "module": "./dist/webgpujs.esm.js",
@@ -34,6 +34,6 @@
     ]
   },
   "devDependencies": {
-    "@webgpu/types": "~0.1.38"
+    "@webgpu/types": "~0.1.42"
   }
 }

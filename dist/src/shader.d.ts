@@ -6,6 +6,7 @@ export declare class ShaderHelper {
         fragment?: TranspiledShader;
         vertex?: TranspiledShader;
     };
+    options: any;
     compute?: ShaderContext;
     vertex?: ShaderContext;
     fragment?: ShaderContext;
@@ -56,7 +57,7 @@ export declare class ShaderContext {
     funcStr: string;
     defaultUniforms: any;
     type: "compute" | "vertex" | "fragment";
-    workGroupSize?: number;
+    workGroupSize: number;
     returnedVars?: any[];
     functions: any;
     shaderModule?: GPUShaderModule;

@@ -102,6 +102,7 @@ export class WebGPUjs {
                 options.renderPass?.vbos as any, 
                 options.functions,
                 options.variableTypes,
+                options.renderPass?.textures,
                 options.lastBinding
             );
 
@@ -142,6 +143,7 @@ export class WebGPUjs {
                         options.renderPass?.vbos as any, 
                         options.functions,
                         options.variableTypes,
+                        options.renderPass?.textures,
                         options.lastBinding
                     );
                 }
@@ -170,12 +172,13 @@ export class WebGPUjs {
                     if(typeof block.compute === 'function' || block.transpileString) {
                         block.compute = WGSLTranspiler.convertToWebGPU(
                             block.compute, 
-                            'compute', 
+                            'compute',
                             options.bindGroupNumber, 
                             options.workGroupSize, 
                             options.renderPass?.vbos as any, 
                             options.functions,
                             options.variableTypes,
+                            options.renderPass?.textures,
                             options.lastBinding
                         );
                     }
@@ -190,6 +193,7 @@ export class WebGPUjs {
                             options.renderPass?.vbos as any, 
                             options.functions,
                             options.variableTypes,
+                            options.renderPass?.textures,
                             options.lastBinding
                         );
                         options.lastBinding = block.vertex.lastBinding;
@@ -205,6 +209,7 @@ export class WebGPUjs {
                             options.renderPass?.vbos as any, 
                             options.functions,
                             options.variableTypes,
+                            options.renderPass?.textures,
                             options.lastBinding
                         );
                     }

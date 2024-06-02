@@ -381,7 +381,7 @@
         return acc.concat(callback(value, index, array2));
       }, []);
     }
-    static generateDataStructures(funcStr, ast, bindGroup = 0, shaderType, variableTypes, minBinding = 0) {
+    static generateDataStructures(funcStr, ast, bindGroup = 0, shaderType, variableTypes, textureOptions, minBinding = 0) {
       let code = "//Bindings (data passed to/from CPU) \n";
       const functionRegex = /function (\w+)\(([^()]*|\((?:[^()]*|\([^()]*\))*\))*\) \{([\s\S]*?)\}/g;
       let modifiedStr = funcStr;
@@ -394,12 +394,11 @@
       returnedVars = this.flattenStrings(returnedVars);
       let uniformsStruct = "";
       let defaultsStruct = "";
-      let hasUniforms = false;
+      let uniformBinding;
       let defaultUniforms;
       const params = [];
       let bindingIncr = minBinding;
       let names = {};
-      let prevTextureBinding;
       ast.forEach((node, i) => {
         if (names[node.name]) return;
         names[node.name] = true;
@@ -409,14 +408,13 @@
         }
         if (new RegExp(`textureSampleCompare\\(${escapeRegExp(node.name)},`).test(funcStr)) {
           let nm = node.name.toLowerCase();
-          if (nm.includes("deptharr")) node.isDepthTextureArray = true;
+          if (nm.includes("depth_arr")) node.isDepthTextureArray = true;
           else if (nm.includes("depth")) node.isDepthTexture2d = true;
-          else if (nm.includes("cubearr")) node.isDepthCubeArrayTexture = true;
+          else if (nm.includes("cube_arr")) node.isDepthCubeArrayTexture = true;
           else if (nm.includes("cube")) node.isDepthCubeTexture = true;
-          else if (nm.includes("ms2d")) node.isDepthMSAATexture = true;
+          else if (nm.includes("depth_mul")) node.isDepthMSAATexture = true;
           node.isTexture = true;
           node.isDepthTexture = true;
-          prevTextureBinding = bindingIncr;
         } else if (new RegExp(`textureSampleCompare\\(\\w+\\s*,\\s*${escapeRegExp(node.name)}`).test(funcStr)) {
           node.isComparisonSampler = true;
           node.isSampler = true;
@@ -426,46 +424,71 @@
           let nm = node.name.toLowerCase();
           if (nm.includes("3d")) node.is3dStorageTexture = true;
           else if (nm.includes("1d")) node.is1dStorageTexture = true;
-          else if (nm.includes("2darr")) node.is2dStorageTextureArray = true;
+          else if (nm.includes("2d_arr")) node.is2dStorageTextureArray = true;
           node.isStorageTexture = true;
-          if (prevTextureBinding !== void 0) node.isSharedStorageTexture = true;
         } else if (new RegExp(`texture.*\\(${escapeRegExp(node.name)},`).test(funcStr)) {
           let nm = node.name.toLowerCase();
-          if (nm.includes("deptharr")) node.isDepthTextureArray = true;
-          else if (nm.includes("depthcubearr")) node.isDepthCubeArrayTexture = true;
-          else if (nm.includes("depthcube")) node.isDepthCubeTexture = true;
-          else if (nm.includes("depthms2d")) node.isDepthMSAATexture = true;
+          if (nm.includes("depth_arr")) node.isDepthTextureArray = true;
+          else if (nm.includes("depth_cube_arr")) node.isDepthCubeArrayTexture = true;
+          else if (nm.includes("depth_cube")) node.isDepthCubeTexture = true;
+          else if (nm.includes("depth_mul")) node.isDepthMSAATexture = true;
           else if (nm.includes("depth")) node.isDepthTexture2d = true;
-          else if (nm.includes("cubearr")) node.isCubeArrayTexture = true;
+          else if (nm.includes("cube_arr")) node.isCubeArrayTexture = true;
           else if (nm.includes("cube")) node.isCubeTexture = true;
           else if (nm.includes("3d")) node.is3dTexture = true;
-          else if (nm.includes("2darr")) node.is2dTextureArray = true;
+          else if (nm.includes("2d_arr")) node.is2dTextureArray = true;
           else if (nm.includes("1d")) node.is1dTexture = true;
-          else if (nm.includes("ms2d")) node.is2dMSAATexture = true;
+          else if (nm.includes("multisampled_2d")) node.is2dMSAATexture = true;
           if (nm.includes("depth"))
             node.isDepthTexture = true;
           node.isTexture = true;
-          prevTextureBinding = bindingIncr;
         }
-        node.binding = bindingIncr;
-        node.group = bindGroup;
+        let binding = node.binding || bindingIncr;
+        let incrBinding = true;
+        let bindingWasSet = false;
+        if (textureOptions?.[node.name] && typeof textureOptions[node.name].binding !== "undefined") {
+          if (typeof textureOptions[node.name].binding === "string") {
+            const check = (name) => {
+              const boundTo = textureOptions[name].binding;
+              if (typeof boundTo === "string") {
+                if (binding === node.name) {
+                  textureOptions[name].binding = boundTo;
+                  incrBinding = false;
+                } else {
+                  check(boundTo);
+                }
+              } else if (typeof boundTo === "number") {
+                binding = boundTo;
+                incrBinding = false;
+              }
+            };
+            check(node.name);
+          } else if (typeof textureOptions[node.name].binding === "number") {
+            binding = textureOptions[node.name].binding;
+            incrBinding = false;
+          }
+        }
         if (variableTypes && variableTypes[node.name]) {
           if (typeof variableTypes[node.name] === "string") {
-            code += `@group(${bindGroup}) @binding(${bindingIncr}) var ${node.name}: ${variableTypes[node.name]};
+            code += `@group(${bindGroup}) @binding(${binding}) var ${node.name}: ${variableTypes[node.name]};
 
 `;
             node.type = variableTypes[node.name];
-            bindingIncr++;
             params.push(node);
           } else if (typeof variableTypes[node.name] === "object") {
-            code += `@group(${bindGroup}) @binding(${bindingIncr}) ${variableTypes[node.name].prefix || "var"} ${node.name}: ${variableTypes[node.name].type};
+            code += `@group(${bindGroup}) @binding(${binding}) ${variableTypes[node.name].prefix || "var"} ${node.name}: ${variableTypes[node.name].type};
 
 `;
             node.type = variableTypes[node.name].type;
-            bindingIncr++;
             params.push(node);
-          }
+          } else incrBinding = false;
+          bindingWasSet = true;
         } else if (node.isTexture) {
+          if (!textureOptions) textureOptions = {};
+          if (!textureOptions[node.name]) {
+            textureOptions[node.name] = {};
+          }
+          textureOptions[node.name].binding = binding;
           params.push(node);
           let format = node.name.includes("i32") ? "i32" : node.name.includes("u32") ? "u32" : "f32";
           let typ;
@@ -481,10 +504,13 @@
           else if (node.is1dTexture) typ = "texture_1d<" + format + ">";
           else if (node.is2dMSAATexture) typ = "texture_multisampled_2d<" + format + ">";
           else typ = `texture_2d<f32>`;
-          code += `@group(${bindGroup}) @binding(${bindingIncr}) var ${node.name}: ${typ};
+          code += `@group(${bindGroup}) @binding(${binding}) var ${node.name}: ${typ};
 `;
-          bindingIncr++;
+          bindingWasSet = true;
         } else if (node.isStorageTexture) {
+          if (!textureOptions) textureOptions = {};
+          if (!textureOptions[node.name]) textureOptions[node.name] = {};
+          textureOptions[node.name].binding = binding;
           let format = textureFormats.find((f) => {
             if (node.name.includes(f)) return true;
           });
@@ -495,20 +521,18 @@
           else if (node.is2dStorageTextureArray) typ = "texture_storage_2d_array<" + format + ",write>";
           else typ = "texture_storage_2d<" + format + ",write>";
           params.push(node);
-          code += `@group(${bindGroup}) @binding(${bindingIncr}) var ${node.name}: ${typ};
+          code += `@group(${bindGroup}) @binding(${binding}) var ${node.name}: ${typ};
 `;
-          if (typeof prevTextureBinding === "undefined")
-            bindingIncr++;
-          else prevTextureBinding = void 0;
+          bindingWasSet = true;
         } else if (node.isSampler) {
           let typ;
           if (node.isComparisonSampler) typ = "sampler_comparison";
           else typ = "sampler";
           params.push(node);
-          code += `@group(${bindGroup}) @binding(${bindingIncr}) var ${node.name}: ${typ};
+          code += `@group(${bindGroup}) @binding(${binding}) var ${node.name}: ${typ};
 
 `;
-          bindingIncr++;
+          bindingWasSet = true;
         } else if (node.isInput && !this.builtInUniforms[node.name]) {
           if (node.type === "array") {
             const elementType = this.inferTypeFromValue(node.value.split(",")[0], funcStr, ast);
@@ -519,7 +543,7 @@
 };
 
 `;
-            code += `@group(${bindGroup}) @binding(${bindingIncr})
+            code += `@group(${bindGroup}) @binding(${binding})
 `;
             if (!returnedVars || returnedVars?.includes(node.name) || node.isModified && !node.isUniform) {
               code += `var<storage, read_write> ${node.name}: ${capitalizeFirstLetter(node.name)}Struct;
@@ -530,20 +554,23 @@
 
 `;
             }
-            bindingIncr++;
+            bindingWasSet = true;
           } else if (node.isUniform) {
-            if (!hasUniforms) {
+            if (typeof uniformBinding === "undefined") {
               uniformsStruct = `struct UniformsStruct {
 `;
-              hasUniforms = bindingIncr;
-              bindingIncr++;
+              uniformBinding = binding;
+            } else {
+              incrBinding = false;
+              binding = uniformBinding;
             }
             const uniformType = this.inferTypeFromValue(node.value, funcStr, ast);
             node.type = uniformType;
             params.push(node);
             uniformsStruct += `    ${node.name}: ${uniformType},
 `;
-          }
+            bindingWasSet = true;
+          } else incrBinding = false;
         } else if (this.builtInUniforms[node.name]) {
           if (!defaultUniforms) {
             defaultUniforms = [];
@@ -554,6 +581,15 @@
           defaultsStruct += `    ${node.name}: ${uniformType},
 `;
           defaultUniforms.push(node.name);
+          bindingWasSet = true;
+          incrBinding = false;
+        } else incrBinding = false;
+        if (bindingWasSet) {
+          node.binding = binding;
+          node.group = bindGroup;
+          if (incrBinding) {
+            bindingIncr++;
+          }
         }
       });
       if (defaultUniforms) {
@@ -564,10 +600,10 @@
 `;
         bindingIncr++;
       }
-      if (hasUniforms !== false) {
+      if (typeof uniformBinding !== "undefined") {
         uniformsStruct += "};\n\n";
         code += uniformsStruct;
-        code += `@group(${bindGroup}) @binding(${hasUniforms}) var<uniform> uniforms: UniformsStruct;
+        code += `@group(${bindGroup}) @binding(${uniformBinding}) var<uniform> uniforms: UniformsStruct;
 
 `;
       }
@@ -972,15 +1008,6 @@ for (var i: i32 = 0; i < ${size}; i = i + 1) {
       }
       return result;
     }
-    static addFunction = (func, shaders) => {
-      if (!shaders.functions) shaders.functions = [];
-      shaders.functions.push(func);
-      for (const key of ["compute", "fragment", "vertex"]) {
-        if (shaders[key])
-          Object.assign(shaders[key], this.convertToWebGPU(shaders[key].funcStr, key, shaders[key].bindGroupNumber, shaders[key].nVertexBuffers, shaders[key].workGroupSize ? shaders[key].workGroupSize : void 0, shaders.functions));
-      }
-      return shaders;
-    };
     //combine input bindings and create mappings so input arrays can be shared based on variable names, assuming same types in a continuous pipeline (the normal thing)
     static combineBindings(bindings1str, bindings2str) {
       const bindingRegex = /@group\((\d+)\) @binding\((\d+)\)\s+(var(?:<[^>]+>)?)\s+(\w+)\s*:/g;
@@ -1126,7 +1153,7 @@ for (var i: i32 = 0; i < ${size}; i = i + 1) {
     //this pipeline is set to only use javascript functions so it can generate asts and infer all of the necessary buffering orders and types
     static convertToWebGPU(func, shaderType = "compute", bindGroupNumber = 0, workGroupSize = 64, vertexBufferOptions = [{
       color: "vec4<f32>"
-    }], gpuFuncs, variableTypes, lastBinding = 0) {
+    }], gpuFuncs, variableTypes, textureOptions, lastBinding = 0) {
       let funcStr = typeof func === "string" ? func : func.toString();
       funcStr = funcStr.replace(/(?<!\w)this\./g, "");
       const tokens = this.tokenize(funcStr);
@@ -1137,6 +1164,7 @@ for (var i: i32 = 0; i < ${size}; i = i + 1) {
         bindGroupNumber,
         shaderType,
         variableTypes,
+        textureOptions,
         lastBinding
       );
       const header = webGPUCode.code;
@@ -1516,6 +1544,7 @@ for (var i: i32 = 0; i < ${size}; i = i + 1) {
   // ../src/shader.ts
   var ShaderHelper = class {
     prototypes = {};
+    options = {};
     compute;
     vertex;
     fragment;
@@ -1582,10 +1611,10 @@ for (var i: i32 = 0; i < ${size}; i = i + 1) {
         }
       }
       Object.assign(this.prototypes, shaders);
+      Object.assign(this.options, options);
       if (shaders.compute) {
         this.compute = new ShaderContext(Object.assign({}, shaders.compute, options));
         this.compute.helper = this;
-        Object.assign(this.compute, options);
       }
       if (shaders.fragment && shaders.vertex) {
         WGSLTranspiler.combineShaderParams(shaders.vertex, shaders.fragment);
@@ -1662,7 +1691,7 @@ for (var i: i32 = 0; i < ${size}; i = i + 1) {
           code: shaders.fragment.code
         });
       }
-      if (this.vertex && this.fragment) {
+      if (this.fragment) {
         this.fragment.vertex = this.vertex;
         if ((this.fragment.bindGroupLayoutEntries || this.fragment.altBindings) && this.bindGroupLayouts.length > 0) {
           this.fragment.pipelineLayout = this.device.createPipelineLayout({
@@ -1693,7 +1722,8 @@ for (var i: i32 = 0; i < ${size}; i = i + 1) {
           options?.renderPass?.vbos,
           options?.contextSettings,
           options?.renderPipelineDescriptor,
-          options?.renderPassDescriptor
+          options?.renderPassDescriptor,
+          "vertex"
         );
       }
     };
@@ -1704,12 +1734,15 @@ for (var i: i32 = 0; i < ${size}; i = i + 1) {
           Object.assign(
             this.prototypes[key],
             WGSLTranspiler.convertToWebGPU(
+              //just recompile the pipeline with current settings
               this.prototypes[key].funcStr,
               key,
               this.prototypes[key].bindGroupNumber,
-              this.prototypes[key].vbos,
-              this.prototypes[key].workGroupSize ? this.prototypes[key].workGroupSize : void 0,
-              this.functions
+              this.options?.renderPass?.vbos,
+              this.options?.workGroupSize,
+              this.functions,
+              this.options?.variableTypes,
+              this.options?.renderPass?.textures
             )
           );
       }
@@ -1860,7 +1893,7 @@ fn vtx_main(
     funcStr;
     defaultUniforms;
     type;
-    workGroupSize;
+    workGroupSize = 64;
     returnedVars;
     functions;
     shaderModule;
@@ -1901,12 +1934,16 @@ fn vtx_main(
       if (!bufferGroup) {
         bufferGroup = this.makeBufferGroup(bindGroupNumber);
       }
+      let texturesUpdated = false;
       if (textures) for (const key in textures) {
         let isStorage = bufferGroup.params.find((node, i) => {
           if (node.name === key && node.isStorageTexture) return true;
         });
         if (isStorage) textures[key].isStorage = true;
-        this.updateTexture(textures[key], key, bindGroupNumber);
+        if (textures[key].source || textures[key].buffer || textures[key] instanceof ImageBitmap) {
+          this.updateTexture(textures[key], key, bindGroupNumber);
+          texturesUpdated = true;
+        }
       }
       let texKeys;
       let texKeyRot = 0;
@@ -2093,23 +2130,19 @@ fn vtx_main(
               bufferGroup.vertexBuffers[index] = vertexBuffer;
             }
           }
+          let buffer;
           if (indexBuffer) {
-            this.device.queue.writeBuffer(
-              bufferGroup.indexBuffer,
-              bufferOffset,
-              vertices,
-              dataOffset,
-              vertices.length
-            );
+            buffer = bufferGroup.indexBuffer;
           } else {
-            this.device.queue.writeBuffer(
-              bufferGroup.vertexBuffers[index],
-              bufferOffset,
-              vertices,
-              dataOffset,
-              vertices.length
-            );
+            buffer = bufferGroup.vertexBuffers[index];
           }
+          this.device.queue.writeBuffer(
+            buffer,
+            bufferOffset,
+            vertices,
+            dataOffset,
+            vertices.length
+          );
         }
       }
     };
@@ -2330,7 +2363,7 @@ fn vtx_main(
     };
     createRenderPipelineDescriptor = (vertexBufferOptions = [{
       color: "vec4<f32>"
-    }], swapChainFormat = navigator.gpu.getPreferredCanvasFormat(), renderPipelineDescriptor = {}) => {
+    }], swapChainFormat = navigator.gpu.getPreferredCanvasFormat(), renderPipelineDescriptor = {}, shaderType = "fragment") => {
       const vertexBuffers = [];
       let loc = 0;
       this.vertexBufferOptions = vertexBufferOptions;
@@ -2366,7 +2399,8 @@ fn vtx_main(
         //https://developer.mozilla.org/en-US/docs/Web/API/GPUDevice/createRenderPipeline
         label: "renderPipeline",
         layout: this.pipelineLayout ? this.pipelineLayout : "auto",
-        vertex: this.vertex ? {
+        vertex: shaderType === "fragment" ? {
+          //if using only the vertex buffer use a different descriptor
           module: this.vertex.shaderModule,
           entryPoint: "vtx_main",
           buffers: vertexBuffers
@@ -2377,7 +2411,7 @@ fn vtx_main(
             format: swapChainFormat
           }]
         },
-        fragment: this.vertex ? {
+        fragment: shaderType === "fragment" ? {
           module: this.shaderModule,
           entryPoint: "frag_main",
           targets: [{
@@ -2427,7 +2461,7 @@ fn vtx_main(
     };
     updateGraphicsPipeline = (vertexBufferOptions = [{
       color: "vec4<f32>"
-    }], contextSettings, renderPipelineDescriptor, renderPassDescriptor) => {
+    }], contextSettings, renderPipelineDescriptor, renderPassDescriptor, shaderType = "fragment") => {
       const swapChainFormat = navigator.gpu.getPreferredCanvasFormat();
       this.context?.configure(contextSettings ? contextSettings : {
         device: this.device,
@@ -2435,7 +2469,12 @@ fn vtx_main(
         //usage: GPUTextureUsage.RENDER_ATTACHMENT,
         alphaMode: "premultiplied"
       });
-      renderPipelineDescriptor = this.createRenderPipelineDescriptor(vertexBufferOptions, swapChainFormat, renderPipelineDescriptor);
+      renderPipelineDescriptor = this.createRenderPipelineDescriptor(
+        vertexBufferOptions,
+        swapChainFormat,
+        renderPipelineDescriptor,
+        shaderType
+      );
       if (!renderPassDescriptor)
         renderPassDescriptor = this.createRenderPassDescriptor();
       this.renderPassDescriptor = renderPassDescriptor;
@@ -2499,7 +2538,9 @@ fn vtx_main(
       if (inputs.length > 0) {
         newBindGroupBuffer = true;
       } else if (!bufferGroup.bindGroup) newBindGroupBuffer = true;
-      if (textures) {
+      if (textures && Object.values(textures).find((t) => {
+        if (t.source || t.buffer || t instanceof ImageBitmap) return true;
+      })) {
         const entries = this.createBindGroupEntries(
           textures,
           bindGroupNumber,
@@ -2932,6 +2973,7 @@ fn vtx_main(
           options.renderPass?.vbos,
           options.functions,
           options.variableTypes,
+          options.renderPass?.textures,
           options.lastBinding
         );
         if (options.getPrevShaderBindGroups) {
@@ -2958,6 +3000,7 @@ fn vtx_main(
               options.renderPass?.vbos,
               options.functions,
               options.variableTypes,
+              options.renderPass?.textures,
               options.lastBinding
             );
           }
@@ -2979,6 +3022,7 @@ fn vtx_main(
                 options.renderPass?.vbos,
                 options.functions,
                 options.variableTypes,
+                options.renderPass?.textures,
                 options.lastBinding
               );
             }
@@ -2993,6 +3037,7 @@ fn vtx_main(
                 options.renderPass?.vbos,
                 options.functions,
                 options.variableTypes,
+                options.renderPass?.textures,
                 options.lastBinding
               );
               options.lastBinding = block.vertex.lastBinding;
@@ -3008,6 +3053,7 @@ fn vtx_main(
                 options.renderPass?.vbos,
                 options.functions,
                 options.variableTypes,
+                options.renderPass?.textures,
                 options.lastBinding
               );
             }
@@ -4983,7 +5029,7 @@ fn vtx_main(
     }
     return [inputData, outputData];
   }
-  function setupWebGPUConverterUI(fn, target = document.body, shaderType, lastBinding, vbos) {
+  function setupWebGPUConverterUI(fn, target = document.body, shaderType, lastBinding, vbos, textures) {
     let webGPUCode = WGSLTranspiler.convertToWebGPU(
       fn,
       shaderType,
@@ -4992,6 +5038,7 @@ fn vtx_main(
       vbos,
       void 0,
       void 0,
+      textures,
       lastBinding
     );
     const uniqueID = Date.now();

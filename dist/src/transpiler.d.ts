@@ -48,6 +48,13 @@ export declare class WGSLTranspiler {
             prefix?: string;
             type: string;
         };
+    }, textureOptions?: {
+        [key: string]: {
+            type?: string;
+            isStorage?: boolean;
+            binding?: string | number;
+            [key: string]: any;
+        };
     }, minBinding?: number): {
         code: string;
         params: any[];
@@ -67,7 +74,6 @@ export declare class WGSLTranspiler {
         consts: any;
     };
     static indentCode(code: any): string;
-    static addFunction: (func: any, shaders: any) => any;
     static combineBindings(bindings1str: string, bindings2str: string): {
         code1: string;
         changes1: any;
@@ -82,6 +88,12 @@ export declare class WGSLTranspiler {
         [key: string]: string | {
             prefix?: string;
             type: string;
+        };
+    }, textureOptions?: {
+        [key: string]: {
+            isStorage?: boolean;
+            binding?: string | number;
+            [key: string]: any;
         };
     }, lastBinding?: number): TranspiledShader;
 }
