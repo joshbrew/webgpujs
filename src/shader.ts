@@ -552,7 +552,7 @@ export class ShaderContext {
         const entries = bufferGroup.params ? bufferGroup.params.map((node, i) => {
             if(node.group !== bindGroupNumber) return undefined;
             assignedEntries[node.name] = true;
-            let isReturned = (bufferGroup.returnedVars === undefined || bufferGroup.returnedVars?.includes(node.name));
+            let isReturned = node.isReturned;
             if (node.isUniform) {
                 if (typeof uniformBufferIdx === 'undefined') {
                     uniformBufferIdx = i;
@@ -931,18 +931,33 @@ export class ShaderContext {
         bindGroupNumber=this.bindGroupNumber
     ) {
 
-        const inputBuffers = this.bufferGroups[bindGroupNumber]?.inputBuffers;
+        let bufferGroup = this.bufferGroups[bindGroupNumber];
+        if(!bufferGroup) {
+            bufferGroup = this.makeBufferGroup(bindGroupNumber);
+        }
+
+        const inputBuffers = bufferGroup?.inputBuffers;
 
         for(const key in buffers) {
 
             if(buffers[key] instanceof GPUBuffer) {
                 inputBuffers[key] = buffers[key]; //preallocated
             } else {
+                
+                let isReturned = bufferGroup.returnedVars.find((v) => {
+                    if(v === key) return true;
+                });
+
+                const usage = isReturned ? 
+                    GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST | GPUBufferUsage.VERTEX :
+                    GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.VERTEX
+
+
                 inputBuffers[key] = (
                     this.device.createBuffer({
                         label: key,
                         size:  buffers[key] ? (buffers[key].byteLength ? buffers[key].byteLength : buffers[key]?.length ? buffers[key].length*4 : 8) : 8,
-                        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST | GPUBufferUsage.VERTEX,
+                        usage,
                         mappedAtCreation: true
                     })  
                 );
@@ -1455,11 +1470,16 @@ export class ShaderContext {
                             if(inputs[inpBuf_i] instanceof GPUBuffer) {
                                 inputBuffers[node.name] = inputs[inpBuf_i]; //preallocated
                             } else {
+
+                                const usage = node.isReturned ? 
+                                    GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST | GPUBufferUsage.VERTEX :
+                                    GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.VERTEX
+                
                                 inputBuffers[node.name] = (
                                     this.device.createBuffer({
                                         label: node.name,
                                         size:  inputs[inpBuf_i] ? (inputs[inpBuf_i].byteLength ? inputs[inpBuf_i].byteLength : inputs[inpBuf_i]?.length ? inputs[inpBuf_i].length*4 : 8) : 8,
-                                        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST | GPUBufferUsage.VERTEX,
+                                        usage,
                                         mappedAtCreation: true
                                     })  
                                 );

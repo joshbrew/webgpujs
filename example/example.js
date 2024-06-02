@@ -31,7 +31,9 @@ function dft(
     }
 
     
-    return {inputData, outputData}; //returning an array of inputs lets us return several buffer promises
+    return {inputData, outputData};
+
+    //{inputData, outputData}; //returning a dict or array of inputs lets us return several buffer promises
     //return outputData;
     //return outp4; //we can also return the uniform buffer though it is immutable so it's pointless
 }

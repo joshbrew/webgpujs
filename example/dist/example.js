@@ -1970,7 +1970,7 @@ fn vtx_main(
       const entries = bufferGroup.params ? bufferGroup.params.map((node, i) => {
         if (node.group !== bindGroupNumber) return void 0;
         assignedEntries[node.name] = true;
-        let isReturned = bufferGroup.returnedVars === void 0 || bufferGroup.returnedVars?.includes(node.name);
+        let isReturned = node.isReturned;
         if (node.isUniform) {
           if (typeof uniformBufferIdx === "undefined") {
             uniformBufferIdx = i;
@@ -2276,15 +2276,23 @@ fn vtx_main(
       return offset;
     };
     updateArrayBuffers(buffers, updateBindGroup = false, bindGroupNumber = this.bindGroupNumber) {
-      const inputBuffers = this.bufferGroups[bindGroupNumber]?.inputBuffers;
+      let bufferGroup = this.bufferGroups[bindGroupNumber];
+      if (!bufferGroup) {
+        bufferGroup = this.makeBufferGroup(bindGroupNumber);
+      }
+      const inputBuffers = bufferGroup?.inputBuffers;
       for (const key in buffers) {
         if (buffers[key] instanceof GPUBuffer) {
           inputBuffers[key] = buffers[key];
         } else {
+          let isReturned = bufferGroup.returnedVars.find((v) => {
+            if (v === key) return true;
+          });
+          const usage = isReturned ? GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST | GPUBufferUsage.VERTEX : GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.VERTEX;
           inputBuffers[key] = this.device.createBuffer({
             label: key,
             size: buffers[key] ? buffers[key].byteLength ? buffers[key].byteLength : buffers[key]?.length ? buffers[key].length * 4 : 8 : 8,
-            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST | GPUBufferUsage.VERTEX,
+            usage,
             mappedAtCreation: true
           });
           new Float32Array(inputBuffers[key].getMappedRange()).set(buffers[key]);
@@ -2623,10 +2631,11 @@ fn vtx_main(
                 if (inputs[inpBuf_i] instanceof GPUBuffer) {
                   inputBuffers[node.name] = inputs[inpBuf_i];
                 } else {
+                  const usage = node.isReturned ? GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST | GPUBufferUsage.VERTEX : GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.VERTEX;
                   inputBuffers[node.name] = this.device.createBuffer({
                     label: node.name,
                     size: inputs[inpBuf_i] ? inputs[inpBuf_i].byteLength ? inputs[inpBuf_i].byteLength : inputs[inpBuf_i]?.length ? inputs[inpBuf_i].length * 4 : 8 : 8,
-                    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST | GPUBufferUsage.VERTEX,
+                    usage,
                     mappedAtCreation: true
                   });
                   new Float32Array(inputBuffers[node.name].getMappedRange()).set(inputs[inpBuf_i] || new Float32Array(1));
@@ -2773,6 +2782,7 @@ fn vtx_main(
       this.device.queue.submit([commandEncoder.finish()]);
       if (returnBuffers) {
         let output = {};
+        if (stagingBuffers.length === 1) return stagingBuffers[0];
         stagingBuffers.map((b, i) => {
           output[keys[i]] = b;
         });
