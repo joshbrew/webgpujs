@@ -1332,8 +1332,8 @@ export class ShaderContext {
         bufferGroup.params = this.params; //can get params from other shaders we transpiled
         bufferGroup.returnedVars = this.returnedVars;
         bufferGroup.defaultUniforms = this.defaultUniforms;
-        bufferGroup.inputBuffers = {} as {[key:string]:GPUBuffer};
-        bufferGroup.outputBuffers = {} as {[key:string]:any};
+        bufferGroup.inputBuffers = {};
+        bufferGroup.outputBuffers = {};
         bufferGroup.textures = {};
         bufferGroup.samplers = {};
         bufferGroup.uniformBuffer = undefined;
@@ -1471,7 +1471,7 @@ export class ShaderContext {
                                 inputBuffers[node.name] = inputs[inpBuf_i]; //preallocated
                             } else {
 
-                                const usage = node.isReturned ? 
+                                const usage = (node.isReturned || node.isModified) ? 
                                     GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST | GPUBufferUsage.VERTEX :
                                     GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.VERTEX
                 
