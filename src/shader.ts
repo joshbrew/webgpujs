@@ -810,8 +810,11 @@ export class ShaderContext {
             this.updateBindGroup(bindGroupNumber);
     }
 
-    updateTexture = (data:TextureInfo|ImageBitmap|any, 
-    name:string, bindGroupNumber=this.bindGroupNumber) => {
+    updateTexture = (
+        data:TextureInfo|ImageBitmap|any, 
+        name:string, 
+        bindGroupNumber=this.bindGroupNumber
+    ) => {
         if(!data) return;
         if(!data.width && data.source) data.width = data.source.width;
         if(!data.height && data.source) data.height = data.source.height;
@@ -1621,7 +1624,7 @@ export class ShaderContext {
         commandEncoder:GPUCommandEncoder, 
         outputBuffers?:{[key:string]:any},
         returnBuffers?:boolean
-    ):Promise<{[key:string]:Float32Array|Uint8Array}>|{[key:string]:GPUBuffer} => {
+    ):Promise<(Float32Array|Uint8Array)|{[key:string]:Float32Array|Uint8Array}>|{[key:string]:GPUBuffer}|GPUBuffer => {
         //Return one or multiple results
         if(!outputBuffers) outputBuffers = this.bufferGroups[this.bindGroupNumber].outputBuffers;
 
@@ -1656,6 +1659,8 @@ export class ShaderContext {
         if(returnBuffers) {
             let output = {};
 
+            if(stagingBuffers.length === 1) return stagingBuffers[0];
+
             stagingBuffers.map((b,i) => {
                 output[keys[i]] = b;
             });
@@ -1680,6 +1685,8 @@ export class ShaderContext {
         return new Promise((res) => {
             Promise.all(promises).then((results:(Uint8Array | Float32Array)[]) => {
                 
+                if(results.length === 1) res(results[0]);
+
                 const output = {};
                 
                 results.map((result,i) => {
@@ -1688,7 +1695,7 @@ export class ShaderContext {
                 
                 res(output);
             });
-        }) as Promise<{[key:string]:Float32Array|Uint8Array}>;
+        }) as Promise<Float32Array|Uint8Array|{[key:string]:Float32Array|Uint8Array}>;
  
     }
 

@@ -10,10 +10,10 @@ export declare class ShaderHelper {
     compute?: ShaderContext;
     vertex?: ShaderContext;
     fragment?: ShaderContext;
-    process: (...inputs: any[]) => {
+    process: (...inputs: any[]) => GPUBuffer | {
         [key: string]: GPUBuffer;
     } | Promise<unknown>;
-    render: (renderPass?: RenderPassSettings, ...inputs: any[]) => {
+    render: (renderPass?: RenderPassSettings, ...inputs: any[]) => GPUBuffer | {
         [key: string]: GPUBuffer;
     } | Promise<unknown>;
     canvas: HTMLCanvasElement | OffscreenCanvas;
@@ -153,11 +153,11 @@ export declare class ShaderContext {
     updateBindGroup: (bindGroupNumber?: number, customBindGroupEntries?: GPUBindGroupEntry[]) => void;
     getOutputData: (commandEncoder: GPUCommandEncoder, outputBuffers?: {
         [key: string]: any;
-    }, returnBuffers?: boolean) => Promise<{
+    }, returnBuffers?: boolean) => Promise<(Float32Array | Uint8Array) | {
         [key: string]: Float32Array | Uint8Array;
     }> | {
         [key: string]: GPUBuffer;
-    };
+    } | GPUBuffer;
     run: ({ vertexCount, instanceCount, firstVertex, firstInstance, vbos, outputVBOs, textures, outputTextures, bufferOnly, skipOutputDef, returnBuffers, bindGroupNumber, viewport, scissorRect, blendConstant, indexBuffer, indexFormat, firstIndex, useRenderBundle, workgroupsX, workgroupsY, workgroupsZ, newBindings }?: {
         vertexCount?: number;
         instanceCount?: number;
@@ -186,7 +186,7 @@ export declare class ShaderContext {
         workgroupsZ?: number;
     } & {
         returnBuffers?: boolean;
-    }, ...inputs: any[]) => {
+    }, ...inputs: any[]) => GPUBuffer | {
         [key: string]: GPUBuffer;
     } | Promise<unknown>;
 }

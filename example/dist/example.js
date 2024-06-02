@@ -2015,7 +2015,7 @@ fn vtx_main(
               //placeholder stuff but anyway you can provide your own bindings as the inferencing is a stretch after a point
               access: "write-only",
               //read-write only in chrome beta, todo: replace this when avaiable in production
-              format: bufferGroup.textures[node.name]?.format ? bufferGroup.textures[node.name].format : "rgbaunorm",
+              format: bufferGroup.textures[node.name]?.format ? bufferGroup.textures[node.name].format : "rgba8unorm",
               viewDimension: node.name.includes("3d") ? "3d" : node.name.includes("1d") ? "1d" : node.name.includes("2darr") ? "2d-array" : "2d"
             };
           } else {
@@ -2027,7 +2027,7 @@ fn vtx_main(
         } else if (node.isSampler) {
           if (!bufferGroup.samplers?.[node.name]) {
             const sampler = this.device.createSampler(
-              texKeys && bufferGroup.textures[texKeys[texKeyRot]]?.samplerSettings?.[node.name] ? bufferGroup.textures[texKeys[texKeyRot]]?.samplerSettings[node.name] : {
+              texKeys && bufferGroup.textures[node.name] ? bufferGroup.textures[node.name] : {
                 magFilter: "linear",
                 minFilter: "linear",
                 mipmapFilter: "linear"
@@ -2035,6 +2035,7 @@ fn vtx_main(
                 // addressModeV: "repeat"
               }
             );
+            if (!bufferGroup.samplers) bufferGroup.samplers = {};
             bufferGroup.samplers[node.name] = sampler;
           }
           const buffer = {
@@ -2167,7 +2168,7 @@ fn vtx_main(
       if (!textures) return;
       let bufferGroup = this.bufferGroup;
       if (!bufferGroup) {
-        this.makeBufferGroup(bindGroupNumber);
+        bufferGroup = this.makeBufferGroup(bindGroupNumber);
       }
       const entries = this.createBindGroupEntries(
         textures,
@@ -2598,7 +2599,6 @@ fn vtx_main(
             uniformValues[inpIdx] = inputs[inpIdx];
             if (!bufferGroup.uniformBuffer || !uBufferSet) {
               uBufferSet = this.allocateUBO(bindGroupNumber);
-              bufferGroup.uniformBufferIndex = inpBuf_i;
             }
             if (!hasUniformBuffer) {
               hasUniformBuffer = 1;
@@ -2792,6 +2792,7 @@ fn vtx_main(
       });
       return new Promise((res) => {
         Promise.all(promises).then((results) => {
+          if (results.length === 1) res(results[0]);
           const output = {};
           results.map((result, i) => {
             output[keys[i]] = result;
