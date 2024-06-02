@@ -372,7 +372,7 @@
     static flattenStrings(arr) {
       if (!arr) return [];
       const callback = (item, index, array2) => {
-        if (item.startsWith("[") && item.endsWith("]")) {
+        if (item.startsWith("[") && item.endsWith("]") || item.startsWith("{") && item.endsWith("}")) {
           return item.slice(1, -1).split(",").map((s) => s.trim());
         }
         return item;
@@ -5072,7 +5072,7 @@ fn vtx_main(
       outputData[outputIndex] = sum.x;
       outputData[outputIndex + 1] = sum.y;
     }
-    return [inputData, outputData];
+    return { inputData, outputData };
   }
   function setupWebGPUConverterUI(fn, target = document.body, shaderType, lastBinding, vbos, textures) {
     let webGPUCode = WGSLTranspiler.convertToWebGPU(

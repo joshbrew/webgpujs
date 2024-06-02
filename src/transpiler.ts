@@ -406,7 +406,7 @@ export class WGSLTranspiler {
     static flattenStrings(arr) {
         if(!arr) return [] as any[];
         const callback = (item, index, array) => {
-            if (item.startsWith('[') && item.endsWith(']')) {
+            if ((item.startsWith('[') && item.endsWith(']')) || (item.startsWith('{') && item.endsWith('}'))) {
                 return item.slice(1, -1).split(',').map(s => s.trim());
             }
             return item;
