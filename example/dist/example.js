@@ -407,6 +407,10 @@
           return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
         }
         if (textureOptions?.[node.name]?.isDepth || new RegExp(`textureSampleCompare\\(${escapeRegExp(node.name)},`).test(funcStr)) {
+          if (!textureOptions) textureOptions = {};
+          if (!textureOptions[node.name]) {
+            textureOptions[node.name] = {};
+          }
           let nm = textureOptions?.[node.name]?.type || node.name.toLowerCase();
           if (nm.includes("depth_arr")) node.isDepthTextureArray = true;
           else if (nm.includes("depth")) node.isDepthTexture2d = true;
@@ -415,18 +419,38 @@
           else if (nm.includes("depth_mul")) node.isDepthMSAATexture = true;
           node.isTexture = true;
           node.isDepthTexture = true;
-        } else if (textureOptions?.[node.name]?.isDepthSampler || new RegExp(`textureSampleCompare\\(\\w+\\s*,\\s*${escapeRegExp(node.name)}`).test(funcStr)) {
+          textureOptions[node.name].isDepth = true;
+        } else if (textureOptions?.[node.name]?.isComparisonSampler || new RegExp(`textureSampleCompare\\(\\w+\\s*,\\s*${escapeRegExp(node.name)}`).test(funcStr)) {
+          if (!textureOptions) textureOptions = {};
+          if (!textureOptions[node.name]) {
+            textureOptions[node.name] = {};
+          }
           node.isComparisonSampler = true;
           node.isSampler = true;
+          textureOptions[node.name].isComparisonSampler = true;
         } else if (textureOptions?.[node.name]?.isSampler || new RegExp(`textureSample\\(\\w+\\s*,\\s*${escapeRegExp(node.name)}`).test(funcStr)) {
+          if (!textureOptions) textureOptions = {};
+          if (!textureOptions[node.name]) {
+            textureOptions[node.name] = {};
+          }
           node.isSampler = true;
+          textureOptions[node.name].isSampler = true;
         } else if (textureOptions?.[node.name]?.isStorage || new RegExp(`textureStore\\(${escapeRegExp(node.name)},`).test(funcStr)) {
+          if (!textureOptions) textureOptions = {};
+          if (!textureOptions[node.name]) {
+            textureOptions[node.name] = {};
+          }
           let nm = textureOptions?.[node.name]?.type || node.name.toLowerCase();
           if (nm.includes("3d")) node.is3dStorageTexture = true;
           else if (nm.includes("1d")) node.is1dStorageTexture = true;
           else if (nm.includes("2d_arr")) node.is2dStorageTextureArray = true;
           node.isStorageTexture = true;
+          textureOptions[node.name].isStorage = true;
         } else if (textureOptions?.[node.name] || new RegExp(`texture.*\\(${escapeRegExp(node.name)},`).test(funcStr)) {
+          if (!textureOptions) textureOptions = {};
+          if (!textureOptions[node.name]) {
+            textureOptions[node.name] = {};
+          }
           let nm = textureOptions?.[node.name]?.type || node.name.toLowerCase();
           if (nm.includes("depth_arr")) node.isDepthTextureArray = true;
           else if (nm.includes("depth_cube_arr")) node.isDepthCubeArrayTexture = true;
@@ -484,11 +508,6 @@
           } else incrBinding = false;
           bindingWasSet = true;
         } else if (node.isTexture) {
-          if (!textureOptions) textureOptions = {};
-          if (!textureOptions[node.name]) {
-            textureOptions[node.name] = {};
-          }
-          textureOptions[node.name].binding = binding;
           params.push(node);
           let format = node.name.includes("i32") ? "i32" : node.name.includes("u32") ? "u32" : "f32";
           let typ;
@@ -506,11 +525,9 @@
           else typ = `texture_2d<f32>`;
           code += `@group(${bindGroup}) @binding(${binding}) var ${node.name}: ${typ};
 `;
+          textureOptions[node.name].binding = binding;
           bindingWasSet = true;
         } else if (node.isStorageTexture) {
-          if (!textureOptions) textureOptions = {};
-          if (!textureOptions[node.name]) textureOptions[node.name] = {};
-          textureOptions[node.name].binding = binding;
           let format = textureFormats.find((f) => {
             if (node.name.includes(f)) return true;
           });
@@ -523,6 +540,7 @@
           params.push(node);
           code += `@group(${bindGroup}) @binding(${binding}) var ${node.name}: ${typ};
 `;
+          textureOptions[node.name].binding = binding;
           bindingWasSet = true;
         } else if (node.isSampler) {
           let typ;
@@ -532,6 +550,7 @@
           code += `@group(${bindGroup}) @binding(${binding}) var ${node.name}: ${typ};
 
 `;
+          textureOptions[node.name].binding = binding;
           bindingWasSet = true;
         } else if (node.isInput && !this.builtInUniforms[node.name]) {
           if (node.type === "array") {

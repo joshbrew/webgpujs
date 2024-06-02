@@ -55,7 +55,7 @@ export declare class WGSLTranspiler {
             isDepth?: boolean;
             isStorage?: boolean;
             isSampler?: boolean;
-            isDepthSampler?: boolean;
+            isComparisonSampler?: boolean;
             [key: string]: any;
         };
     }, minBinding?: number): {
@@ -98,7 +98,7 @@ export declare class WGSLTranspiler {
             isDepth?: boolean;
             isStorage?: boolean;
             isSampler?: boolean;
-            isDepthSampler?: boolean;
+            isComparisonSampler?: boolean;
             [key: string]: any;
         };
     }, lastBinding?: number): TranspiledShader;

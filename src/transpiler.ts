@@ -428,7 +428,7 @@ export class WGSLTranspiler {
             isDepth?:boolean, //is it a depth texture? implicit function or naming will set this otherwise
             isStorage?:boolean, //is it a storage texture? must be set if not using implicit functions or names
             isSampler?:boolean,
-            isDepthSampler?:boolean,
+            isComparisonSampler?:boolean,
             [key:string]:any
         }},
         minBinding=0
@@ -478,6 +478,11 @@ export class WGSLTranspiler {
             //methods for parsing texture types, we didn't really have a choice but to use variable names for implicit texture typing, but it should work in general
             if (textureOptions?.[node.name]?.isDepth || new RegExp(`textureSampleCompare\\(${escapeRegExp(node.name)},`).test(funcStr)) { 
                 
+                if(!textureOptions) textureOptions = {};
+                if(!textureOptions[node.name]) {
+                    textureOptions[node.name] = {};
+                }
+
                 let nm = textureOptions?.[node.name]?.type || node.name.toLowerCase();
                 if(nm.includes('depth_arr')) node.isDepthTextureArray = true;
                 else if(nm.includes('depth')) node.isDepthTexture2d = true;
@@ -487,27 +492,51 @@ export class WGSLTranspiler {
 
                 node.isTexture = true;
                 node.isDepthTexture = true;
+                textureOptions[node.name].isDepth = true; //set if not set
                
-            } else if(textureOptions?.[node.name]?.isDepthSampler || new RegExp(`textureSampleCompare\\(\\w+\\s*,\\s*${escapeRegExp(node.name)}`).test(funcStr)) {
+            } else if(textureOptions?.[node.name]?.isComparisonSampler || new RegExp(`textureSampleCompare\\(\\w+\\s*,\\s*${escapeRegExp(node.name)}`).test(funcStr)) {
                 
+                if(!textureOptions) textureOptions = {};
+                if(!textureOptions[node.name]) {
+                    textureOptions[node.name] = {};
+                }
+                    
                 node.isComparisonSampler = true;
                 node.isSampler = true;
+                textureOptions[node.name].isComparisonSampler = true; //set if not set
             
             } else if (textureOptions?.[node.name]?.isSampler || new RegExp(`textureSample\\(\\w+\\s*,\\s*${escapeRegExp(node.name)}`).test(funcStr)) { 
                 
+                if(!textureOptions) textureOptions = {};
+                if(!textureOptions[node.name]) {
+                    textureOptions[node.name] = {};
+                }
+                    
                 node.isSampler = true;
+                textureOptions[node.name].isSampler = true; //set if not set
             
             } else if(textureOptions?.[node.name]?.isStorage ||  new RegExp(`textureStore\\(${escapeRegExp(node.name)},`).test(funcStr)) {
                 
+                if(!textureOptions) textureOptions = {};
+                if(!textureOptions[node.name]) {
+                    textureOptions[node.name] = {};
+                }
+                    
                 let nm = textureOptions?.[node.name]?.type || node.name.toLowerCase();
                 if(nm.includes('3d')) node.is3dStorageTexture = true;
                 else if(nm.includes('1d')) node.is1dStorageTexture = true;
                 else if(nm.includes('2d_arr')) node.is2dStorageTextureArray = true;
                 
                 node.isStorageTexture = true;
+                textureOptions[node.name].isStorage = true; //set if not set
                
             } else if (textureOptions?.[node.name] || new RegExp(`texture.*\\(${escapeRegExp(node.name)},`).test(funcStr)) { //todo: we could infer texture dimensions from the second input type
                 
+                if(!textureOptions) textureOptions = {};
+                if(!textureOptions[node.name]) {
+                    textureOptions[node.name] = {};
+                }
+                    
                 let nm = textureOptions?.[node.name]?.type || node.name.toLowerCase();
 
                 //rudimentary way to dynamically type textures since we can't predict based on texture function calls
@@ -575,12 +604,6 @@ export class WGSLTranspiler {
 
             } else if (node.isTexture) {
 
-                if(!textureOptions) textureOptions = {};
-                if(!textureOptions[node.name]) {
-                    textureOptions[node.name] = {};
-                }
-                textureOptions[node.name].binding = binding; //set binding for reference
-
                 params.push(node);
                 let format = node.name.includes('i32') ? 'i32' : node.name.includes('u32') ? 'u32' : 'f32';
                 let typ;
@@ -600,12 +623,10 @@ export class WGSLTranspiler {
                 code += `@group(${bindGroup}) @binding(${binding}) var ${node.name}: ${typ};\n`;
                 //else  code += `@group(${bindGroup}) @binding(${bindingIncr}) var ${node.name}: texture_storage_2d<${storageTextureType}, write>;\n\n`; //todo: rgba8unorm type should be customizable
 
+                textureOptions[node.name].binding = binding; //set binding for reference
+
                 bindingWasSet = true;
             } else if (node.isStorageTexture) { 
-
-                if(!textureOptions) textureOptions = {};
-                if(!textureOptions[node.name]) textureOptions[node.name] = {};
-                textureOptions[node.name].binding = binding; //set binding for reference
 
                 let format = textureFormats.find((f) => {if(node.name.includes(f)) return true;});
                 if(!format) format = 'rgba8unorm';
@@ -619,6 +640,8 @@ export class WGSLTranspiler {
                 params.push(node);
                 code += `@group(${bindGroup}) @binding(${binding}) var ${node.name}: ${typ};\n`; //todo rgba8unorm is not only type
                 
+                textureOptions[node.name].binding = binding; //set binding for reference
+
                 bindingWasSet = true;
             } else if (node.isSampler) {
                 let typ;
@@ -628,8 +651,10 @@ export class WGSLTranspiler {
 
                 params.push(node);
                 code += `@group(${bindGroup}) @binding(${binding}) var ${node.name}: ${typ};\n\n`;
-                bindingWasSet = true;
             
+                textureOptions[node.name].binding = binding; //set binding for reference
+                
+                bindingWasSet = true;
             } else if(node.isInput && !this.builtInUniforms[node.name]) {
 
                 if (node.type === 'array') {
@@ -1474,7 +1499,7 @@ fn frag_main(
             isDepth?:boolean,
             isStorage?:boolean,
             isSampler?:boolean,
-            isDepthSampler?:boolean,
+            isComparisonSampler?:boolean,
             //else defaults to implicit usage (which works great in most cases)
             [key:string]:any
         }},
