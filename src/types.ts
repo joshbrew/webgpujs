@@ -55,20 +55,7 @@ export type RenderPassSettings = {
     }|Float32Array|GPUBuffer)[],
     outputVBOs?:boolean,
     textures?:{
-        [key:string]:{
-            source?:ImageBitmap|any,
-            texture?:GPUTextureDescriptor,        
-            buffer?:BufferSource | SharedArrayBuffer,
-            width:number, 
-            height:number, 
-            bytesPerRow?:number,
-            label?:string, 
-            format?:string, //default: 'rgba8unorm' 
-            usage?:any,
-            samplerSettings?:any,
-            layout?:GPUImageDataLayout|GPUImageCopyExternalImage //customize the layout that gets created for an image source e.g. flipY
-            isStorage?:boolean
-        }|ImageBitmap
+        [key:string]:TextureInfo|ImageBitmap
     },
     outputTextures?:boolean,
     newBindings?:boolean
@@ -96,3 +83,61 @@ export type TranspiledShader = {
     returnedVars?: any;
 }
 
+
+export type BufferGroup = {
+    params:any[],
+    returnedVars:string[],
+    inputTypes:{[key:string]:any}
+    firstPass?:boolean
+
+    bindGroup?:GPUBindGroup,
+    renderBundle?:GPURenderBundle
+
+    inputBuffers:{
+        [key:string]:GPUBuffer
+    },
+    outputBuffers:{
+        [key:string]:GPUBuffer
+    },
+    
+    uniformBuffer?:GPUBuffer,
+    uniformBufferInputs:{[key:string]:any},
+    totalUniformBufferSize?:number
+
+    defaultUniformBuffer?:GPUBuffer,
+    totalDefaultUniformBufferSize?:number
+    defaultUniformBinding?:number
+
+    textures:{[key:string]:GPUTexture},
+    samplers?:{[key:string]:GPUSampler},
+    defaultUniforms:{[key:string]:any}, //defined in the transpiler class
+    indexCount?:number,
+    indexBuffer?:GPUBuffer,
+    indexFormat?:GPUIndexFormat,
+    vertexBuffers?:GPUBuffer[],
+    vertexCount?:number,
+    bindGroupLayoutEntries:GPUBindGroupEntry[]|GPUBindGroupLayoutEntry[],
+
+    //[key:string]:any
+}
+
+
+export type TextureInfo = {
+    source?:ImageBitmap|any,
+    texture?:GPUTextureDescriptor,
+    buffer?:BufferSource | SharedArrayBuffer,
+    width:number, 
+    height:number, 
+    bytesPerRow?:number,
+    label?:string, 
+    format?:GPUTextureFormat, //default: 'rgba8unorm' 
+    usage?:any,
+    layout?:GPUImageDataLayout|GPUImageCopyExternalImage, //customize the layout that gets created for an image source e.g. flipY
+    
+    mipLevelCount?:number //todo: support more stuff or roll it in neater
+
+    isDepth?:boolean, //depth texture?
+    isStorage?:boolean, //something to help with identifying in the bindgroup automation
+    isSampler?:boolean,
+    isComparisonSampler?:boolean
+}

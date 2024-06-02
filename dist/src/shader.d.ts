@@ -1,5 +1,5 @@
 /// <reference types="@webgpu/types" />
-import { ShaderOptions, RenderOptions, ComputeOptions, RenderPassSettings, ComputePassSettings, TranspiledShader } from './types';
+import { ShaderOptions, RenderOptions, ComputeOptions, RenderPassSettings, ComputePassSettings, TranspiledShader, BufferGroup, TextureInfo } from './types';
 export declare class ShaderHelper {
     prototypes: {
         compute?: TranspiledShader;
@@ -77,9 +77,9 @@ export declare class ShaderContext {
     contextSettings: any;
     altBindings: any;
     builtInUniforms: any;
-    bufferGroup: any;
-    bufferGroups: any[];
-    bindings?: Partial<GPUBindGroupEntry>[];
+    bufferGroup: BufferGroup;
+    bufferGroups: BufferGroup[];
+    bindings?: Partial<GPUBindGroupLayoutEntry>[];
     bindGroups: GPUBindGroup[];
     bindGroupLayouts: GPUBindGroupLayout[];
     bindGroupNumber: number;
@@ -89,28 +89,15 @@ export declare class ShaderContext {
         [key: string]: string;
     }[];
     constructor(props?: any);
-    createBindGroupEntries: (textures?: any, bindGroupNumber?: number, visibility?: number) => GPUBindGroupLayoutEntry[];
+    createBindGroupEntries: (textures?: {
+        [key: string]: TextureInfo;
+    }, bindGroupNumber?: number, visibility?: number) => GPUBindGroupLayoutEntry[];
     setBindGroupLayout: (entries?: any[], bindGroupNumber?: number) => GPUBindGroupLayout;
     updateVBO: (vertices: any, index?: number, bufferOffset?: number, dataOffset?: number, bindGroupNumber?: number, indexBuffer?: boolean, indexFormat?: 'uint32' | 'uint16') => void;
     updateTextures: (textures: {
-        [key: string]: any;
+        [key: string]: TextureInfo;
     }, updateBindGroup?: boolean, bindGroupNumber?: number) => void;
-    updateTexture: (data: {
-        source?: ImageBitmap | any;
-        texture?: GPUTextureDescriptor;
-        buffer?: BufferSource | SharedArrayBuffer;
-        width: number;
-        height: number;
-        bytesPerRow?: number;
-        label?: string;
-        format?: string;
-        usage?: any;
-        layout?: GPUImageDataLayout | GPUImageCopyExternalImage;
-        isDepth?: boolean;
-        isStorage?: boolean;
-        isSampler?: boolean;
-        isDepthSampler?: boolean;
-    } | ImageBitmap | any, name: string, bindGroupNumber?: number) => boolean;
+    updateTexture: (data: TextureInfo | ImageBitmap | any, name: string, bindGroupNumber?: number) => boolean;
     setUBOposition: (dataView: DataView, typeInfo: {
         type: string;
         size: number;
@@ -154,20 +141,7 @@ export declare class ShaderContext {
         } | Float32Array | GPUBuffer)[];
         outputVBOs?: boolean;
         textures?: {
-            [key: string]: ImageBitmap | {
-                source?: any;
-                texture?: GPUTextureDescriptor;
-                buffer?: BufferSource | SharedArrayBuffer;
-                width: number;
-                height: number;
-                bytesPerRow?: number;
-                label?: string;
-                format?: string;
-                usage?: any;
-                samplerSettings?: any;
-                layout?: GPUImageDataLayout | GPUImageCopyExternalImage;
-                isStorage?: boolean;
-            };
+            [key: string]: TextureInfo | ImageBitmap;
         };
         outputTextures?: boolean;
         newBindings?: boolean;
@@ -202,20 +176,7 @@ export declare class ShaderContext {
         } | Float32Array | GPUBuffer)[];
         outputVBOs?: boolean;
         textures?: {
-            [key: string]: ImageBitmap | {
-                source?: any;
-                texture?: GPUTextureDescriptor;
-                buffer?: BufferSource | SharedArrayBuffer;
-                width: number;
-                height: number;
-                bytesPerRow?: number;
-                label?: string;
-                format?: string;
-                usage?: any;
-                samplerSettings?: any;
-                layout?: GPUImageDataLayout | GPUImageCopyExternalImage;
-                isStorage?: boolean;
-            };
+            [key: string]: TextureInfo | ImageBitmap;
         };
         outputTextures?: boolean;
         newBindings?: boolean;

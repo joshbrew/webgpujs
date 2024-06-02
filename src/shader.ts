@@ -1,5 +1,5 @@
 import { WGSLTranspiler, WGSLTypeSizes } from "./transpiler";
-import {ShaderOptions, RenderOptions, ComputeOptions, RenderPassSettings, ComputePassSettings, TranspiledShader} from './types'
+import {ShaderOptions, RenderOptions, ComputeOptions, RenderPassSettings, ComputePassSettings, TranspiledShader, BufferGroup, TextureInfo} from './types'
 
 
 //Self contained shader execution boilerplate
@@ -451,6 +451,9 @@ fn vtx_main(
 
 }
 
+
+
+
 export class ShaderContext {
 
     canvas:HTMLCanvasElement | OffscreenCanvas; 
@@ -491,10 +494,10 @@ export class ShaderContext {
 
     builtInUniforms:any;
 
-    bufferGroup:any;
-    bufferGroups:any[] = [];
+    bufferGroup:BufferGroup;
+    bufferGroups:BufferGroup[] = [];
 
-    bindings?:Partial<GPUBindGroupEntry>[];
+    bindings?:Partial<GPUBindGroupLayoutEntry>[];
     bindGroups:GPUBindGroup[]=[];
     bindGroupLayouts:GPUBindGroupLayout[]=[];
     
@@ -518,7 +521,7 @@ export class ShaderContext {
 
     // Extract all returned variables from the function string
     createBindGroupEntries = (
-        textures?:any,
+        textures?:{[key:string]:TextureInfo},
         bindGroupNumber=this.bindGroupNumber,
         visibility=GPUShaderStage.COMPUTE | GPUShaderStage.FRAGMENT
     ) => {
@@ -592,7 +595,7 @@ export class ShaderContext {
                 } else if (node.isStorageTexture && !node.isSharedStorageTexture) {
                     buffer.storageTexture = { //placeholder stuff but anyway you can provide your own bindings as the inferencing is a stretch after a point
                         access:'write-only', //read-write only in chrome beta, todo: replace this when avaiable in production
-                        format:bufferGroup.textures[node.name]?.format ? bufferGroup.textures[node.name].format : 'rgbaunorm',
+                        format:bufferGroup.textures[node.name]?.format ? bufferGroup.textures[node.name].format : 'rgba8unorm',
                         viewDimension:node.name.includes('3d') ? '3d' : node.name.includes('1d') ? '1d' : node.name.includes('2darr') ? '2d-array' : '2d'
                     };
                 } else { //IDK
@@ -604,8 +607,8 @@ export class ShaderContext {
             } else if(node.isSampler) { //todo, we may want multiple samplers, need to separate texture and sampler creation
                 if(!bufferGroup.samplers?.[node.name]) {
                     const sampler = this.device.createSampler(
-                        (texKeys && bufferGroup.textures[texKeys[texKeyRot]]?.samplerSettings?.[node.name]) ? 
-                        bufferGroup.textures[texKeys[texKeyRot]]?.samplerSettings[node.name] : {
+                        (texKeys && bufferGroup.textures[node.name]) ? 
+                        bufferGroup.textures[node.name] : {
                             magFilter: 'linear',
                             minFilter: 'linear',
                             mipmapFilter: "linear",
@@ -614,6 +617,7 @@ export class ShaderContext {
                         }
                     );
             
+                    if(!bufferGroup.samplers) bufferGroup.samplers = {};
                     bufferGroup.samplers[node.name] = sampler;
                     
                 }
@@ -650,7 +654,7 @@ export class ShaderContext {
         if(this.bindings) {
             for(const key in this.bindings) {
                 if(!assignedEntries[key])
-                    entries.push(this.bindings[key]); //push any extra bindings (e.g. if we're forcing our own bindings, but they must be complete!)
+                    entries.push(this.bindings[key] as GPUBindGroupLayoutEntry); //push any extra bindings (e.g. if we're forcing our own bindings, but they must be complete!)
             }
         }
 
@@ -779,7 +783,7 @@ export class ShaderContext {
     }
 
     updateTextures = (
-        textures:{[key:string]:any}, 
+        textures:{[key:string]:TextureInfo}, 
         updateBindGroup=false,
         bindGroupNumber=this.bindGroupNumber
     ) => {
@@ -788,9 +792,10 @@ export class ShaderContext {
 
         let bufferGroup = this.bufferGroup;
         if(!bufferGroup) {
-            this.makeBufferGroup(bindGroupNumber);
+            bufferGroup = this.makeBufferGroup(bindGroupNumber);
         }
 
+        //this will call updateTexture respectively
         const entries = this.createBindGroupEntries(
             textures, 
             bindGroupNumber, 
@@ -805,23 +810,7 @@ export class ShaderContext {
             this.updateBindGroup(bindGroupNumber);
     }
 
-    updateTexture = (data:{
-        source?:ImageBitmap|any,
-        texture?:GPUTextureDescriptor,
-        buffer?:BufferSource | SharedArrayBuffer,
-        width:number, 
-        height:number, 
-        bytesPerRow?:number,
-        label?:string, 
-        format?:string, //default: 'rgba8unorm' 
-        usage?:any,
-        layout?:GPUImageDataLayout|GPUImageCopyExternalImage, //customize the layout that gets created for an image source e.g. flipY
-        
-        isDepth?:boolean, //depth texture?
-        isStorage?:boolean, //something to help with identifying in the bindgroup automation
-        isSampler?:boolean,
-        isDepthSampler?:boolean
-    }|ImageBitmap|any, 
+    updateTexture = (data:TextureInfo|ImageBitmap|any, 
     name:string, bindGroupNumber=this.bindGroupNumber) => {
         if(!data) return;
         if(!data.width && data.source) data.width = data.source.width;
@@ -1431,7 +1420,6 @@ export class ShaderContext {
 
                     if (!bufferGroup.uniformBuffer || !uBufferSet) {
                         uBufferSet = this.allocateUBO(bindGroupNumber);
-                        bufferGroup.uniformBufferIndex = inpBuf_i;
                     }
 
                     if(!hasUniformBuffer) {

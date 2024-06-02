@@ -58,20 +58,7 @@ export type RenderPassSettings = {
     } | Float32Array | GPUBuffer)[];
     outputVBOs?: boolean;
     textures?: {
-        [key: string]: {
-            source?: ImageBitmap | any;
-            texture?: GPUTextureDescriptor;
-            buffer?: BufferSource | SharedArrayBuffer;
-            width: number;
-            height: number;
-            bytesPerRow?: number;
-            label?: string;
-            format?: string;
-            usage?: any;
-            samplerSettings?: any;
-            layout?: GPUImageDataLayout | GPUImageCopyExternalImage;
-            isStorage?: boolean;
-        } | ImageBitmap;
+        [key: string]: TextureInfo | ImageBitmap;
     };
     outputTextures?: boolean;
     newBindings?: boolean;
@@ -94,4 +81,60 @@ export type TranspiledShader = {
     workGroupSize?: number;
     altBindings?: any;
     returnedVars?: any;
+};
+export type BufferGroup = {
+    params: any[];
+    returnedVars: string[];
+    inputTypes: {
+        [key: string]: any;
+    };
+    firstPass?: boolean;
+    bindGroup?: GPUBindGroup;
+    renderBundle?: GPURenderBundle;
+    inputBuffers: {
+        [key: string]: GPUBuffer;
+    };
+    outputBuffers: {
+        [key: string]: GPUBuffer;
+    };
+    uniformBuffer?: GPUBuffer;
+    uniformBufferInputs: {
+        [key: string]: any;
+    };
+    totalUniformBufferSize?: number;
+    defaultUniformBuffer?: GPUBuffer;
+    totalDefaultUniformBufferSize?: number;
+    defaultUniformBinding?: number;
+    textures: {
+        [key: string]: GPUTexture;
+    };
+    samplers?: {
+        [key: string]: GPUSampler;
+    };
+    defaultUniforms: {
+        [key: string]: any;
+    };
+    indexCount?: number;
+    indexBuffer?: GPUBuffer;
+    indexFormat?: GPUIndexFormat;
+    vertexBuffers?: GPUBuffer[];
+    vertexCount?: number;
+    bindGroupLayoutEntries: GPUBindGroupEntry[] | GPUBindGroupLayoutEntry[];
+};
+export type TextureInfo = {
+    source?: ImageBitmap | any;
+    texture?: GPUTextureDescriptor;
+    buffer?: BufferSource | SharedArrayBuffer;
+    width: number;
+    height: number;
+    bytesPerRow?: number;
+    label?: string;
+    format?: GPUTextureFormat;
+    usage?: any;
+    layout?: GPUImageDataLayout | GPUImageCopyExternalImage;
+    mipLevelCount?: number;
+    isDepth?: boolean;
+    isStorage?: boolean;
+    isSampler?: boolean;
+    isComparisonSampler?: boolean;
 };
