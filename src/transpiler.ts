@@ -423,9 +423,12 @@ export class WGSLTranspiler {
         shaderType?:'compute'|'fragment'|'vertex',
         variableTypes?:{[key:string]:string|{prefix?:string, type:string}},
         textureOptions?:{[key:string]:{ //texture variable name
-            type?:string, //e.g. texture_2d or texture_storage_2d can be set explicitly
-            isStorage?:boolean, //is it a storage texture? if not specified by the type or implicitly in the name
             binding?:string|number, // variable name or binding number to set this texture to share buffer binding with
+            type?:string, //e.g. texture_2d or texture_storage_2d can be set explicitly
+            isDepth?:boolean, //is it a depth texture? implicit function or naming will set this otherwise
+            isStorage?:boolean, //is it a storage texture? must be set if not using implicit functions or names
+            isSampler?:boolean,
+            isDepthSampler?:boolean,
             [key:string]:any
         }},
         minBinding=0
@@ -473,9 +476,9 @@ export class WGSLTranspiler {
 
             //todo: texture types - texture_1d, texture_2d, texture_2d_array, texture_3d
             //methods for parsing texture types, we didn't really have a choice but to use variable names for implicit texture typing, but it should work in general
-            if (new RegExp(`textureSampleCompare\\(${escapeRegExp(node.name)},`).test(funcStr)) { 
+            if (textureOptions?.[node.name]?.isDepth || new RegExp(`textureSampleCompare\\(${escapeRegExp(node.name)},`).test(funcStr)) { 
                 
-                let nm = node.name.toLowerCase();
+                let nm = textureOptions?.[node.name]?.type || node.name.toLowerCase();
                 if(nm.includes('depth_arr')) node.isDepthTextureArray = true;
                 else if(nm.includes('depth')) node.isDepthTexture2d = true;
                 else if(nm.includes('cube_arr')) node.isDepthCubeArrayTexture = true;
@@ -485,27 +488,27 @@ export class WGSLTranspiler {
                 node.isTexture = true;
                 node.isDepthTexture = true;
                
-            } else if(new RegExp(`textureSampleCompare\\(\\w+\\s*,\\s*${escapeRegExp(node.name)}`).test(funcStr)) {
+            } else if(textureOptions?.[node.name]?.isDepthSampler || new RegExp(`textureSampleCompare\\(\\w+\\s*,\\s*${escapeRegExp(node.name)}`).test(funcStr)) {
                 
                 node.isComparisonSampler = true;
                 node.isSampler = true;
             
-            } else if (new RegExp(`textureSample\\(\\w+\\s*,\\s*${escapeRegExp(node.name)}`).test(funcStr)) { 
+            } else if (textureOptions?.[node.name]?.isSampler || new RegExp(`textureSample\\(\\w+\\s*,\\s*${escapeRegExp(node.name)}`).test(funcStr)) { 
                 
                 node.isSampler = true;
             
-            } else if(new RegExp(`textureStore\\(${escapeRegExp(node.name)},`).test(funcStr)) {
+            } else if(textureOptions?.[node.name]?.isStorage ||  new RegExp(`textureStore\\(${escapeRegExp(node.name)},`).test(funcStr)) {
                 
-                let nm = node.name.toLowerCase();
+                let nm = textureOptions?.[node.name]?.type || node.name.toLowerCase();
                 if(nm.includes('3d')) node.is3dStorageTexture = true;
                 else if(nm.includes('1d')) node.is1dStorageTexture = true;
                 else if(nm.includes('2d_arr')) node.is2dStorageTextureArray = true;
                 
                 node.isStorageTexture = true;
                
-            } else if (new RegExp(`texture.*\\(${escapeRegExp(node.name)},`).test(funcStr)) { //todo: we could infer texture dimensions from the second input type
+            } else if (textureOptions?.[node.name] || new RegExp(`texture.*\\(${escapeRegExp(node.name)},`).test(funcStr)) { //todo: we could infer texture dimensions from the second input type
                 
-                let nm = node.name.toLowerCase();
+                let nm = textureOptions?.[node.name]?.type || node.name.toLowerCase();
 
                 //rudimentary way to dynamically type textures since we can't predict based on texture function calls
                 if(nm.includes('depth_arr')) node.isDepthTextureArray = true;
@@ -1467,8 +1470,12 @@ fn frag_main(
         gpuFuncs?:(Function|string)[],
         variableTypes?:{[key:string]:string|{ prefix?: string; type: string; }},
         textureOptions?:{[key:string]:{
-            isStorage?:boolean,
             binding?:string|number, //map to another texture variable binding e.g. a storage texture in a compute shader outputting as a texture in a vertex/fragment
+            isDepth?:boolean,
+            isStorage?:boolean,
+            isSampler?:boolean,
+            isDepthSampler?:boolean,
+            //else defaults to implicit usage (which works great in most cases)
             [key:string]:any
         }},
         lastBinding=0

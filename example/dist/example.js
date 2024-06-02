@@ -406,8 +406,8 @@
         function escapeRegExp(string) {
           return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
         }
-        if (new RegExp(`textureSampleCompare\\(${escapeRegExp(node.name)},`).test(funcStr)) {
-          let nm = node.name.toLowerCase();
+        if (textureOptions?.[node.name]?.isDepth || new RegExp(`textureSampleCompare\\(${escapeRegExp(node.name)},`).test(funcStr)) {
+          let nm = textureOptions?.[node.name]?.type || node.name.toLowerCase();
           if (nm.includes("depth_arr")) node.isDepthTextureArray = true;
           else if (nm.includes("depth")) node.isDepthTexture2d = true;
           else if (nm.includes("cube_arr")) node.isDepthCubeArrayTexture = true;
@@ -415,19 +415,19 @@
           else if (nm.includes("depth_mul")) node.isDepthMSAATexture = true;
           node.isTexture = true;
           node.isDepthTexture = true;
-        } else if (new RegExp(`textureSampleCompare\\(\\w+\\s*,\\s*${escapeRegExp(node.name)}`).test(funcStr)) {
+        } else if (textureOptions?.[node.name]?.isDepthSampler || new RegExp(`textureSampleCompare\\(\\w+\\s*,\\s*${escapeRegExp(node.name)}`).test(funcStr)) {
           node.isComparisonSampler = true;
           node.isSampler = true;
-        } else if (new RegExp(`textureSample\\(\\w+\\s*,\\s*${escapeRegExp(node.name)}`).test(funcStr)) {
+        } else if (textureOptions?.[node.name]?.isSampler || new RegExp(`textureSample\\(\\w+\\s*,\\s*${escapeRegExp(node.name)}`).test(funcStr)) {
           node.isSampler = true;
-        } else if (new RegExp(`textureStore\\(${escapeRegExp(node.name)},`).test(funcStr)) {
-          let nm = node.name.toLowerCase();
+        } else if (textureOptions?.[node.name]?.isStorage || new RegExp(`textureStore\\(${escapeRegExp(node.name)},`).test(funcStr)) {
+          let nm = textureOptions?.[node.name]?.type || node.name.toLowerCase();
           if (nm.includes("3d")) node.is3dStorageTexture = true;
           else if (nm.includes("1d")) node.is1dStorageTexture = true;
           else if (nm.includes("2d_arr")) node.is2dStorageTextureArray = true;
           node.isStorageTexture = true;
-        } else if (new RegExp(`texture.*\\(${escapeRegExp(node.name)},`).test(funcStr)) {
-          let nm = node.name.toLowerCase();
+        } else if (textureOptions?.[node.name] || new RegExp(`texture.*\\(${escapeRegExp(node.name)},`).test(funcStr)) {
+          let nm = textureOptions?.[node.name]?.type || node.name.toLowerCase();
           if (nm.includes("depth_arr")) node.isDepthTextureArray = true;
           else if (nm.includes("depth_cube_arr")) node.isDepthCubeArrayTexture = true;
           else if (nm.includes("depth_cube")) node.isDepthCubeTexture = true;
@@ -1934,7 +1934,6 @@ fn vtx_main(
       if (!bufferGroup) {
         bufferGroup = this.makeBufferGroup(bindGroupNumber);
       }
-      let texturesUpdated = false;
       if (textures) for (const key in textures) {
         let isStorage = bufferGroup.params.find((node, i) => {
           if (node.name === key && node.isStorageTexture) return true;
@@ -1942,7 +1941,6 @@ fn vtx_main(
         if (isStorage) textures[key].isStorage = true;
         if (textures[key].source || textures[key].buffer || textures[key] instanceof ImageBitmap) {
           this.updateTexture(textures[key], key, bindGroupNumber);
-          texturesUpdated = true;
         }
       }
       let texKeys;
@@ -2146,6 +2144,23 @@ fn vtx_main(
         }
       }
     };
+    updateTextures = (textures, updateBindGroup = false, bindGroupNumber = this.bindGroupNumber) => {
+      if (!textures) return;
+      let bufferGroup = this.bufferGroup;
+      if (!bufferGroup) {
+        this.makeBufferGroup(bindGroupNumber);
+      }
+      const entries = this.createBindGroupEntries(
+        textures,
+        bindGroupNumber,
+        this.vertex || !this.vertex && this.graphicsPipeline ? GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT : void 0
+      );
+      this.bindGroupLayoutEntries = entries;
+      bufferGroup.bindGroupLayoutEntries = entries;
+      this.setBindGroupLayout(entries, bindGroupNumber);
+      if (updateBindGroup)
+        this.updateBindGroup(bindGroupNumber);
+    };
     updateTexture = (data, name, bindGroupNumber = this.bindGroupNumber) => {
       if (!data) return;
       if (!data.width && data.source) data.width = data.source.width;
@@ -2155,7 +2170,7 @@ fn vtx_main(
         bufferGroup = this.makeBufferGroup(bindGroupNumber);
       }
       const defaultDescriptor = {
-        label: data.label ? data.label : `texture_g${bindGroupNumber}_${name}`,
+        label: data.label ? data.label : name,
         format: data.format ? data.format : "rgba8unorm",
         size: [data.width, data.height, 1],
         usage: data.usage ? data.usage : data.source ? GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | (data.isStorage ? GPUTextureUsage.STORAGE_BINDING : GPUTextureUsage.RENDER_ATTACHMENT) : data.isStorage ? GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.STORAGE_BINDING : GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST
@@ -2486,7 +2501,7 @@ fn vtx_main(
       bufferGroup.returnedVars = this.returnedVars;
       bufferGroup.defaultUniforms = this.defaultUniforms;
       bufferGroup.inputBuffers = {};
-      bufferGroup.outputBuffers = [];
+      bufferGroup.outputBuffers = {};
       bufferGroup.textures = {};
       bufferGroup.samplers = {};
       bufferGroup.uniformBuffer = void 0;
@@ -2538,17 +2553,8 @@ fn vtx_main(
       if (inputs.length > 0) {
         newBindGroupBuffer = true;
       } else if (!bufferGroup.bindGroup) newBindGroupBuffer = true;
-      if (textures && Object.values(textures).find((t) => {
-        if (t.source || t.buffer || t instanceof ImageBitmap) return true;
-      })) {
-        const entries = this.createBindGroupEntries(
-          textures,
-          bindGroupNumber,
-          this.vertex || !this.vertex && this.graphicsPipeline ? GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT : void 0
-        );
-        this.bindGroupLayoutEntries = entries;
-        bufferGroup.bindGroupLayoutEntries = entries;
-        this.setBindGroupLayout(entries, bindGroupNumber);
+      if (textures) {
+        this.updateTextures(textures, false, bindGroupNumber);
         newBindGroupBuffer = true;
       }
       if (newBindGroupBuffer && bindGroupNumber === this.bindGroupNumber) {
@@ -2614,22 +2620,24 @@ fn vtx_main(
           }
           if (!skipOutputDef && node.isReturned && (!node.isUniform || node.isUniform && !uBufferPushed)) {
             if (!node.isUniform) {
-              outputBuffers[inpBuf_i - 1] = inputBuffers[node.name];
+              outputBuffers[node.name] = inputBuffers[node.name];
             } else if (!uBufferPushed) {
               uBufferPushed = true;
-              outputBuffers[inpBuf_i - 1] = bufferGroup.uniformBuffer;
+              outputBuffers["uniform"] = bufferGroup.uniformBuffer;
             }
           }
         }
       }
       ;
       if (bufferGroup.vertexBuffers && outputVBOs) {
-        outputBuffers.push(...bufferGroup.vertexBuffers);
+        Object.values(bufferGroup.vertexBuffers).forEach((vbo, i) => {
+          outputBuffers[vbo.label] = vbo;
+        });
       }
       if (bufferGroup.textures && outputTextures) {
-        for (const key in bufferGroup.textures) {
-          outputBuffers.push(bufferGroup.textures[key]);
-        }
+        Object.values(bufferGroup.textures).forEach((tex, i) => {
+          outputBuffers[tex.label] = tex;
+        });
       }
       bindGroupAlts.forEach((inp, i) => {
         if (inp && i !== bindGroupNumber)
@@ -2717,15 +2725,17 @@ fn vtx_main(
         this.bindGroups[bindGroupNumber] = bindGroup;
       }
     };
-    getOutputData = (commandEncoder, outputBuffers) => {
+    getOutputData = (commandEncoder, outputBuffers, returnBuffers) => {
       if (!outputBuffers) outputBuffers = this.bufferGroups[this.bindGroupNumber].outputBuffers;
-      const stagingBuffers = outputBuffers.map((outputBuffer) => {
+      const keys = Object.keys(outputBuffers);
+      const values = Object.values(outputBuffers);
+      const stagingBuffers = values.map((outputBuffer) => {
         return this.device.createBuffer({
           size: outputBuffer.size,
           usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST
         });
       });
-      outputBuffers.forEach((outputBuffer, index) => {
+      values.forEach((outputBuffer, index) => {
         if (outputBuffer.width) {
           commandEncoder.copyTextureToBuffer(
             //easier to copy the texture to an array and reuse it that way
@@ -2742,19 +2752,34 @@ fn vtx_main(
         );
       });
       this.device.queue.submit([commandEncoder.finish()]);
+      if (returnBuffers) {
+        let output = {};
+        stagingBuffers.map((b, i) => {
+          output[keys[i]] = b;
+        });
+        return output;
+      }
       const promises = stagingBuffers.map((buffer, i) => {
         return new Promise((resolve) => {
           buffer.mapAsync(GPUMapMode.READ).then(() => {
             const mappedRange = buffer.getMappedRange();
-            const rawResults = outputBuffers[i].format?.includes("8") ? new Uint8Array(mappedRange) : new Float32Array(mappedRange);
-            const copiedResults = outputBuffers[i].format?.includes("8") ? new Uint8Array(rawResults.length) : new Float32Array(rawResults.length);
+            const rawResults = values[i].format?.includes("8") ? new Uint8Array(mappedRange) : new Float32Array(mappedRange);
+            const copiedResults = values[i].format?.includes("8") ? new Uint8Array(rawResults.length) : new Float32Array(rawResults.length);
             copiedResults.set(rawResults);
             buffer.unmap();
             resolve(copiedResults);
           });
         });
       });
-      return promises.length === 1 ? promises[0] : Promise.all(promises);
+      return new Promise((res) => {
+        Promise.all(promises).then((results) => {
+          const output = {};
+          results.map((result, i) => {
+            output[keys[i]] = result;
+          });
+          res(output);
+        });
+      });
     };
     //bound to the shader scope. Todo: make this more robust for passing values for specific vertexbuffers or say texturebuffers etc
     run = ({
@@ -2771,6 +2796,7 @@ fn vtx_main(
       outputTextures,
       bufferOnly,
       skipOutputDef,
+      returnBuffers,
       bindGroupNumber,
       viewport,
       scissorRect,
@@ -2910,8 +2936,8 @@ fn vtx_main(
           }
           renderPass.end();
         }
-        if (!skipOutputDef && bufferGroup.outputBuffers?.length > 0) {
-          return this.getOutputData(commandEncoder, bufferGroup.outputBuffers);
+        if (!skipOutputDef && bufferGroup.outputBuffers && Object.keys(bufferGroup.outputBuffers)?.length > 0) {
+          return this.getOutputData(commandEncoder, bufferGroup.outputBuffers, returnBuffers);
         } else {
           this.device.queue.submit([commandEncoder.finish()]);
           return new Promise((r) => r(true));

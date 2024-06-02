@@ -50,9 +50,12 @@ export declare class WGSLTranspiler {
         };
     }, textureOptions?: {
         [key: string]: {
-            type?: string;
-            isStorage?: boolean;
             binding?: string | number;
+            type?: string;
+            isDepth?: boolean;
+            isStorage?: boolean;
+            isSampler?: boolean;
+            isDepthSampler?: boolean;
             [key: string]: any;
         };
     }, minBinding?: number): {
@@ -91,8 +94,11 @@ export declare class WGSLTranspiler {
         };
     }, textureOptions?: {
         [key: string]: {
-            isStorage?: boolean;
             binding?: string | number;
+            isDepth?: boolean;
+            isStorage?: boolean;
+            isSampler?: boolean;
+            isDepthSampler?: boolean;
             [key: string]: any;
         };
     }, lastBinding?: number): TranspiledShader;

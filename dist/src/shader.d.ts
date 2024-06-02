@@ -10,8 +10,12 @@ export declare class ShaderHelper {
     compute?: ShaderContext;
     vertex?: ShaderContext;
     fragment?: ShaderContext;
-    process: (...inputs: any[]) => any;
-    render: (renderPass?: RenderPassSettings, ...inputs: any[]) => any;
+    process: (...inputs: any[]) => {
+        [key: string]: GPUBuffer;
+    } | Promise<unknown>;
+    render: (renderPass?: RenderPassSettings, ...inputs: any[]) => {
+        [key: string]: GPUBuffer;
+    } | Promise<unknown>;
     canvas: HTMLCanvasElement | OffscreenCanvas;
     context: GPUCanvasContext | OffscreenRenderingContext;
     device: GPUDevice;
@@ -88,6 +92,9 @@ export declare class ShaderContext {
     createBindGroupEntries: (textures?: any, bindGroupNumber?: number, visibility?: number) => GPUBindGroupLayoutEntry[];
     setBindGroupLayout: (entries?: any[], bindGroupNumber?: number) => GPUBindGroupLayout;
     updateVBO: (vertices: any, index?: number, bufferOffset?: number, dataOffset?: number, bindGroupNumber?: number, indexBuffer?: boolean, indexFormat?: 'uint32' | 'uint16') => void;
+    updateTextures: (textures: {
+        [key: string]: any;
+    }, updateBindGroup?: boolean, bindGroupNumber?: number) => void;
     updateTexture: (data: {
         source?: ImageBitmap | any;
         texture?: GPUTextureDescriptor;
@@ -99,7 +106,10 @@ export declare class ShaderContext {
         format?: string;
         usage?: any;
         layout?: GPUImageDataLayout | GPUImageCopyExternalImage;
+        isDepth?: boolean;
         isStorage?: boolean;
+        isSampler?: boolean;
+        isDepthSampler?: boolean;
     } | ImageBitmap | any, name: string, bindGroupNumber?: number) => boolean;
     setUBOposition: (dataView: DataView, typeInfo: {
         type: string;
@@ -167,8 +177,14 @@ export declare class ShaderContext {
         workgroupsZ?: number;
     }>, ...inputs: any[]) => boolean;
     updateBindGroup: (bindGroupNumber?: number, customBindGroupEntries?: GPUBindGroupEntry[]) => void;
-    getOutputData: (commandEncoder: GPUCommandEncoder, outputBuffers?: any) => any;
-    run: ({ vertexCount, instanceCount, firstVertex, firstInstance, vbos, outputVBOs, textures, outputTextures, bufferOnly, skipOutputDef, bindGroupNumber, viewport, scissorRect, blendConstant, indexBuffer, indexFormat, firstIndex, useRenderBundle, workgroupsX, workgroupsY, workgroupsZ, newBindings }?: {
+    getOutputData: (commandEncoder: GPUCommandEncoder, outputBuffers?: {
+        [key: string]: any;
+    }, returnBuffers?: boolean) => Promise<{
+        [key: string]: Float32Array | Uint8Array;
+    }> | {
+        [key: string]: GPUBuffer;
+    };
+    run: ({ vertexCount, instanceCount, firstVertex, firstInstance, vbos, outputVBOs, textures, outputTextures, bufferOnly, skipOutputDef, returnBuffers, bindGroupNumber, viewport, scissorRect, blendConstant, indexBuffer, indexFormat, firstIndex, useRenderBundle, workgroupsX, workgroupsY, workgroupsZ, newBindings }?: {
         vertexCount?: number;
         instanceCount?: number;
         firstVertex?: number;
@@ -207,5 +223,9 @@ export declare class ShaderContext {
         workgroupsX?: number;
         workgroupsY?: number;
         workgroupsZ?: number;
-    }, ...inputs: any[]) => any;
+    } & {
+        returnBuffers?: boolean;
+    }, ...inputs: any[]) => {
+        [key: string]: GPUBuffer;
+    } | Promise<unknown>;
 }
