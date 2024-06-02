@@ -1,5 +1,5 @@
 import { WGSLTranspiler, WGSLTypeSizes } from "./transpiler";
-import {ShaderOptions, RenderOptions, ComputeOptions, RenderPassSettings, ComputePassSettings, TranspiledShader, BufferGroup, TextureInfo} from './types'
+import {ShaderOptions, RenderOptions, ComputeOptions, RenderPassSettings, ComputePassSettings, TranspiledShader, BufferGroup, TextureInfo, Param} from './types'
 
 
 //Self contained shader execution boilerplate
@@ -465,7 +465,9 @@ export class ShaderContext {
     code: string;
     header: string;
     ast: any[];
-    params: any[];
+
+    params: Param[];
+    
     funcStr: string;
     defaultUniforms: any;
     type: "compute" | "vertex" | "fragment";
@@ -1390,7 +1392,7 @@ export class ShaderContext {
             bufferGroup.inputTypes = bufferGroup.params.map((p) => {
                 let type = p.type;
                 if(type.startsWith('array')) {
-                    type = type.substring(6,type.length-1) //cut off array<  >
+                    type = type.substring(6,type.length-1) as any; //cut off array<  >
                 }
                 return WGSLTypeSizes[type];
             });

@@ -68,13 +68,51 @@ export type ComputePassSettings = {
 } & ShaderPassSettings;
 
 
+export type Param = {
+    type:'array'|'variable',
+    name:string,
+    value:string,
+    isInput:boolean,
+    length?:number,
+    isReturned:boolean,
+    isModified:boolean,
+    isUniform?:boolean
+
+    binding?:number|string
+
+    isTexture?:boolean,
+    isStorageTexture?:boolean, //something to help with identifying in the bindgroup automation 
+    isSampler?:boolean,
+    isComparisonSampler?:boolean,
+    isDepthTexture?:boolean,
+
+    isSharedStorageTexture?:boolean,
+
+    is3dStorageTexture?:boolean,
+    is1dStorageTexture?:boolean,
+    is2dStorageTextureArray?:boolean,
+    isDepthTextureArray?:boolean,
+    isDepthCubeArrayTexture?:boolean,
+    isDepthCubeTexture?:boolean,
+    isDepthMSAATexture?:boolean,
+    isDepthTexture2d?:boolean,
+    isCubeArrayTexture?:boolean,
+    isCubeTexture?:boolean,
+    is3dTexture?:boolean,
+    isis2dTextureArrayDepthTextureArray?:boolean,
+    is1dTexture?:boolean,
+    is2dMSAATexture?:boolean,
+    
+
+}
+
 export type TranspiledShader = {
     code: string;
     header: string;
     bindGroupNumber:number;
     lastBinding:number; //the last binding in the list, e.g. vertex and fragment bindings need to be in series
     ast: any[];
-    params: any[];
+    params: Param[];
     funcStr: string;
     defaultUniforms: any;
     type: "compute" | "vertex" | "fragment";
@@ -85,7 +123,7 @@ export type TranspiledShader = {
 
 
 export type BufferGroup = {
-    params:any[],
+    params:Param[],
     returnedVars:string[],
     inputTypes:{[key:string]:any}
     firstPass?:boolean
@@ -99,7 +137,7 @@ export type BufferGroup = {
     outputBuffers:{
         [key:string]:GPUBuffer
     },
-    
+
     uniformBuffer?:GPUBuffer,
     uniformBufferInputs:{[key:string]:any},
     totalUniformBufferSize?:number

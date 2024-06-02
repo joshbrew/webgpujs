@@ -572,6 +572,7 @@ export class WGSLTranspiler {
                         if(typeof boundTo === 'string') {
                             if(binding === node.name) {
                                 textureOptions[name].binding = boundTo; //set the binding to a number
+                                if(node.isStorageTexture) node.isSharedStorageTexture = true;
                                 incrBinding = false;
                             } else {
                                 //find it recursively if we have chained multiple texture bindings for some reason, else use bindingIncr
@@ -579,6 +580,7 @@ export class WGSLTranspiler {
                             }
                         } else if (typeof boundTo === 'number') {
                             binding = boundTo;
+                            if(node.isStorageTexture) node.isSharedStorageTexture = true;
                             incrBinding = false;
                         }
                     }

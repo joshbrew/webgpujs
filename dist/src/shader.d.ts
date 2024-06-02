@@ -1,5 +1,5 @@
 /// <reference types="@webgpu/types" />
-import { ShaderOptions, RenderOptions, ComputeOptions, RenderPassSettings, ComputePassSettings, TranspiledShader, BufferGroup, TextureInfo } from './types';
+import { ShaderOptions, RenderOptions, ComputeOptions, RenderPassSettings, ComputePassSettings, TranspiledShader, BufferGroup, TextureInfo, Param } from './types';
 export declare class ShaderHelper {
     prototypes: {
         compute?: TranspiledShader;
@@ -57,7 +57,7 @@ export declare class ShaderContext {
     code: string;
     header: string;
     ast: any[];
-    params: any[];
+    params: Param[];
     funcStr: string;
     defaultUniforms: any;
     type: "compute" | "vertex" | "fragment";

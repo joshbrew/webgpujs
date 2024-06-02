@@ -68,13 +68,44 @@ export type ComputePassSettings = {
     workgroupsY?: number;
     workgroupsZ?: number;
 } & ShaderPassSettings;
+export type Param = {
+    type: 'array' | 'variable';
+    name: string;
+    value: string;
+    isInput: boolean;
+    length?: number;
+    isReturned: boolean;
+    isModified: boolean;
+    isUniform?: boolean;
+    binding?: number | string;
+    isTexture?: boolean;
+    isStorageTexture?: boolean;
+    isSampler?: boolean;
+    isComparisonSampler?: boolean;
+    isDepthTexture?: boolean;
+    isSharedStorageTexture?: boolean;
+    is3dStorageTexture?: boolean;
+    is1dStorageTexture?: boolean;
+    is2dStorageTextureArray?: boolean;
+    isDepthTextureArray?: boolean;
+    isDepthCubeArrayTexture?: boolean;
+    isDepthCubeTexture?: boolean;
+    isDepthMSAATexture?: boolean;
+    isDepthTexture2d?: boolean;
+    isCubeArrayTexture?: boolean;
+    isCubeTexture?: boolean;
+    is3dTexture?: boolean;
+    isis2dTextureArrayDepthTextureArray?: boolean;
+    is1dTexture?: boolean;
+    is2dMSAATexture?: boolean;
+};
 export type TranspiledShader = {
     code: string;
     header: string;
     bindGroupNumber: number;
     lastBinding: number;
     ast: any[];
-    params: any[];
+    params: Param[];
     funcStr: string;
     defaultUniforms: any;
     type: "compute" | "vertex" | "fragment";
@@ -83,7 +114,7 @@ export type TranspiledShader = {
     returnedVars?: any;
 };
 export type BufferGroup = {
-    params: any[];
+    params: Param[];
     returnedVars: string[];
     inputTypes: {
         [key: string]: any;
