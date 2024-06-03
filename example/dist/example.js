@@ -1055,7 +1055,7 @@ for (var i: i32 = 0; i < ${size}; i = i + 1) {
       return result;
     }
     //combine input bindings and create mappings so input arrays can be shared based on variable names, assuming same types in a continuous pipeline (the normal thing)
-    static combineBindings(bindings1str, bindings2str, noOverlap = true) {
+    static combineBindings(bindings1str, bindings2str, noOverlap = true, bindings2params) {
       const bindingRegex = /@group\((\d+)\) @binding\((\d+)\)\s+(var(?:<[^>]+>)?)\s+(\w+)\s*:/g;
       const structRegex = /struct (\w+) \{([\s\S]*?)\}/;
       const combinedStructs = /* @__PURE__ */ new Map();
@@ -1070,9 +1070,13 @@ for (var i: i32 = 0; i < ${size}; i = i + 1) {
       }
       bindings2str = bindings2str.replace(bindingRegex, (match2, group, binding, varDecl, varName) => {
         let newBinding = binding;
-        if (noOverlap) while (usedBindings.has(`${group}-${newBinding}`)) {
-          newBinding = (parseInt(newBinding) + 1).toString();
-          changesShader2[varName] = { group, binding: newBinding };
+        if (!(bindings2params && bindings2params.find((v) => {
+          if (v.name === varName && v.sharedBinding) return true;
+        })) && noOverlap) {
+          while (usedBindings.has(`${group}-${newBinding}`)) {
+            newBinding = (parseInt(newBinding) + 1).toString();
+            changesShader2[varName] = { group, binding: newBinding };
+          }
         }
         usedBindings.add(`${group}-${newBinding}`);
         return `@group(${group}) @binding(${newBinding}) ${varDecl} ${varName}:`;
@@ -1168,6 +1172,8 @@ for (var i: i32 = 0; i < ${size}; i = i + 1) {
             combinedAst.push(n);
             if (shader2Obj.params.find((v) => {
               if (v.name === n.name) return true;
+            }) && !combinedParams.find((v) => {
+              if (v.name === n.name) return true;
             }))
               combinedParams.push(n);
           }
@@ -1182,8 +1188,7 @@ for (var i: i32 = 0; i < ${size}; i = i + 1) {
           if (!maxSharedBindings[entry.group]) maxSharedBindings[entry.group] = 0;
           uniqueBindings.add(entry.name);
           const newBinding = maxSharedBindings[entry.group];
-          updatedParams.push(entry);
-          bindingMap2.set(entry.binding, newBinding);
+          bindingMap2.set(`${entry.group},${entry.binding}`, newBinding);
           entry.binding = newBinding;
           maxSharedBindings[entry.group]++;
         }
@@ -1192,17 +1197,16 @@ for (var i: i32 = 0; i < ${size}; i = i + 1) {
         if (!shader1Obj.params.some((param) => param.name === entry.name) && !uniqueBindings.has(entry.name) && maxSharedBindings[entry.group] && !entry.sharedBinding) {
           if (!maxSharedBindings[entry.group]) maxSharedBindings[entry.group] = 0;
           uniqueBindings.add(entry.name);
-          updatedParams.push(entry);
-          bindingMap2.set(entry.binding, maxSharedBindings[entry.group]);
+          bindingMap2.set(`${entry.group},${entry.binding}`, maxSharedBindings[entry.group]);
           entry.binding = maxSharedBindings[entry.group];
           maxSharedBindings[entry.group]++;
         }
       });
-      combinedParams = updatedParams;
       let shaderCode2 = shader2Obj.code;
       for (let [oldBinding, newBinding] of bindingMap2.entries()) {
-        const regex = new RegExp(`@binding\\(${oldBinding}\\)`, "g");
-        shaderCode2 = shaderCode2.replace(regex, `@binding(${newBinding})`);
+        const [group, binding] = oldBinding.split(",");
+        const regex = new RegExp(`@group\\(${group}\\) @binding\\(${binding}\\)`, "g");
+        shaderCode2 = shaderCode2.replace(regex, `@group(${group}) @binding(${newBinding})`);
       }
       shader2Obj.code = shaderCode2;
       shader1Obj.ast = combinedAst;
@@ -1648,21 +1652,21 @@ for (var i: i32 = 0; i < ${size}; i = i + 1) {
         shaders = this.generateShaderBoilerplate(shaders, options);
       if (!options.skipCombinedBindings) {
         if (shaders.compute && shaders.vertex) {
-          let combined = WGSLTranspiler.combineBindings(shaders.compute.code, shaders.vertex.code);
+          let combined = WGSLTranspiler.combineBindings(shaders.compute.code, shaders.vertex.code, true, shaders.vertex.params);
           shaders.compute.code = combined.code1;
           shaders.compute.altBindings = Object.keys(combined.changes1).length > 0 ? combined.changes1 : void 0;
           shaders.vertex.code = combined.code2;
           shaders.vertex.altBindings = Object.keys(combined.changes2).length > 0 ? combined.changes2 : void 0;
         }
         if (shaders.compute && shaders.fragment) {
-          let combined = WGSLTranspiler.combineBindings(shaders.compute.code, shaders.fragment.code);
+          let combined = WGSLTranspiler.combineBindings(shaders.compute.code, shaders.fragment.code, true, shaders.fragment.params);
           shaders.compute.code = combined.code1;
           shaders.compute.altBindings = Object.keys(combined.changes1).length > 0 ? combined.changes1 : void 0;
           shaders.fragment.code = combined.code2;
           shaders.fragment.altBindings = Object.keys(combined.changes2).length > 0 ? combined.changes2 : void 0;
         }
         if (shaders.vertex && shaders.fragment) {
-          let combined = WGSLTranspiler.combineBindings(shaders.vertex.code, shaders.fragment.code);
+          let combined = WGSLTranspiler.combineBindings(shaders.vertex.code, shaders.fragment.code, true, shaders.fragment.params);
           shaders.vertex.code = combined.code1;
           shaders.vertex.altBindings = Object.keys(combined.changes1).length > 0 ? combined.changes1 : void 0;
           shaders.fragment.code = combined.code2;
@@ -3184,12 +3188,13 @@ fn vtx_main(
             for (const key in block) {
               for (const key2 in options.previousPipeline.prototypes) {
                 let combined = WGSLTranspiler.combineBindings(
-                  block[key].code,
                   options.previousPipeline.prototypes[key2].code,
-                  false
+                  block[key].code,
+                  false,
+                  block[key].params
                 );
-                block[key].code = combined.code1;
-                block[key].altBindings = combined.changes1;
+                block[key].code = combined.code2;
+                block[key].altBindings = combined.changes2;
               }
             }
           }
@@ -5641,4 +5646,122 @@ fn vtx_main(
     };
     requestAnimationFrame(loop);
   });
+  function texCompute() {
+    let coords = vec2f(threadId.xy) / vec2f(textureDimensions(outputTex1));
+    let color2 = vec4f(0.5 + 0.5 * sin(coords.x + utcTime), 0.5 + 0.5 * cos(coords.y + utcTime), 0.5, 1);
+    textureStore(outputTex1, vec2i(threadId.xy), color2);
+  }
+  function texCompute2() {
+    let size = vec2i(textureDimensions(inputTex));
+    var sum = vec4f(0);
+    for (var dx = -1; dx <= 1; dx++) {
+      for (var dy = -1; dy <= 1; dy++) {
+        let offset = vec2i(dx, dy);
+        let samplePos = vec2i(threadId.xy) + offset;
+        if (samplePos.x >= 0 && samplePos.y >= 0 && samplePos.x < size.x && samplePos.y < size.y) {
+          sum += textureLoad(inputTex, samplePos, 0);
+        }
+      }
+    }
+    let color2 = sum / 9;
+    textureStore(outputTex2, vec2i(threadId.xy), color2);
+  }
+  function texVertex() {
+    const tri = array(
+      vec2f(-1, -1),
+      vec2f(3, -1),
+      vec2f(-1, 3)
+    );
+    let xy = tri[vertexIndex];
+    position = vec4f(xy, 0, 1);
+    texCoord = xy;
+  }
+  function texFragment() {
+    let texColor = textureSample(inputTex2, outputSampler, texCoord);
+    return texColor;
+  }
+  async function createTexPipeline() {
+    const canvas4 = document.createElement("canvas");
+    const pipeline1 = await WebGPUjs.createPipeline(
+      {
+        compute: texCompute
+      },
+      {
+        workGroupSize: 64,
+        computePass: {
+          workgroupsX: canvas4.width / 64,
+          workgroupsY: canvas4.height / 64
+        },
+        renderPass: {
+          textures: {
+            inputTex: {
+              //when storage texture read_write is available we can do away with this
+              source: await createImageBitmap(canvas4),
+              width: canvas4.width,
+              height: canvas4.height
+            },
+            outputTex1: {
+              buffer: new Float32Array(canvas4.width * canvas4.height * 4).buffer,
+              //placeholder for setting the storage texture
+              width: canvas4.width,
+              height: canvas4.height,
+              isStorage: true,
+              binding: "inputTex"
+              //make sure it uses the same binding as the input texture
+            }
+          }
+        }
+      }
+    );
+    console.log(pipeline1.prototypes.compute.code);
+    const pipeline2 = await WebGPUjs.combineShaders(
+      {
+        compute: texCompute2,
+        vertex: texVertex,
+        fragment: texFragment
+      },
+      {
+        canvas: canvas4,
+        workGroupSize: 64,
+        computePass: {
+          workgroupsX: canvas4.width / 64,
+          workgroupsY: canvas4.height / 64
+        },
+        renderPass: {
+          vertexCount: 3,
+          vbos: [
+            {
+              texCoord: "vec2f"
+            }
+          ],
+          textures: {
+            inputTex2: {
+              //when storage texture read_write is available we can do away with this
+              source: await createImageBitmap(canvas4),
+              width: canvas4.width,
+              height: canvas4.height,
+              binding: "outputTex2"
+            },
+            outputTex2: {
+              buffer: new Float32Array(canvas4.width * canvas4.height * 4).buffer,
+              //placeholder for setting the storage texture
+              width: canvas4.width,
+              height: canvas4.height,
+              isStorage: true,
+              binding: "inputTex2"
+              //make sure it uses the same binding as the input texture
+            }
+          }
+        }
+      },
+      pipeline1
+    );
+    console.log(
+      pipeline2.prototypes.compute.code,
+      pipeline2.prototypes.vertex.code,
+      pipeline2.prototypes.fragment.code
+    );
+    pipeline1.process();
+  }
+  createTexPipeline();
 })();

@@ -237,12 +237,13 @@ export class WebGPUjs {
                     for(const key in block) {
                         for(const key2 in options.previousPipeline.prototypes) {
                             let combined = WGSLTranspiler.combineBindings(
-                                block[key].code, 
                                 options.previousPipeline.prototypes[key2].code,
-                                false
+                                block[key].code, 
+                                false,
+                                block[key].params
                             );
-                            block[key].code = combined.code1;
-                            block[key].altBindings = combined.changes1;
+                            block[key].code = combined.code2;
+                            block[key].altBindings = combined.changes2;
                         }
                         
                     }

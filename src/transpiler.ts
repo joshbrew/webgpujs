@@ -1313,8 +1313,10 @@ fn frag_main(
     static combineBindings(
         bindings1str:string, 
         bindings2str:string,
-        noOverlap=true
+        noOverlap=true,
+        bindings2params?:Param[]
     ) {
+        
         const bindingRegex = /@group\((\d+)\) @binding\((\d+)\)\s+(var(?:<[^>]+>)?)\s+(\w+)\s*:/g;
         const structRegex = /struct (\w+) \{([\s\S]*?)\}/;
 
@@ -1335,9 +1337,11 @@ fn frag_main(
         // Adjust bindings in the second shader
         bindings2str = bindings2str.replace(bindingRegex, (match, group, binding, varDecl, varName) => {
             let newBinding = binding;
-            if(noOverlap) while (usedBindings.has(`${group}-${newBinding}`)) {
-                newBinding = (parseInt(newBinding) + 1).toString();
-                changesShader2[varName] = { group: group, binding: newBinding };
+            if(!(bindings2params && bindings2params.find((v) => { if(v.name === varName && v.sharedBinding) return true; })) && noOverlap) {
+                while (usedBindings.has(`${group}-${newBinding}`)) {
+                    newBinding = (parseInt(newBinding) + 1).toString();
+                    changesShader2[varName] = { group: group, binding: newBinding };
+                }
             }
             usedBindings.add(`${group}-${newBinding}`);
             return `@group(${group}) @binding(${newBinding}) ${varDecl} ${varName}:`;
@@ -1477,7 +1481,7 @@ fn frag_main(
             shader2Obj.ast.forEach((n) => {
                 if(!combinedAst.find((v) => { if(v.name === n.name) return true;})) {
                     combinedAst.push(n); 
-                    if(shader2Obj.params.find((v)=>{if(v.name === n.name) return true;})) 
+                    if(shader2Obj.params.find((v)=>{if(v.name === n.name) return true;}) && !combinedParams.find((v)=>{if(v.name === n.name) return true;})) 
                         combinedParams.push(n);
                 }  
             });
@@ -1499,8 +1503,7 @@ fn frag_main(
                 if(!maxSharedBindings[entry.group]) maxSharedBindings[entry.group] = 0;
                 uniqueBindings.add(entry.name);
                 const newBinding = maxSharedBindings[entry.group]; // Keep vertex shader binding
-                updatedParams.push(entry);
-                bindingMap2.set(entry.binding, newBinding);  // Map fragment shader's old binding to new
+                bindingMap2.set(`${entry.group},${entry.binding}`, newBinding);  // Map fragment shader's old binding to new
                 entry.binding = newBinding;
                 maxSharedBindings[entry.group]++;
             }
@@ -1515,20 +1518,18 @@ fn frag_main(
             ) {
                 if(!maxSharedBindings[entry.group]) maxSharedBindings[entry.group] = 0;
                 uniqueBindings.add(entry.name);
-                updatedParams.push(entry);
-                bindingMap2.set(entry.binding, maxSharedBindings[entry.group]);
+                bindingMap2.set(`${entry.group},${entry.binding}`, maxSharedBindings[entry.group]);
                 entry.binding = maxSharedBindings[entry.group];
                 maxSharedBindings[entry.group]++;
             }
         });
 
-        combinedParams = updatedParams;
-
         // Only update binding numbers in the shader code for fragment shader using bindingMap2
         let shaderCode2 = shader2Obj.code;
         for (let [oldBinding, newBinding] of bindingMap2.entries()) {
-            const regex = new RegExp(`@binding\\(${oldBinding}\\)`, 'g');
-            shaderCode2 = shaderCode2.replace(regex, `@binding(${newBinding})`);
+            const [group,binding] = oldBinding.split(',');
+            const regex = new RegExp(`@group\\(${group}\\) @binding\\(${binding}\\)`, 'g');
+            shaderCode2 = shaderCode2.replace(regex, `@group(${group}) @binding(${newBinding})`);
         }
 
         shader2Obj.code = shaderCode2;

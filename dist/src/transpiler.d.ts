@@ -78,7 +78,7 @@ export declare class WGSLTranspiler {
         consts: any;
     };
     static indentCode(code: any): string;
-    static combineBindings(bindings1str: string, bindings2str: string, noOverlap?: boolean): {
+    static combineBindings(bindings1str: string, bindings2str: string, noOverlap?: boolean, bindings2params?: Param[]): {
         code1: string;
         changes1: any;
         code2: string;

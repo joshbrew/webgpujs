@@ -778,7 +778,7 @@ async function createTexPipeline() {
     pipeline1.process()
 }
 
-//createTexPipeline();
+createTexPipeline();
 
 //Example 6 storage texture usage via compute
 

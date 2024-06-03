@@ -77,21 +77,21 @@ export class ShaderHelper {
 
         if(!options.skipCombinedBindings) {
             if(shaders.compute && shaders.vertex) {
-                let combined = WGSLTranspiler.combineBindings(shaders.compute.code, shaders.vertex.code);
+                let combined = WGSLTranspiler.combineBindings(shaders.compute.code, shaders.vertex.code, true, shaders.vertex.params);
                 shaders.compute.code = combined.code1;
                 shaders.compute.altBindings = Object.keys(combined.changes1).length > 0 ? combined.changes1 : undefined;
                 shaders.vertex.code = combined.code2; 
                 shaders.vertex.altBindings = Object.keys(combined.changes2).length > 0 ? combined.changes2 : undefined;
             }
             if(shaders.compute && shaders.fragment) {
-                let combined = WGSLTranspiler.combineBindings(shaders.compute.code, shaders.fragment.code);
+                let combined = WGSLTranspiler.combineBindings(shaders.compute.code, shaders.fragment.code, true, shaders.fragment.params);
                 shaders.compute.code = combined.code1;
                 shaders.compute.altBindings = Object.keys(combined.changes1).length > 0 ? combined.changes1 : undefined;
                 shaders.fragment.code = combined.code2; 
                 shaders.fragment.altBindings = Object.keys(combined.changes2).length > 0 ? combined.changes2 : undefined;
             }
             if(shaders.vertex && shaders.fragment) { 
-                let combined = WGSLTranspiler.combineBindings(shaders.vertex.code, shaders.fragment.code);
+                let combined = WGSLTranspiler.combineBindings(shaders.vertex.code, shaders.fragment.code, true, shaders.fragment.params);
                 shaders.vertex.code = combined.code1;
                 shaders.vertex.altBindings = Object.keys(combined.changes1).length > 0 ? combined.changes1 : undefined;
                 shaders.fragment.code = combined.code2;
@@ -158,7 +158,7 @@ export class ShaderHelper {
             const entries = this.vertex.createBindGroupEntries(
                 options?.renderPass?.textures, 
                 undefined, 
-                GPUShaderStage.VERTEX |GPUShaderStage.FRAGMENT
+                GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT
             );
 
             this.vertex.bindGroupLayoutEntries = entries.length > 0 ? entries : undefined;
