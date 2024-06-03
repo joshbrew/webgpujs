@@ -381,7 +381,7 @@
         return acc.concat(callback(value, index, array2));
       }, []);
     }
-    static generateDataStructures(funcStr, ast, bindGroup = 0, shaderType, variableTypes, textureOptions, minBinding = 0) {
+    static generateDataStructures(funcStr, ast, bindGroup = 0, shaderType, variableTypes, textureOptions, minBinding = 0, prevParams) {
       let code = "//Bindings (data passed to/from CPU) \n";
       const functionRegex = /function (\w+)\(([^()]*|\((?:[^()]*|\([^()]*\))*\))*\) \{([\s\S]*?)\}/g;
       let modifiedStr = funcStr;
@@ -396,11 +396,20 @@
       let defaultsStruct = "";
       let uniformBinding;
       let defaultUniforms;
-      const params = [];
+      const params = prevParams || [];
       let bindingIncr = minBinding;
       let names = {};
       ast.forEach((node, i) => {
         if (names[node.name]) return;
+        let paramFound = false;
+        params.find((p) => {
+          if (node.name === p.name) {
+            node = p;
+            ast[i] = p;
+            paramFound = true;
+            return true;
+          }
+        });
         names[node.name] = true;
         if (returnedVars.includes(node.name) && !this.excludedNames[node.name]) node.isInput = true;
         function escapeRegExp(string) {
@@ -467,48 +476,63 @@
             node.isDepthTexture = true;
           node.isTexture = true;
         }
-        let binding = node.binding || bindingIncr;
+        let binding = typeof node.binding !== "undefined" ? node.binding : bindingIncr;
+        let group = typeof node.group !== "undefined" ? node.group : bindGroup;
         let incrBinding = true;
         let bindingWasSet = false;
+        if (group !== bindGroup || binding !== bindingIncr)
+          incrBinding = false;
         if (textureOptions?.[node.name] && typeof textureOptions[node.name].binding !== "undefined") {
           if (typeof textureOptions[node.name].binding === "string") {
             const check = (name) => {
               const boundTo = textureOptions[name].binding;
               if (typeof boundTo === "string") {
-                if (binding === node.name) {
-                  textureOptions[name].binding = boundTo;
+                if (boundTo === node.name) {
+                  textureOptions[name].binding = binding;
+                  textureOptions[name].group = group;
+                  node.sharedBinding = true;
+                  if (node.isStorageTexture)
+                    node.isSharedStorageTexture = true;
                   incrBinding = false;
                 } else {
                   check(boundTo);
                 }
               } else if (typeof boundTo === "number") {
                 binding = boundTo;
+                node.sharedBinding = true;
+                if (typeof textureOptions[name].group !== "undefined")
+                  group = textureOptions[name].group;
+                if (node.isStorageTexture)
+                  node.isSharedStorageTexture = true;
                 incrBinding = false;
               }
             };
             check(node.name);
           } else if (typeof textureOptions[node.name].binding === "number") {
             binding = textureOptions[node.name].binding;
+            if (typeof textureOptions[node.name].group !== "undefined")
+              group = textureOptions[node.name].group;
             incrBinding = false;
+            node.sharedBinding = true;
           }
         }
         if (variableTypes && variableTypes[node.name]) {
           if (typeof variableTypes[node.name] === "string") {
-            code += `@group(${bindGroup}) @binding(${binding}) var ${node.name}: ${variableTypes[node.name]};
+            code += `@group(${group}) @binding(${binding}) var ${node.name}: ${variableTypes[node.name]};
 
 `;
             node.type = variableTypes[node.name];
-            params.push(node);
+            if (!paramFound) params.push(node);
           } else if (typeof variableTypes[node.name] === "object") {
-            code += `@group(${bindGroup}) @binding(${binding}) ${variableTypes[node.name].prefix || "var"} ${node.name}: ${variableTypes[node.name].type};
+            code += `@group(${group}) @binding(${binding}) ${variableTypes[node.name].prefix || "var"} ${node.name}: ${variableTypes[node.name].type};
 
 `;
             node.type = variableTypes[node.name].type;
-            params.push(node);
+            if (!paramFound) params.push(node);
           } else incrBinding = false;
           bindingWasSet = true;
         } else if (node.isTexture) {
-          params.push(node);
+          if (!paramFound) params.push(node);
           let format = node.name.includes("i32") ? "i32" : node.name.includes("u32") ? "u32" : "f32";
           let typ;
           if (node.isDepthTextureArray) typ = "texture_depth_2d_array";
@@ -523,11 +547,13 @@
           else if (node.is1dTexture) typ = "texture_1d<" + format + ">";
           else if (node.is2dMSAATexture) typ = "texture_multisampled_2d<" + format + ">";
           else typ = `texture_2d<f32>`;
-          code += `@group(${bindGroup}) @binding(${binding}) var ${node.name}: ${typ};
+          code += `@group(${group}) @binding(${binding}) var ${node.name}: ${typ};
 `;
           textureOptions[node.name].binding = binding;
+          textureOptions[node.name].group = group;
           bindingWasSet = true;
         } else if (node.isStorageTexture) {
+          if (!paramFound) params.push(node);
           let format = textureFormats.find((f) => {
             if (node.name.includes(f)) return true;
           });
@@ -537,32 +563,33 @@
           else if (node.is1dStorageTexture) typ = "texture_storage_3d<" + format + ",write>";
           else if (node.is2dStorageTextureArray) typ = "texture_storage_2d_array<" + format + ",write>";
           else typ = "texture_storage_2d<" + format + ",write>";
-          params.push(node);
-          code += `@group(${bindGroup}) @binding(${binding}) var ${node.name}: ${typ};
+          code += `@group(${group}) @binding(${binding}) var ${node.name}: ${typ};
 `;
           textureOptions[node.name].binding = binding;
+          textureOptions[node.name].group = group;
           bindingWasSet = true;
         } else if (node.isSampler) {
           let typ;
           if (node.isComparisonSampler) typ = "sampler_comparison";
           else typ = "sampler";
-          params.push(node);
-          code += `@group(${bindGroup}) @binding(${binding}) var ${node.name}: ${typ};
+          if (!paramFound) params.push(node);
+          code += `@group(${group}) @binding(${binding}) var ${node.name}: ${typ};
 
 `;
           textureOptions[node.name].binding = binding;
+          textureOptions[node.name].group = group;
           bindingWasSet = true;
         } else if (node.isInput && !this.builtInUniforms[node.name]) {
           if (node.type === "array") {
             const elementType = this.inferTypeFromValue(node.value.split(",")[0], funcStr, ast);
             node.type = elementType;
-            params.push(node);
+            if (!paramFound) params.push(node);
             code += `struct ${capitalizeFirstLetter(node.name)}Struct {
     values: ${elementType}
 };
 
 `;
-            code += `@group(${bindGroup}) @binding(${binding})
+            code += `@group(${group}) @binding(${binding})
 `;
             if (!returnedVars || returnedVars?.includes(node.name) || node.isModified && !node.isUniform) {
               code += `var<storage, read_write> ${node.name}: ${capitalizeFirstLetter(node.name)}Struct;
@@ -575,6 +602,7 @@
             }
             bindingWasSet = true;
           } else if (node.isUniform) {
+            if (!paramFound) params.push(node);
             if (typeof uniformBinding === "undefined") {
               uniformsStruct = `struct UniformsStruct {
 `;
@@ -585,7 +613,6 @@
             }
             const uniformType = this.inferTypeFromValue(node.value, funcStr, ast);
             node.type = uniformType;
-            params.push(node);
             uniformsStruct += `    ${node.name}: ${uniformType},
 `;
             bindingWasSet = true;
@@ -1028,7 +1055,7 @@ for (var i: i32 = 0; i < ${size}; i = i + 1) {
       return result;
     }
     //combine input bindings and create mappings so input arrays can be shared based on variable names, assuming same types in a continuous pipeline (the normal thing)
-    static combineBindings(bindings1str, bindings2str) {
+    static combineBindings(bindings1str, bindings2str, noOverlap = true) {
       const bindingRegex = /@group\((\d+)\) @binding\((\d+)\)\s+(var(?:<[^>]+>)?)\s+(\w+)\s*:/g;
       const structRegex = /struct (\w+) \{([\s\S]*?)\}/;
       const combinedStructs = /* @__PURE__ */ new Map();
@@ -1043,7 +1070,7 @@ for (var i: i32 = 0; i < ${size}; i = i + 1) {
       }
       bindings2str = bindings2str.replace(bindingRegex, (match2, group, binding, varDecl, varName) => {
         let newBinding = binding;
-        while (usedBindings.has(`${group}-${newBinding}`)) {
+        if (noOverlap) while (usedBindings.has(`${group}-${newBinding}`)) {
           newBinding = (parseInt(newBinding) + 1).toString();
           changesShader2[varName] = { group, binding: newBinding };
         }
@@ -1120,8 +1147,8 @@ for (var i: i32 = 0; i < ${size}; i = i + 1) {
       };
     }
     static combineShaderParams(shader1Obj, shader2Obj) {
-      let combinedAst = shader2Obj.ast ? [...shader2Obj.ast] : [];
-      let combinedParams = shader2Obj.params ? [...shader2Obj.params] : [];
+      let combinedAst = shader2Obj.ast ? [...shader1Obj.ast] : [];
+      let combinedParams = shader2Obj.params ? [...shader1Obj.params] : [];
       let combinedReturnedVars = [];
       const returnMatches = shader2Obj.funcStr.match(/^(?![ \t]*\/\/).*\breturn .*;/gm);
       if (returnMatches) {
@@ -1133,26 +1160,42 @@ for (var i: i32 = 0; i < ${size}; i = i + 1) {
         const returnedVars2 = returnMatches2.map((match) => match.replace(/^[ \t]*return /, "").replace(";", ""));
         combinedReturnedVars.push(..._WGSLTranspiler.flattenStrings(returnedVars2));
       }
-      if (shader1Obj.ast) combinedAst.push(...shader1Obj.ast);
-      if (shader1Obj.params) combinedParams.push(...shader1Obj.params);
+      if (shader2Obj.ast) {
+        shader2Obj.ast.forEach((n) => {
+          if (!combinedAst.find((v) => {
+            if (v.name === n.name) return true;
+          })) {
+            combinedAst.push(n);
+            if (shader2Obj.params.find((v) => {
+              if (v.name === n.name) return true;
+            }))
+              combinedParams.push(n);
+          }
+        });
+      }
       const uniqueBindings = /* @__PURE__ */ new Set();
       const updatedParams = [];
       const bindingMap2 = /* @__PURE__ */ new Map();
+      let maxSharedBindings = {};
       shader1Obj.params.forEach((entry, i) => {
-        if (shader2Obj.params.some((param) => param.name === entry.name) && !uniqueBindings.has(entry.name)) {
+        if (shader2Obj.params.some((param) => param.name === entry.name) && !uniqueBindings.has(entry.name) && !entry.sharedBinding) {
+          if (!maxSharedBindings[entry.group]) maxSharedBindings[entry.group] = 0;
           uniqueBindings.add(entry.name);
-          const newBinding = i;
+          const newBinding = maxSharedBindings[entry.group];
           updatedParams.push(entry);
           bindingMap2.set(entry.binding, newBinding);
+          entry.binding = newBinding;
+          maxSharedBindings[entry.group]++;
         }
       });
-      let maxSharedBinding = uniqueBindings.size - 1;
       shader2Obj.params.forEach((entry, i) => {
-        if (!shader1Obj.params.some((param) => param.name === entry.name) && !uniqueBindings.has(entry.name)) {
-          uniqueBindings.add(i);
-          maxSharedBinding++;
+        if (!shader1Obj.params.some((param) => param.name === entry.name) && !uniqueBindings.has(entry.name) && maxSharedBindings[entry.group] && !entry.sharedBinding) {
+          if (!maxSharedBindings[entry.group]) maxSharedBindings[entry.group] = 0;
+          uniqueBindings.add(entry.name);
           updatedParams.push(entry);
-          bindingMap2.set(entry.binding, maxSharedBinding);
+          bindingMap2.set(entry.binding, maxSharedBindings[entry.group]);
+          entry.binding = maxSharedBindings[entry.group];
+          maxSharedBindings[entry.group]++;
         }
       });
       combinedParams = updatedParams;
@@ -1172,7 +1215,7 @@ for (var i: i32 = 0; i < ${size}; i = i + 1) {
     //this pipeline is set to only use javascript functions so it can generate asts and infer all of the necessary buffering orders and types
     static convertToWebGPU(func, shaderType = "compute", bindGroupNumber = 0, workGroupSize = 64, vertexBufferOptions = [{
       color: "vec4<f32>"
-    }], gpuFuncs, variableTypes, textureOptions, lastBinding = 0) {
+    }], gpuFuncs, variableTypes, textureOptions, lastBinding = 0, params) {
       let funcStr = typeof func === "string" ? func : func.toString();
       funcStr = funcStr.replace(/(?<!\w)this\./g, "");
       const tokens = this.tokenize(funcStr);
@@ -1184,7 +1227,8 @@ for (var i: i32 = 0; i < ${size}; i = i + 1) {
         shaderType,
         variableTypes,
         textureOptions,
-        lastBinding
+        lastBinding,
+        params
       );
       const header = webGPUCode.code;
       webGPUCode.code += "\n" + this.generateMainFunctionWorkGroup(
@@ -1625,7 +1669,6 @@ for (var i: i32 = 0; i < ${size}; i = i + 1) {
           shaders.fragment.altBindings = Object.keys(combined.changes2).length > 0 ? combined.changes2 : void 0;
         }
         if (shaders.vertex?.params && shaders.fragment) {
-          if (shaders.fragment.params) shaders.vertex.params.push(...shaders.fragment.params);
           shaders.fragment.params = shaders.vertex.params;
         }
       }
@@ -1973,7 +2016,7 @@ fn vtx_main(
         let isReturned = node.isReturned;
         if (node.isUniform) {
           if (typeof uniformBufferIdx === "undefined") {
-            uniformBufferIdx = i;
+            uniformBufferIdx = node.binding;
             bufferIncr++;
             const buffer = {
               name: "uniform",
@@ -2203,7 +2246,13 @@ fn vtx_main(
       bufferGroup.textures[name] = texture;
       let texInfo = {};
       if (data.source) texInfo.source = data.source;
-      else texInfo.source = data;
+      else if (data instanceof ImageBitmap) texInfo.source = data;
+      else if (data.buffer) {
+        texInfo.texture = texture;
+        if (data.mipLevelCount) {
+          texInfo.mipLevel = data.mipLevelCount;
+        }
+      }
       if (data.layout) Object.assign(texInfo, data.layout);
       if (data.buffer)
         this.device.queue.writeTexture(
@@ -2631,7 +2680,7 @@ fn vtx_main(
                 if (inputs[inpBuf_i] instanceof GPUBuffer) {
                   inputBuffers[node.name] = inputs[inpBuf_i];
                 } else {
-                  const usage = node.isReturned ? GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST | GPUBufferUsage.VERTEX : GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.VERTEX;
+                  const usage = node.isReturned || node.isModified ? GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST | GPUBufferUsage.VERTEX : GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.VERTEX;
                   inputBuffers[node.name] = this.device.createBuffer({
                     label: node.name,
                     size: inputs[inpBuf_i] ? inputs[inpBuf_i].byteLength ? inputs[inpBuf_i].byteLength : inputs[inpBuf_i]?.length ? inputs[inpBuf_i].length * 4 : 8 : 8,
@@ -3030,12 +3079,19 @@ fn vtx_main(
           options.functions,
           options.variableTypes,
           options.renderPass?.textures,
-          options.lastBinding
+          options.lastBinding,
+          options.params
         );
-        if (options.getPrevShaderBindGroups) {
-          let combined = WGSLTranspiler.combineBindings(shader.code, options.getPrevShaderBindGroups);
-          shader.code = combined.code1;
-          shader.altBindings = combined.changes1;
+        if (options.previousPipeline) {
+          for (const key in options.previousPipeline.prototypes) {
+            let combined = WGSLTranspiler.combineBindings(
+              shader.code,
+              options.previousPipeline.prototypes[key],
+              false
+            );
+            shader.code = combined.code1;
+            shader.altBindings = combined.changes1;
+          }
         }
         let shaderPipeline;
         if (shader.type === "compute") {
@@ -3057,13 +3113,20 @@ fn vtx_main(
               options.functions,
               options.variableTypes,
               options.renderPass?.textures,
-              options.lastBinding
+              options.lastBinding,
+              options.params
             );
           }
-          if (options.getPrevShaderBindGroups) {
-            let combined = WGSLTranspiler.combineBindings(block.code, options.getPrevShaderBindGroups);
-            block.code = combined.code1;
-            block.altBindings = combined.changes1;
+          if (options.previousPipeline) {
+            for (const key in options.previousPipeline.prototypes) {
+              let combined = WGSLTranspiler.combineBindings(
+                block.code,
+                options.previousPipeline.prototypes[key],
+                false
+              );
+              block.code = combined.code1;
+              block.altBindings = combined.changes1;
+            }
           }
           const shaderPipeline = this.init(block, options);
           return shaderPipeline;
@@ -3079,7 +3142,8 @@ fn vtx_main(
                 options.functions,
                 options.variableTypes,
                 options.renderPass?.textures,
-                options.lastBinding
+                options.lastBinding,
+                options.params
               );
             }
           }
@@ -3094,7 +3158,8 @@ fn vtx_main(
                 options.functions,
                 options.variableTypes,
                 options.renderPass?.textures,
-                options.lastBinding
+                options.lastBinding,
+                block.compute?.params || options.params
               );
               options.lastBinding = block.vertex.lastBinding;
             }
@@ -3110,15 +3175,22 @@ fn vtx_main(
                 options.functions,
                 options.variableTypes,
                 options.renderPass?.textures,
-                options.lastBinding
+                options.lastBinding,
+                block.vertex?.params || block.compute?.params || options.params
               );
             }
           }
-          if (options.getPrevShaderBindGroups) {
+          if (options.previousPipeline) {
             for (const key in block) {
-              let combined = WGSLTranspiler.combineBindings(block[key].code, options.getPrevShaderBindGroups);
-              block[key].code = combined.code1;
-              block[key].altBindings = combined.changes1;
+              for (const key2 in options.previousPipeline.prototypes) {
+                let combined = WGSLTranspiler.combineBindings(
+                  block[key].code,
+                  options.previousPipeline.prototypes[key2].code,
+                  false
+                );
+                block[key].code = combined.code1;
+                block[key].altBindings = combined.changes1;
+              }
             }
           }
           const shaderPipeline = new ShaderHelper(block, options);
@@ -3133,18 +3205,18 @@ fn vtx_main(
     static combineShaders = (shaders, options = {}, previousPipeline) => {
       let bindGroupNumber = previousPipeline.bindGroupLayouts.length;
       options.device = previousPipeline.device;
-      if (options.bindGroupLayouts) options.bindGroupLayouts;
-      previousPipeline.bindGroupLayouts.push(...options.bindGroupLayouts);
+      if (options.bindGroupLayouts)
+        previousPipeline.bindGroupLayouts.push(...options.bindGroupLayouts);
       options.bindGroupNumber = bindGroupNumber;
       options.bindGroupLayouts = previousPipeline.bindGroupLayouts;
       options.bindGroups = previousPipeline.bindGroups;
       options.bufferGroups = previousPipeline.bufferGroups;
-      if (previousPipeline.fragment) {
-        options.getPrevShaderBindGroups = previousPipeline.fragment.code;
-      } else if (previousPipeline.compute) {
-        options.getPrevShaderBindGroups = previousPipeline.compute.code;
-      }
-      return _WebGPUjs.createPipeline(shaders, options);
+      options.previousPipeline = previousPipeline;
+      options.params = previousPipeline.prototypes["fragment"] ? previousPipeline.prototypes["fragment"].params : previousPipeline.prototypes["compute"].params;
+      return _WebGPUjs.createPipeline(
+        shaders,
+        options
+      );
     };
     static cleanup = (shaderPipeline) => {
       if (shaderPipeline.device) shaderPipeline.device.destroy();

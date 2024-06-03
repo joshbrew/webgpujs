@@ -2,7 +2,7 @@ export type ShaderOptions = {
     device?:GPUDevice
     prependCode?:string,
     bindGroupNumber?:number,
-    getPrevShaderBindGroups?:string,
+    previousPipeline?:any, //list shader code from previous pipeline(s) to combine bindings
     functions?:Function[],
     variableTypes?:{[key:string]:string|{ prefix?: string; type: string; }}, //we can skip the implicit typing of the bindings and set them ourselves e.g. tex1:'texture_2d' or tex1:{prefix:'var', type:'texture_2d'} etc.
     inputs?:any[],
@@ -10,6 +10,7 @@ export type ShaderOptions = {
     bindGroups?:GPUBindGroup[],
     bindings?:{[key:string]:Partial<GPUBindGroupEntry>}
     lastBinding?:number,
+    params?:Param[],
     bufferGroups?:any,
     skipCombinedBindings?:boolean
 }
@@ -79,6 +80,8 @@ export type Param = {
     isUniform?:boolean
 
     binding?:number|string
+    group?:number|string,
+    sharedBinding?:boolean,
 
     isTexture?:boolean,
     isStorageTexture?:boolean, //something to help with identifying in the bindgroup automation 

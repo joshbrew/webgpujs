@@ -103,13 +103,20 @@ export class WebGPUjs {
                 options.functions,
                 options.variableTypes,
                 options.renderPass?.textures,
-                options.lastBinding
+                options.lastBinding,
+                options.params
             );
 
-            if(options.getPrevShaderBindGroups) {
-                let combined = WGSLTranspiler.combineBindings(shader.code, options.getPrevShaderBindGroups);
-                shader.code = combined.code1;
-                (shader as any).altBindings = combined.changes1;
+            if(options.previousPipeline) {
+                for(const key in options.previousPipeline.prototypes) {
+                    let combined = WGSLTranspiler.combineBindings(
+                        shader.code, 
+                        options.previousPipeline.prototypes[key],
+                        false
+                    );
+                    shader.code = combined.code1;
+                    shader.altBindings = combined.changes1;
+                } 
             }
 
             let shaderPipeline;
@@ -144,14 +151,21 @@ export class WebGPUjs {
                         options.functions,
                         options.variableTypes,
                         options.renderPass?.textures,
-                        options.lastBinding
+                        options.lastBinding,
+                        options.params
                     );
                 }
 
-                if(options.getPrevShaderBindGroups) {
-                    let combined = WGSLTranspiler.combineBindings(block.code, options.getPrevShaderBindGroups);
-                    block.code = combined.code1;
-                    block.altBindings = combined.changes1;
+                if(options.previousPipeline) {
+                    for(const key in options.previousPipeline.prototypes) {
+                        let combined = WGSLTranspiler.combineBindings(
+                            block.code, 
+                            options.previousPipeline.prototypes[key],
+                            false
+                        );
+                        block.code = combined.code1;
+                        block.altBindings = combined.changes1;
+                    } 
                 }
 
                 const shaderPipeline = this.init(block,options);
@@ -179,7 +193,8 @@ export class WebGPUjs {
                             options.functions,
                             options.variableTypes,
                             options.renderPass?.textures,
-                            options.lastBinding
+                            options.lastBinding,
+                            options.params
                         );
                     }
                 }
@@ -194,7 +209,8 @@ export class WebGPUjs {
                             options.functions,
                             options.variableTypes,
                             options.renderPass?.textures,
-                            options.lastBinding
+                            options.lastBinding,
+                            block.compute?.params || options.params
                         );
                         options.lastBinding = block.vertex.lastBinding;
                     }
@@ -210,17 +226,25 @@ export class WebGPUjs {
                             options.functions,
                             options.variableTypes,
                             options.renderPass?.textures,
-                            options.lastBinding
+                            options.lastBinding,
+                            block.vertex?.params || block.compute?.params || options.params
                         );
                     }
                 }
 
                 //combine shader bindings where variable names are shared.
-                if(options.getPrevShaderBindGroups) {
+                if(options.previousPipeline) {
                     for(const key in block) {
-                        let combined = WGSLTranspiler.combineBindings(block[key].code, options.getPrevShaderBindGroups);
-                        block[key].code = combined.code1;
-                        block[key].altBindings = combined.changes1;
+                        for(const key2 in options.previousPipeline.prototypes) {
+                            let combined = WGSLTranspiler.combineBindings(
+                                block[key].code, 
+                                options.previousPipeline.prototypes[key2].code,
+                                false
+                            );
+                            block[key].code = combined.code1;
+                            block[key].altBindings = combined.changes1;
+                        }
+                        
                     }
                 }
 
@@ -277,18 +301,19 @@ export class WebGPUjs {
 
         let bindGroupNumber = previousPipeline.bindGroupLayouts.length;
         options.device = previousPipeline.device;
-        if(options.bindGroupLayouts) options.bindGroupLayouts; previousPipeline.bindGroupLayouts.push(...options.bindGroupLayouts);
+        if(options.bindGroupLayouts) 
+            previousPipeline.bindGroupLayouts.push(...options.bindGroupLayouts);
         options.bindGroupNumber = bindGroupNumber;
         options.bindGroupLayouts = previousPipeline.bindGroupLayouts;
         options.bindGroups = previousPipeline.bindGroups;
         options.bufferGroups = previousPipeline.bufferGroups;
-        if(previousPipeline.fragment) {
-            options.getPrevShaderBindGroups = previousPipeline.fragment.code;
-        } else if(previousPipeline.compute) {
-            options.getPrevShaderBindGroups = previousPipeline.compute.code;
-        }
+        options.previousPipeline = previousPipeline;
+        options.params = previousPipeline.prototypes['fragment'] ? previousPipeline.prototypes['fragment'].params : previousPipeline.prototypes['compute'].params; //get prev params for shader transpilation
 
-        return WebGPUjs.createPipeline(shaders,options); //generate a new helper for the new shaders that combines previous information like layouts and buffers. Variable names can reference the same bindings now inputted in whatever order.
+        return WebGPUjs.createPipeline(
+            shaders,
+            options
+        ); //generate a new helper for the new shaders that combines previous information like layouts and buffers. Variable names can reference the same bindings now inputted in whatever order.
     }
 
     static cleanup = (shaderPipeline) => {

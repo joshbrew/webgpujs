@@ -3,7 +3,7 @@ export type ShaderOptions = {
     device?: GPUDevice;
     prependCode?: string;
     bindGroupNumber?: number;
-    getPrevShaderBindGroups?: string;
+    previousPipeline?: any;
     functions?: Function[];
     variableTypes?: {
         [key: string]: string | {
@@ -18,6 +18,7 @@ export type ShaderOptions = {
         [key: string]: Partial<GPUBindGroupEntry>;
     };
     lastBinding?: number;
+    params?: Param[];
     bufferGroups?: any;
     skipCombinedBindings?: boolean;
 };
@@ -78,6 +79,8 @@ export type Param = {
     isModified: boolean;
     isUniform?: boolean;
     binding?: number | string;
+    group?: number | string;
+    sharedBinding?: boolean;
     isTexture?: boolean;
     isStorageTexture?: boolean;
     isSampler?: boolean;

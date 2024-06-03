@@ -1,4 +1,4 @@
-import { TranspiledShader } from "./types";
+import { Param, TranspiledShader } from "./types";
 export declare class WGSLTranspiler {
     static builtInUniforms: {
         resX: {
@@ -51,6 +51,7 @@ export declare class WGSLTranspiler {
     }, textureOptions?: {
         [key: string]: {
             binding?: string | number;
+            group?: string | number;
             type?: string;
             isDepth?: boolean;
             isStorage?: boolean;
@@ -58,9 +59,9 @@ export declare class WGSLTranspiler {
             isComparisonSampler?: boolean;
             [key: string]: any;
         };
-    }, minBinding?: number): {
+    }, minBinding?: number, prevParams?: Param[]): {
         code: string;
-        params: any[];
+        params: Param[];
         defaultUniforms: any;
         lastBinding: number;
     };
@@ -77,7 +78,7 @@ export declare class WGSLTranspiler {
         consts: any;
     };
     static indentCode(code: any): string;
-    static combineBindings(bindings1str: string, bindings2str: string): {
+    static combineBindings(bindings1str: string, bindings2str: string, noOverlap?: boolean): {
         code1: string;
         changes1: any;
         code2: string;
@@ -95,13 +96,14 @@ export declare class WGSLTranspiler {
     }, textureOptions?: {
         [key: string]: {
             binding?: string | number;
+            group?: string | number;
             isDepth?: boolean;
             isStorage?: boolean;
             isSampler?: boolean;
             isComparisonSampler?: boolean;
             [key: string]: any;
         };
-    }, lastBinding?: number): TranspiledShader;
+    }, lastBinding?: number, params?: Param[]): TranspiledShader;
 }
 export declare const replacements: {
     'Math.PI': string;

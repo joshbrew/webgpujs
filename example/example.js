@@ -651,9 +651,9 @@ WebGPUjs.createPipeline({
 //Example 5, multiple compute shaders then a render, w/ storage texture usage like a boss
 
 function texCompute() {
-    let coords = vec2f(threadId.xy) / vec2f(textureDimensions(outputTex));
+    let coords = vec2f(threadId.xy) / vec2f(textureDimensions(outputTex1));
     let color = vec4f(0.5 + 0.5 * sin(coords.x + utcTime), 0.5 + 0.5*cos(coords.y + utcTime), 0.5, 1.0);
-    textureStore(outputTex, vec2i(threadId.xy), color);
+    textureStore(outputTex1, vec2i(threadId.xy), color);
 }
 
 function texCompute2() {
@@ -664,14 +664,14 @@ function texCompute2() {
     for (var dx = -1; dx <= 1; dx++) {
         for (var dy = -1; dy <= 1; dy++) {
             let offset = vec2i(dx, dy);
-            let samplePos = vec2i(id.xy) + offset;
+            let samplePos = vec2i(threadId.xy) + offset;
             if (samplePos.x >= 0 && samplePos.y >= 0 && samplePos.x < size.x && samplePos.y < size.y) {
                 sum += textureLoad(inputTex, samplePos, 0);
             }
         }
     }
     let color = sum / 9.0;
-    textureStore(outputTex, vec2i(threadId.xy), color);
+    textureStore(outputTex2, vec2i(threadId.xy), color);
 }
 
 function texVertex() {
@@ -681,13 +681,15 @@ function texVertex() {
         vec2f(-1.0, 3.0)
     );
 
-    position = vec4f(tri[vertexIndex], 0.0, 1.0);
+    let xy = tri[vertexIndex];
+    position = vec4f(xy, 0.0, 1.0);
+    texCoord = xy;
 }
 
 function texFragment() {
-    let texColor = textureLoad(outputTex, vec2f(position.xy), 0);
+    let texColor = textureSample(inputTex2, outputSampler, texCoord);
     //let gray = dot(color.xyz, vec3f(0.299, 0.587, 0.114));
-    return vec4f(texColor, 1.0);
+    return texColor;
 }
 
 async function createTexPipeline() {
@@ -711,7 +713,7 @@ async function createTexPipeline() {
                         width:canvas4.width,
                         height:canvas4.height
                     },
-                    outputTex:{
+                    outputTex1:{
                         buffer:new Float32Array(canvas4.width*canvas4.height*4).buffer, //placeholder for setting the storage texture
                         width:canvas4.width,
                         height:canvas4.height,
@@ -723,11 +725,13 @@ async function createTexPipeline() {
         }
     );
 
-    const combinedPipeline = await WebGPUjs.combineShaders(
+    console.log(pipeline1.prototypes.compute.code);
+
+    const pipeline2 = await WebGPUjs.combineShaders(
         {
             compute:texCompute2,
             vertex:texVertex,
-            fragmnet:texFragment
+            fragment:texFragment
         },
         {
             canvas:canvas4,
@@ -736,10 +740,39 @@ async function createTexPipeline() {
             computePass:{
                 workgroupsX:canvas4.width/64,
                 workgroupsY:canvas4.height/64
+            },
+            renderPass:{
+                vertexCount:3,
+                vbos:[
+                    {
+                        texCoord:'vec2f'
+                    }
+                ],
+                textures:{
+                    inputTex2:{ //when storage texture read_write is available we can do away with this
+                        source:await createImageBitmap(canvas4),
+                        width:canvas4.width,
+                        height:canvas4.height,
+                        binding:'outputTex2'
+                    },
+                    outputTex2:{
+                        buffer:new Float32Array(canvas4.width*canvas4.height*4).buffer, //placeholder for setting the storage texture
+                        width:canvas4.width,
+                        height:canvas4.height,
+                        isStorage:true,
+                        binding:'inputTex2' //make sure it uses the same binding as the input texture
+                    }
+                }
             }
         },
         pipeline1
     )
+
+    console.log(
+        pipeline2.prototypes.compute.code,
+        pipeline2.prototypes.vertex.code,
+        pipeline2.prototypes.fragment.code,
+    );
 
     //now we should be able to run shader set 1 then shader set 2 and buffers will be shared
     pipeline1.process()

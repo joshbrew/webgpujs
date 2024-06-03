@@ -98,7 +98,6 @@ export class ShaderHelper {
                 shaders.fragment.altBindings = Object.keys(combined.changes2).length > 0 ? combined.changes2 : undefined; 
             }
             if(shaders.vertex?.params && shaders.fragment){
-                if(shaders.fragment.params) shaders.vertex.params.push(...shaders.fragment.params); //make sure the vertex and fragment bindings are combined
                 shaders.fragment.params = shaders.vertex.params;
             }
         }
@@ -467,7 +466,7 @@ export class ShaderContext {
     ast: any[];
 
     params: Param[];
-    
+
     funcStr: string;
     defaultUniforms: any;
     type: "compute" | "vertex" | "fragment";
@@ -557,7 +556,7 @@ export class ShaderContext {
             let isReturned = node.isReturned;
             if (node.isUniform) {
                 if (typeof uniformBufferIdx === 'undefined') {
-                    uniformBufferIdx = i;
+                    uniformBufferIdx = node.binding;
                     bufferIncr++;
                     const buffer = {
                         name:'uniform', //custom label for us to refer to
@@ -842,18 +841,24 @@ export class ShaderContext {
         
         if(bufferGroup.textures[name]) bufferGroup.textures[name].destroy();
         bufferGroup.textures[name] = texture;
-
         //console.log(texture);
 
         let texInfo = {} as any;
+
         if(data.source) texInfo.source = data.source;
-        else texInfo.source = data; 
+        else if(data instanceof ImageBitmap) texInfo.source = data;
+        else if(data.buffer) {
+            texInfo.texture = texture;
+            if(data.mipLevelCount) {
+                texInfo.mipLevel = data.mipLevelCount;
+            }
+        }
 
         if(data.layout) Object.assign(texInfo,data.layout);
         //todo: more texture settings and stuff
         if(data.buffer)
             this.device.queue.writeTexture(
-                texInfo,
+                texInfo as GPUImageCopyTexture,
                 data.buffer,
                 { 
                     bytesPerRow: data.bytesPerRow ? data.bytesPerRow : data.width * 4 
@@ -865,7 +870,7 @@ export class ShaderContext {
             );
         else if (texInfo.source)
             this.device.queue.copyExternalImageToTexture(
-                texInfo, //e.g. an ImageBitmap
+                texInfo as GPUImageCopyExternalImage, //e.g. an ImageBitmap
                 { texture },
                 [ data.width, data.height ],
             );
