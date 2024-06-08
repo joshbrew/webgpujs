@@ -11,7 +11,7 @@ export type ShaderOptions = {
     bindings?:{[key:string]:Partial<GPUBindGroupEntry>}
     lastBinding?:number,
     params?:Param[],
-    bufferGroups?:any,
+    bufferGroups?:BufferGroup[],
     skipCombinedBindings?:boolean
 }
 

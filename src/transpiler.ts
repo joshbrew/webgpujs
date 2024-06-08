@@ -227,9 +227,9 @@ export class WGSLTranspiler {
                         isModified
                     });
                 } else if (token.startsWith('vec') || token.startsWith('mat')) {
-                    const typeMatch = token.match(/(vec\d+|mat\d+x\d+)(f|h|i|u|<[^>]+>)?\(([^)]+)\)/);
+                    const typeMatch = token.match(/(atomic\d+|vec\d+|mat\d+x\d+)(f|h|i|u|<[^>]+>)?\(([^)]+)\)/);
                     if (typeMatch) {
-                        let type = typeMatch[1]; // Extracts 'vecN' or 'matNxM'
+                        let type = typeMatch[1]; // Extracts 'vecN' or 'matNxM' or 'atomic<i32>'
                         let format = typeMatch[2]; // Extracts 'f', 'h', 'i', 'u', or '<...>'
                 
                         // Convert shorthand format to full format
@@ -337,6 +337,30 @@ export class WGSLTranspiler {
         
                 return `mat${matSize}${type}`;
             }
+        } else if (value.startsWith('atomic')) {
+            // Matches both 'vec3f' and 'vec3<f32>' formats
+            const VecMatch = value.match(/atomic(\d+)(f|h|i|u|<[^>]+>)?/);
+            if (VecMatch) {
+                const vecSize = VecMatch[1];
+                let type = VecMatch[2];
+        
+                if (!type) {
+                    // Infer type if not explicitly provided
+                    type = '<i32>';
+                } else if (type.length === 1) {
+                    // Convert single-letter type to full format
+                    switch (type) {
+                        //case 'f': type = '<f32>'; break;
+                        //case 'h': type = '<f16>'; break;
+                        case 'i': type = '<i32>'; break;
+                        case 'u': type = '<u32>'; break;
+                    }
+                }
+        
+                return `atomic${vecSize}${type}`;
+            }
+
+        //!! Various javascript syntax we can transform into acceptable WGSL syntax !!
         } else if (value.startsWith('[')) {
             // Infer the type from the first element if the array is initialized with values
             const firstElement = value.split(',')[0].substring(1);
@@ -972,11 +996,11 @@ fn frag_main(
 
 
         //code = code.replace(/const/g, 'let');
-        code = code.replace(/const (\w+) = (?!(vec\d+|mat\d+|\[.*|array))/gm, 'let $1 = ')
+        code = code.replace(/const (\w+) = (?!(atomic\d+|vec\d+|mat\d+|\[.*|array))/gm, 'let $1 = ')
 
-        const vecMatDeclarationRegex = /(let|var) (\w+) = (vec\d+|mat\d+)/gm;
+        const vecMatDeclarationRegex = /(let|var) (\w+) = (atomic\d+|vec\d+|mat\d+)/gm;
         code = code.replace(vecMatDeclarationRegex, 'var $2 = $3');
-        const vecMatDeclarationRegex2 = /const (\w+) = (vec\d+|mat\d+)/gm;
+        const vecMatDeclarationRegex2 = /const (\w+) = (atomic\d+|vec\d+|mat\d+)/gm;
         code = code.replace(vecMatDeclarationRegex2, 'const $2 = $3');
 
         // ------ Array conversion ------ ------ ------ ------ ------ ------ ------
@@ -1038,7 +1062,7 @@ fn frag_main(
 
             // Extract the type from the first value (assumes all values in the array are of the same type)
             let arrayValueType = inferredType;
-            const arrayValueTypeMatch = valuesWithoutComments.match(/^(vec\d+f?|mat\d+x\d+)/gm);
+            const arrayValueTypeMatch = valuesWithoutComments.match(/^(vec\d+(f|h|u|i)?|mat\d+x\d+|atomic+(f|h|u|i)?\d)/gm);
             if (arrayValueTypeMatch) {
                 arrayValueType = arrayValueTypeMatch[0];
             }
@@ -1135,18 +1159,22 @@ fn frag_main(
         // Handle mathematical operations
         code = replaceJSFunctions(code, replacements);
 
-        // Handle vector and matrix creation
+        // Handle vector and matrix creation 
         const vecMatCreationRegex = /(vec(\d+)|mat(\d+))\(([^)]+)\)/gm;
         code = code.replace(vecMatCreationRegex, (match, type, vecSize, matSize, args) => {
+           
             // Split the arguments and check if any of them contain a decimal point
+
             const argArray = args.split(',').map(arg => arg.trim());
             const hasDecimal = argArray.some(arg => arg.includes('.'));
             
+
             // Check if the type includes 'f', 'u', 'i', or 'h'
-            const isVecOrMatWithSpecificType = /^(vec|mat)\d+[fuhi]/.test(type);
+            const isVecOrMatWithSpecificType = /^(vec|mat|atomic)\d+[fuhi]/.test(type);
 
             // Determine the inferred type
             let inferredType;
+
             if (isVecOrMatWithSpecificType) {
                 // Extract the type suffix (f, u, i, or h)
                 const typeSuffix = type.match(/[fuhi]$/)[0];

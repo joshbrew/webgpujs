@@ -37,7 +37,7 @@ export class ShaderHelper {
     //copy these to new ShaderHelpers to share buffers between shaders
     bindGroupLayouts:GPUBindGroupLayout[]=[];
     bindGroups:GPUBindGroup[]=[];
-    bufferGroups:any[]=[];
+    bufferGroups:BufferGroup[]=[];
 
     constructor(
         shaders:{
@@ -128,7 +128,9 @@ export class ShaderHelper {
             this.compute.bindGroups = this.bindGroups;
             this.compute.bufferGroups = this.bufferGroups;
 
-            const entries = this.compute.createBindGroupEntries(options?.renderPass?.textures);
+            const entries = this.compute.createBindGroupEntries(
+                options?.renderPass?.textures
+            );
 
             this.compute.bindGroupLayoutEntries = entries.length > 0 ? entries : undefined;
             this.compute.setBindGroupLayout(entries, options.bindGroupNumber);
@@ -142,7 +144,7 @@ export class ShaderHelper {
             const entries = this.fragment.createBindGroupEntries(
                 options?.renderPass?.textures, 
                 undefined, 
-                GPUShaderStage.VERTEX |GPUShaderStage.FRAGMENT
+                GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT
             );
 
             this.fragment.bindGroupLayoutEntries = entries.length > 0 ? entries : undefined;
@@ -534,24 +536,24 @@ export class ShaderContext {
             bufferGroup = this.makeBufferGroup(bindGroupNumber);
         }
 
-        //let texturesUpdated = false;
-        if(textures) for(const key in textures) {
-            let isStorage = bufferGroup.params.find((node, i) => { 
-                if(node.name === key && node.isStorageTexture) return true;
-            }); //assign storage texture primitives
-            if(isStorage) textures[key].isStorage = true;
-            if(textures[key].source || textures[key].buffer || textures[key] instanceof ImageBitmap) {
-                this.updateTexture(textures[key], key, bindGroupNumber); //generate texture buffers and samplers
-                //texturesUpdated = true;
-            }   
-        }
-
-        let texKeys; let texKeyRot = 0; let baseMipLevel = 0;
+        let texKeys = []; let texKeyRot = 0; let baseMipLevel = 0;
         if(bufferGroup.textures) texKeys = Object.keys(bufferGroup.textures);
         let assignedEntries = {};
 
         const entries = bufferGroup.params ? bufferGroup.params.map((node, i) => {
             if(node.group !== bindGroupNumber) return undefined;
+
+            if(textures?.[node.name]) {
+               
+                if(textures[node.name].source || textures[node.name].buffer || textures[node.name] instanceof ImageBitmap) {
+                    if(node.isStorageTexture) textures[node.name].isStorage = true;
+                    this.updateTexture(textures[node.name], node.name, bindGroupNumber); //generate texture buffers and samplers
+                    //texturesUpdated = true;
+                    if(!texKeys.includes(node.name)) 
+                        texKeys.push(node.name);
+                }
+            }
+
             assignedEntries[node.name] = true;
             let isReturned = node.isReturned;
             if (node.isUniform) {
@@ -670,6 +672,8 @@ export class ShaderContext {
                 }
             } as GPUBindGroupLayoutEntry)
         }
+
+        console.log(entries);
 
         this.bindGroupLayoutEntries = entries;
         return entries as GPUBindGroupLayoutEntry[];
@@ -1781,7 +1785,7 @@ export class ShaderContext {
                 computePass.setPipeline(this.computePipeline);
 
                 const withBindGroup = (group,i) => {
-                    if(i === this.bindGroupNumber || this.altBindings) computePass.setBindGroup(i,group);
+                    if(group && (i === this.bindGroupNumber || this.altBindings)) computePass.setBindGroup(i,group);
                 }
                 
                 this.bindGroups.forEach(withBindGroup);

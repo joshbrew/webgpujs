@@ -194,7 +194,7 @@
               isModified
             });
           } else if (token.startsWith("vec") || token.startsWith("mat")) {
-            const typeMatch = token.match(/(vec\d+|mat\d+x\d+)(f|h|i|u|<[^>]+>)?\(([^)]+)\)/);
+            const typeMatch = token.match(/(atomic\d+|vec\d+|mat\d+x\d+)(f|h|i|u|<[^>]+>)?\(([^)]+)\)/);
             if (typeMatch) {
               let type = typeMatch[1];
               let format = typeMatch[2];
@@ -309,6 +309,25 @@
             }
           }
           return `mat${matSize}${type}`;
+        }
+      } else if (value.startsWith("atomic")) {
+        const VecMatch = value.match(/atomic(\d+)(f|h|i|u|<[^>]+>)?/);
+        if (VecMatch) {
+          const vecSize = VecMatch[1];
+          let type = VecMatch[2];
+          if (!type) {
+            type = "<i32>";
+          } else if (type.length === 1) {
+            switch (type) {
+              case "i":
+                type = "<i32>";
+                break;
+              case "u":
+                type = "<u32>";
+                break;
+            }
+          }
+          return `atomic${vecSize}${type}`;
         }
       } else if (value.startsWith("[")) {
         const firstElement = value.split(",")[0].substring(1);
@@ -800,10 +819,10 @@ fn frag_main(
         stringPlaceholderIndex++;
         return placeholder;
       });
-      code = code.replace(/const (\w+) = (?!(vec\d+|mat\d+|\[.*|array))/gm, "let $1 = ");
-      const vecMatDeclarationRegex = /(let|var) (\w+) = (vec\d+|mat\d+)/gm;
+      code = code.replace(/const (\w+) = (?!(atomic\d+|vec\d+|mat\d+|\[.*|array))/gm, "let $1 = ");
+      const vecMatDeclarationRegex = /(let|var) (\w+) = (atomic\d+|vec\d+|mat\d+)/gm;
       code = code.replace(vecMatDeclarationRegex, "var $2 = $3");
-      const vecMatDeclarationRegex2 = /const (\w+) = (vec\d+|mat\d+)/gm;
+      const vecMatDeclarationRegex2 = /const (\w+) = (atomic\d+|vec\d+|mat\d+)/gm;
       code = code.replace(vecMatDeclarationRegex2, "const $2 = $3");
       const arrayVars = [];
       code.replace(/(let|var|const) (\w+) = (array|\[)/gm, (match, p1, varName) => {
@@ -846,7 +865,7 @@ fn frag_main(
         const isVecWithF = /^vec\d+f/.test(valuesWithoutComments);
         const inferredType = valuesWithoutComments.startsWith("mat") || hasDecimal || isVecWithF ? "f32" : "i32";
         let arrayValueType = inferredType;
-        const arrayValueTypeMatch = valuesWithoutComments.match(/^(vec\d+f?|mat\d+x\d+)/gm);
+        const arrayValueTypeMatch = valuesWithoutComments.match(/^(vec\d+(f|h|u|i)?|mat\d+x\d+|atomic+(f|h|u|i)?\d)/gm);
         if (arrayValueTypeMatch) {
           arrayValueType = arrayValueTypeMatch[0];
         }
@@ -930,7 +949,7 @@ for (var i: i32 = 0; i < ${size}; i = i + 1) {
       code = code.replace(vecMatCreationRegex, (match, type, vecSize, matSize, args) => {
         const argArray = args.split(",").map((arg) => arg.trim());
         const hasDecimal = argArray.some((arg) => arg.includes("."));
-        const isVecOrMatWithSpecificType = /^(vec|mat)\d+[fuhi]/.test(type);
+        const isVecOrMatWithSpecificType = /^(vec|mat|atomic)\d+[fuhi]/.test(type);
         let inferredType;
         if (isVecOrMatWithSpecificType) {
           const typeSuffix = type.match(/[fuhi]$/)[0];
@@ -2000,22 +2019,21 @@ fn vtx_main(
       if (!bufferGroup) {
         bufferGroup = this.makeBufferGroup(bindGroupNumber);
       }
-      if (textures) for (const key in textures) {
-        let isStorage = bufferGroup.params.find((node, i) => {
-          if (node.name === key && node.isStorageTexture) return true;
-        });
-        if (isStorage) textures[key].isStorage = true;
-        if (textures[key].source || textures[key].buffer || textures[key] instanceof ImageBitmap) {
-          this.updateTexture(textures[key], key, bindGroupNumber);
-        }
-      }
-      let texKeys;
+      let texKeys = [];
       let texKeyRot = 0;
       let baseMipLevel = 0;
       if (bufferGroup.textures) texKeys = Object.keys(bufferGroup.textures);
       let assignedEntries = {};
       const entries = bufferGroup.params ? bufferGroup.params.map((node, i) => {
         if (node.group !== bindGroupNumber) return void 0;
+        if (textures?.[node.name]) {
+          if (textures[node.name].source || textures[node.name].buffer || textures[node.name] instanceof ImageBitmap) {
+            if (node.isStorageTexture) textures[node.name].isStorage = true;
+            this.updateTexture(textures[node.name], node.name, bindGroupNumber);
+            if (!texKeys.includes(node.name))
+              texKeys.push(node.name);
+          }
+        }
         assignedEntries[node.name] = true;
         let isReturned = node.isReturned;
         if (node.isUniform) {
@@ -2131,6 +2149,7 @@ fn vtx_main(
           }
         });
       }
+      console.log(entries);
       this.bindGroupLayoutEntries = entries;
       return entries;
     };
@@ -2919,7 +2938,7 @@ fn vtx_main(
           const computePass = commandEncoder.beginComputePass();
           computePass.setPipeline(this.computePipeline);
           const withBindGroup = (group, i) => {
-            if (i === this.bindGroupNumber || this.altBindings) computePass.setBindGroup(i, group);
+            if (group && (i === this.bindGroupNumber || this.altBindings)) computePass.setBindGroup(i, group);
           };
           this.bindGroups.forEach(withBindGroup);
           const firstinp = Object.values(bufferGroup.inputBuffers)[0];
@@ -5646,4 +5665,123 @@ fn vtx_main(
     };
     requestAnimationFrame(loop);
   });
+  function texCompute() {
+    let coords = vec2f(threadId.xy) / vec2f(textureDimensions(outputTex1));
+    let color2 = vec4f(0.5 + 0.5 * sin(coords.x + utcTime), 0.5 + 0.5 * cos(coords.y + utcTime), 0.5, 1);
+    textureStore(outputTex1, vec2i(threadId.xy), color2);
+  }
+  function texCompute2() {
+    let size = vec2i(textureDimensions(inputTex));
+    var sum = vec4f(0);
+    for (var dx = -1; dx <= 1; dx++) {
+      for (var dy = -1; dy <= 1; dy++) {
+        let offset = vec2i(dx, dy);
+        let samplePos = vec2i(threadId.xy) + offset;
+        if (samplePos.x >= 0 && samplePos.y >= 0 && samplePos.x < size.x && samplePos.y < size.y) {
+          sum += textureLoad(inputTex, samplePos, 0);
+        }
+      }
+    }
+    let color2 = sum / 9;
+    textureStore(outputTex2, vec2i(threadId.xy), color2);
+  }
+  function texVertex() {
+    const tri = array(
+      vec2f(-1, -1),
+      vec2f(3, -1),
+      vec2f(-1, 3)
+    );
+    let xy = tri[vertexIndex];
+    position = vec4f(xy, 0, 1);
+    texCoord = xy;
+  }
+  function texFragment() {
+    let texColor = textureSample(inputTex2, outputSampler, texCoord);
+    return texColor;
+  }
+  async function createTexPipeline() {
+    const canvas4 = document.createElement("canvas");
+    const pipeline1 = await WebGPUjs.createPipeline(
+      {
+        compute: texCompute
+      },
+      {
+        workGroupSize: 64,
+        computePass: {
+          workgroupsX: canvas4.width / 64,
+          workgroupsY: canvas4.height / 64
+        },
+        renderPass: {
+          textures: {
+            inputTex: {
+              //when storage texture read_write is available we can do away with this
+              source: await createImageBitmap(canvas4),
+              width: canvas4.width,
+              height: canvas4.height
+            },
+            outputTex1: {
+              buffer: new Float32Array(canvas4.width * canvas4.height * 4).buffer,
+              //placeholder for setting the storage texture
+              width: canvas4.width,
+              height: canvas4.height,
+              isStorage: true,
+              binding: "inputTex"
+              //make sure it uses the same binding as the input texture
+            }
+          }
+        }
+      }
+    );
+    console.log(pipeline1.prototypes.compute.code);
+    const pipeline2 = await WebGPUjs.combineShaders(
+      {
+        compute: texCompute2,
+        vertex: texVertex,
+        fragment: texFragment
+      },
+      {
+        canvas: canvas4,
+        workGroupSize: 64,
+        computePass: {
+          workgroupsX: canvas4.width / 64,
+          workgroupsY: canvas4.height / 64
+        },
+        renderPass: {
+          vertexCount: 3,
+          vbos: [
+            {
+              texCoord: "vec2f"
+            }
+          ],
+          textures: {
+            inputTex2: {
+              //when storage texture read_write is available we can do away with this
+              source: await createImageBitmap(canvas4),
+              width: canvas4.width,
+              height: canvas4.height,
+              binding: "outputTex2"
+            },
+            outputTex2: {
+              buffer: new Float32Array(canvas4.width * canvas4.height * 4).buffer,
+              //placeholder for setting the storage texture
+              width: canvas4.width,
+              height: canvas4.height,
+              isStorage: true,
+              binding: "inputTex2"
+              //make sure it uses the same binding as the input texture
+            }
+          }
+        }
+      },
+      pipeline1
+    );
+    console.log(
+      pipeline2.prototypes.compute.code,
+      pipeline2.prototypes.vertex.code,
+      pipeline2.prototypes.fragment.code
+    );
+    pipeline1.process();
+  }
+  createTexPipeline();
 })();
+//!! Various javascript syntax we can transform into acceptable WGSL syntax !!
