@@ -261,6 +261,7 @@
       return ast;
     };
     static inferTypeFromValue(value, funcStr, ast, defaultValue = "f32") {
+      if (!value) return defaultValue;
       value = value.trim();
       if (value === "true" || value === "false") return "bool";
       else if (value.startsWith('"') || value.startsWith("'") || value.startsWith("`")) return value.substring(1, value.length - 1);
@@ -674,18 +675,17 @@
       }
       return { code, params, defaultUniforms, lastBinding: bindingIncr };
     }
-    static extractAndTransposeInnerFunctions = (body, extract = true, ast, params, shaderType, vertexBufferOptions) => {
+    static extractAndTransposeInnerFunctions(body, extract = true, ast, params, shaderType, vertexBufferOptions) {
       const functionRegex = /function (\w+)\(([^()]*|\((?:[^()]*|\([^()]*\))*\))*\) \{([\s\S]*?)\}/g;
       let match;
       let extractedFunctions = "";
       while ((match = functionRegex.exec(body)) !== null) {
-        const functionHead = match[0];
         const funcName = match[1];
         const funcBody = match[3];
-        let paramString = functionHead.substring(functionHead.indexOf("(") + 1, functionHead.lastIndexOf(")"));
+        let paramString = match[2];
         let outputParam;
-        const regex = /return\s+([\s\S]*?);/;
-        const retmatch = body.match(regex);
+        const regex = new RegExp(`return\\s+(${this.variablePattern("[\\s\\S]*?")});`);
+        const retmatch = funcBody.match(regex);
         if (retmatch) {
           let inferredType = this.inferTypeFromValue(retmatch[1], body, ast, false);
           if (inferredType) {
@@ -700,13 +700,16 @@
           return vname + ": " + inferredType;
         });
         const transposedBody = this.transposeBody(funcBody, funcBody, params2, shaderType, true, void 0, false, vertexBufferOptions).code;
-        extractedFunctions += `fn ${funcName}(${params2}) -> ${outputParam} {${transposedBody}}
+        extractedFunctions += `fn ${funcName}(${params2.join(", ")}) -> ${outputParam} {${transposedBody}}
 
 `;
       }
       if (extract) body = body.replace(functionRegex, "");
       return { body, extractedFunctions };
-    };
+    }
+    static variablePattern(content) {
+      return content.replace(/[-\/\\^$*+?.()|[\]{}]/g, "\\$&");
+    }
     static generateMainFunctionWorkGroup(funcStr, ast, params, shaderType = "compute", vertexBufferOptions = [{
       color: "vec4<f32>"
     }], workGroupSize = 64, gpuFuncs) {
@@ -830,9 +833,9 @@ fn frag_main(
         return match;
       });
       if (shaderType !== "vertex" && shaderType !== "fragment") {
-        code = code.replace(/(\w+)\[([\w\s+\-*\/]+)\]/gm, (match, p1, p2) => {
+        code = code.replace(/(\w+)\[([\w\s+\-*%&\/]+)\]/gm, (match, p1, p2) => {
           if (arrayVars.includes(p1)) return match;
-          return `${p1}.values[${p2}]`;
+          return `${p1}.values[${p2.replace(/(\w+)\[([\w\s+\-*\/]+)\]/g, "$1.values[$2]")}]`;
         });
       } else {
         let names = ["position"];
@@ -844,7 +847,7 @@ fn frag_main(
         let namesPattern = names.join("|");
         code = code.replace(new RegExp(`(${namesPattern})|(\\w+)\\[([\\w\\s+\\-*\\/]+)\\]`, "gm"), (match, p1, p2, p3) => {
           if (p1 || arrayVars.includes(p2)) return match;
-          return `${p2}.values[${p3}]`;
+          return `${p2}.values[${p3.replace(/(\w+)\[([\w\s+\-*\/]+)\]/g, "$1.values[$2]")}]`;
         });
       }
       code = code.replace(/(\w+)\.length/gm, "arrayLength(&$1.values)");
@@ -1716,7 +1719,9 @@ for (var i: i32 = 0; i < ${size}; i = i + 1) {
         this.compute.bindGroupLayouts = this.bindGroupLayouts;
         this.compute.bindGroups = this.bindGroups;
         this.compute.bufferGroups = this.bufferGroups;
-        const entries = this.compute.createBindGroupEntries(options?.renderPass?.textures);
+        const entries = this.compute.createBindGroupEntries(
+          options?.renderPass?.textures
+        );
         this.compute.bindGroupLayoutEntries = entries.length > 0 ? entries : void 0;
         this.compute.setBindGroupLayout(entries, options.bindGroupNumber);
       }
@@ -2149,7 +2154,6 @@ fn vtx_main(
           }
         });
       }
-      console.log(entries);
       this.bindGroupLayoutEntries = entries;
       return entries;
     };
@@ -5246,7 +5250,7 @@ fn vtx_main(
             console.timeEnd("run DFT dynamically resizing inputData and outputData");
             console.log("Results can be dynamically resized:", r3);
             console.time("addFunction and recompile shader pipeline");
-            pipeline.addFunction(function mul(a = vec2f(2, 0), b = vec2f(2, 0)) {
+            pipeline.addFunction(function mul(a = "vec2f", b = "vec2f") {
               return a * b;
             });
             console.timeEnd("addFunction and recompile shader pipeline");
@@ -5665,123 +5669,107 @@ fn vtx_main(
     };
     requestAnimationFrame(loop);
   });
-  function texCompute() {
-    let coords = vec2f(threadId.xy) / vec2f(textureDimensions(outputTex1));
-    let color2 = vec4f(0.5 + 0.5 * sin(coords.x + utcTime), 0.5 + 0.5 * cos(coords.y + utcTime), 0.5, 1);
-    textureStore(outputTex1, vec2i(threadId.xy), color2);
-  }
-  function texCompute2() {
-    let size = vec2i(textureDimensions(inputTex));
-    var sum = vec4f(0);
-    for (var dx = -1; dx <= 1; dx++) {
-      for (var dy = -1; dy <= 1; dy++) {
-        let offset = vec2i(dx, dy);
-        let samplePos = vec2i(threadId.xy) + offset;
-        if (samplePos.x >= 0 && samplePos.y >= 0 && samplePos.x < size.x && samplePos.y < size.y) {
-          sum += textureLoad(inputTex, samplePos, 0);
-        }
+  async function createNoiseGeneratorExample() {
+    let seed = 12345;
+    let gradients = [
+      // vec3f(1,1,0), vec3f(-1,1,0), vec3f(1,-1,0), vec3f(-1,-1,0),
+      // vec3f(1,0,1), vec3f(-1,0,1), vec3f(1,0,-1), vec3f(-1,0,-1),
+      // vec3f(0,1,1), vec3f(0,-1,1), vec3f(0,1,-1), vec3f(0,-1,-1)
+    ];
+    function perlinNoise3D(outputArray = "array<f32>", permutations = "array<i32>", gradients2 = "array<vec3f>", gridDim = "vec3u", offset = "vec3f", zoom = "f32", octaves = "i32", lacunarity = "f32", gain = "f32", shift = "vec3f", turbulence = "i32", seed2 = "f32") {
+      function fade(t) {
+        return t * t * t * (t * (t * 6 - 15) + 10);
       }
+      function lerp(t, a, b) {
+        return a + t * (b - a);
+      }
+      function dot(x2, y2, z2, g = "vec3f") {
+        return g.x * x2 + g.y * y2 + g.z * z2;
+      }
+      function noise(x2, y2, z2) {
+        const X = i32(Math.floor(x2)) & 255;
+        const Y = i32(Math.floor(y2)) & 255;
+        const Z = i32(Math.floor(z2)) & 255;
+        const xf = x2 - Math.floor(x2);
+        const yf = y2 - Math.floor(y2);
+        const zf = z2 - Math.floor(z2);
+        const u = fade(xf);
+        const v = fade(yf);
+        const w = fade(zf);
+        const A = permutations[X] + Y;
+        const AA = permutations[A] + Z;
+        const AB = permutations[A + 1] + Z;
+        const B = permutations[X + 1] + Y;
+        const BA = permutations[B] + Z;
+        const BB = permutations[B + 1] + Z;
+        const permAA = permutations[AA];
+        const permBA = permutations[BA];
+        const permAB = permutations[AB];
+        const permBB = permutations[BB];
+        const permAA1 = permutations[AA + 1];
+        const permBA1 = permutations[BA + 1];
+        const permAB1 = permutations[AB + 1];
+        const permBB1 = permutations[BB + 1];
+        const gradAA = gradients2[permAA % 12];
+        const gradBA = gradients2[permBA % 12];
+        const gradAB = gradients2[permAB % 12];
+        const gradBB = gradients2[permBB % 12];
+        const gradAA1 = gradients2[permAA1 % 12];
+        const gradBA1 = gradients2[permBA1 % 12];
+        const gradAB1 = gradients2[permAB1 % 12];
+        const gradBB1 = gradients2[permBB1 % 12];
+        return lerp(
+          w,
+          lerp(
+            v,
+            lerp(u, dot(xf, yf, zf, gradAA), dot(xf - 1, yf, zf, gradBA)),
+            lerp(u, dot(xf, yf - 1, zf, gradAB), dot(xf - 1, yf - 1, zf, gradBB))
+          ),
+          lerp(
+            v,
+            lerp(u, dot(xf, yf, zf - 1, gradAA1), dot(xf - 1, yf, zf - 1, gradBA1)),
+            lerp(u, dot(xf, yf - 1, zf - 1, gradAB1), dot(xf - 1, yf - 1, zf - 1, gradBB1))
+          )
+        );
+      }
+      var x = (f32(threadId.x) + offset.x) / zoom;
+      var y = (f32(threadId.y) + offset.y) / zoom;
+      var z = (f32(threadId.z) + offset.z) / zoom;
+      var sum = f32(0);
+      var amp = f32(1);
+      var freq = f32(1);
+      var angle = seed2 * 2 * Math.PI;
+      const angleIncrement = Math.PI / 4;
+      for (let i = 0; i < octaves; i++) {
+        var noiseValue = noise(x * freq, y * freq, z * freq) * amp;
+        if (turbulence == 1) {
+          noiseValue = Math.abs(noiseValue);
+        }
+        sum += noiseValue;
+        freq *= lacunarity;
+        amp *= gain;
+        const cosAngle = Math.cos(angle);
+        const sinAngle = Math.sin(angle);
+        const newX = x * cosAngle - y * sinAngle;
+        const newY = x * sinAngle + y * cosAngle;
+        x = newX;
+        y = newY;
+        x += shift.x;
+        y += shift.y;
+        angle += angleIncrement;
+      }
+      if (turbulence == 1) {
+        sum -= 1;
+      }
+      const index = threadId.x + threadId.y * gridDim.x + threadId.z * gridDim.x * gridDim.y;
+      outputArray[index] = sum;
+      return outputArray;
     }
-    let color2 = sum / 9;
-    textureStore(outputTex2, vec2i(threadId.xy), color2);
+    WebGPUjs.createPipeline(perlinNoise3D).then((pipeline) => {
+      console.log("Perlin noise pipeline", pipeline);
+    });
+    console.log(WGSLTranspiler.convertToWebGPU(perlinNoise3D, "compute", 0, 64).code);
   }
-  function texVertex() {
-    const tri = array(
-      vec2f(-1, -1),
-      vec2f(3, -1),
-      vec2f(-1, 3)
-    );
-    let xy = tri[vertexIndex];
-    position = vec4f(xy, 0, 1);
-    texCoord = xy;
-  }
-  function texFragment() {
-    let texColor = textureSample(inputTex2, outputSampler, texCoord);
-    return texColor;
-  }
-  async function createTexPipeline() {
-    const canvas4 = document.createElement("canvas");
-    const pipeline1 = await WebGPUjs.createPipeline(
-      {
-        compute: texCompute
-      },
-      {
-        workGroupSize: 64,
-        computePass: {
-          workgroupsX: canvas4.width / 64,
-          workgroupsY: canvas4.height / 64
-        },
-        renderPass: {
-          textures: {
-            inputTex: {
-              //when storage texture read_write is available we can do away with this
-              source: await createImageBitmap(canvas4),
-              width: canvas4.width,
-              height: canvas4.height
-            },
-            outputTex1: {
-              buffer: new Float32Array(canvas4.width * canvas4.height * 4).buffer,
-              //placeholder for setting the storage texture
-              width: canvas4.width,
-              height: canvas4.height,
-              isStorage: true,
-              binding: "inputTex"
-              //make sure it uses the same binding as the input texture
-            }
-          }
-        }
-      }
-    );
-    console.log(pipeline1.prototypes.compute.code);
-    const pipeline2 = await WebGPUjs.combineShaders(
-      {
-        compute: texCompute2,
-        vertex: texVertex,
-        fragment: texFragment
-      },
-      {
-        canvas: canvas4,
-        workGroupSize: 64,
-        computePass: {
-          workgroupsX: canvas4.width / 64,
-          workgroupsY: canvas4.height / 64
-        },
-        renderPass: {
-          vertexCount: 3,
-          vbos: [
-            {
-              texCoord: "vec2f"
-            }
-          ],
-          textures: {
-            inputTex2: {
-              //when storage texture read_write is available we can do away with this
-              source: await createImageBitmap(canvas4),
-              width: canvas4.width,
-              height: canvas4.height,
-              binding: "outputTex2"
-            },
-            outputTex2: {
-              buffer: new Float32Array(canvas4.width * canvas4.height * 4).buffer,
-              //placeholder for setting the storage texture
-              width: canvas4.width,
-              height: canvas4.height,
-              isStorage: true,
-              binding: "inputTex2"
-              //make sure it uses the same binding as the input texture
-            }
-          }
-        }
-      },
-      pipeline1
-    );
-    console.log(
-      pipeline2.prototypes.compute.code,
-      pipeline2.prototypes.vertex.code,
-      pipeline2.prototypes.fragment.code
-    );
-    pipeline1.process();
-  }
-  createTexPipeline();
+  createNoiseGeneratorExample();
 })();
 //!! Various javascript syntax we can transform into acceptable WGSL syntax !!

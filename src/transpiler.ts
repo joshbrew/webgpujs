@@ -290,6 +290,7 @@ export class WGSLTranspiler {
     }
 
     static inferTypeFromValue(value, funcStr, ast, defaultValue:any='f32') {
+        if(!value) return defaultValue;
         value=value.trim()
         if(value === 'true' || value === 'false') return 'bool';
         else if(value.startsWith('"') || value.startsWith("'") || value.startsWith('`')) return value.substring(1,value.length-1); //should extract string types
@@ -793,51 +794,51 @@ export class WGSLTranspiler {
         return {code, params, defaultUniforms, lastBinding:bindingIncr};
     }
 
-    static extractAndTransposeInnerFunctions = (
-        body, extract=true, ast, params, shaderType, vertexBufferOptions) => {
-        
+    static extractAndTransposeInnerFunctions(body, extract = true, ast, params, shaderType, vertexBufferOptions) {
         const functionRegex = /function (\w+)\(([^()]*|\((?:[^()]*|\([^()]*\))*\))*\) \{([\s\S]*?)\}/g;
 
         let match;
         let extractedFunctions = '';
-        
-        while ((match = functionRegex.exec(body)) !== null) {
 
-            const functionHead = match[0];
+        while ((match = functionRegex.exec(body)) !== null) {
             const funcName = match[1];
             const funcBody = match[3];
-            let paramString = functionHead.substring(functionHead.indexOf('(') + 1, functionHead.lastIndexOf(')'));
+            let paramString = match[2];
 
             let outputParam;
 
-            const regex = /return\s+([\s\S]*?);/;
-            const retmatch = body.match(regex);
-            if(retmatch) {
+            const regex = new RegExp(`return\\s+(${this.variablePattern('[\\s\\S]*?')});`);
+            const retmatch = funcBody.match(regex);
+            if (retmatch) {
                 let inferredType = this.inferTypeFromValue(retmatch[1], body, ast, false);
-                if(inferredType) {
+                if (inferredType) {
                     outputParam = inferredType;
                 }
             }
 
-            let params = this.splitIgnoringBrackets(paramString).map((p) => { 
+            let params = this.splitIgnoringBrackets(paramString).map((p) => {
                 let split = p.split('=');
                 let vname = split[0];
                 let inferredType = this.inferTypeFromValue(split[1], body, ast);
-                if(!outputParam) outputParam = inferredType;
-                return vname+': '+inferredType;
+                if (!outputParam) outputParam = inferredType;
+                return vname + ': ' + inferredType;
             });
 
             // Transpose the function body
-            const transposedBody = this.transposeBody(funcBody, funcBody, params, shaderType, true, undefined, false, vertexBufferOptions).code; // Assuming AST is not used in your current implementation
+            const transposedBody = this.transposeBody(funcBody, funcBody, params, shaderType, true, undefined, false, vertexBufferOptions).code;
 
-            //todo: infer output types better, instead of just assuming from the first input type
-            extractedFunctions += `fn ${funcName}(${params}) -> ${outputParam} {${transposedBody}}\n\n`;
+            // Infer output types better
+            extractedFunctions += `fn ${funcName}(${params.join(', ')}) -> ${outputParam} {${transposedBody}}\n\n`;
         }
 
         // Remove the inner functions from the main body
-        if(extract) body = body.replace(functionRegex, '');
+        if (extract) body = body.replace(functionRegex, '');
 
         return { body, extractedFunctions };
+    }
+
+    static variablePattern(content) {
+        return content.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
     }
 
     static generateMainFunctionWorkGroup(
@@ -1013,28 +1014,29 @@ fn frag_main(
         });
 
         if (shaderType !== 'vertex' && shaderType !== 'fragment') {
-            code = code.replace(/(\w+)\[([\w\s+\-*\/]+)\]/gm, (match, p1, p2) => {
+            code = code.replace(/(\w+)\[([\w\s+\-*%&\/]+)\]/gm, (match, p1, p2) => {
                 if (arrayVars.includes(p1)) return match;  // if the variable is an array declaration, return it as is
-                return `${p1}.values[${p2}]`;
+                return `${p1}.values[${p2.replace(/(\w+)\[([\w\s+\-*\/]+)\]/g, '$1.values[$2]')}]`;
             });
         } else {
             // When shaderType is vertex or fragment, exclude specific variable names from the replacement
             // Gather up custom vbos to add to the filter 
-
+        
             let names = ['position'];
             vertexBufferOptions.forEach((opt) => {
                 names.push(...Object.keys(opt).filter((n) => { if(n !== 'stepMode' && n !== '__COUNT') return true;}));
-            })
-
+            });
+        
             // Create a regular expression pattern from the names array
             let namesPattern = names.join('|');
-
+        
             // Use the dynamically generated pattern in the replace function
             code = code.replace(new RegExp(`(${namesPattern})|(\\w+)\\[([\\w\\s+\\-*\\/]+)\\]`, 'gm'), (match, p1, p2, p3) => {
                 if (p1 || arrayVars.includes(p2)) return match;  // if match is one of the keywords or is an array variable, return it as is
-                return `${p2}.values[${p3}]`;  // otherwise, apply the transformation
+                return `${p2}.values[${p3.replace(/(\w+)\[([\w\s+\-*\/]+)\]/g, '$1.values[$2]')}]`;  // otherwise, apply the transformation
             });
         }
+
         
         code = code.replace(/(\w+)\.length/gm, 'arrayLength(&$1.values)');
 

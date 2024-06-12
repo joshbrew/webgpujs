@@ -4,7 +4,7 @@ import { WGSLTranspiler } from "../src/transpiler";
 import { cubeVertices, cubeIndices } from "./exampleCube";
 import { mat4 as m4, vec3 as v3 } from 'wgpu-matrix' //they'll transform the dummy functions on the bundle step if not renamed
 
-//dft is an O(n^2) example, plus a bunch of other nonsense just to test the transpiler out, we'll do this proper soon
+//dft is an O(n^2) example
 function dft(
     inputData = new Float32Array(), 
     outputData = []
@@ -120,7 +120,7 @@ console.time('createComputePipeline');
                     console.timeEnd('run DFT dynamically resizing inputData and outputData');
                     console.log('Results can be dynamically resized:', r3); // Log the output
                     console.time('addFunction and recompile shader pipeline');
-                    pipeline.addFunction(function mul(a=vec2f(2,0),b=vec2f(2,0)) { return a * b; })
+                    pipeline.addFunction(function mul(a='vec2f',b='vec2f') { return a * b; })
                     console.timeEnd('addFunction and recompile shader pipeline');
                     console.log("DFT Compute Pipeline", pipeline);
                     document.getElementById('t1_'+ex1Id.uniqueID).value = pipeline.compute.code;
@@ -778,12 +778,166 @@ async function createTexPipeline() {
     pipeline1.process()
 }
 
-createTexPipeline();
+//createTexPipeline();
 
 //Example 6 storage texture usage via compute
 
 //Example 7, multiple vertex shaders for shadowing and render example
 
+
+
+//actually useful example: generating noise textures with various functions
+
+async function createNoiseGeneratorExample() {
+
+    let seed = 12345;
+
+    let gradients = [
+        // vec3f(1,1,0), vec3f(-1,1,0), vec3f(1,-1,0), vec3f(-1,-1,0),
+        // vec3f(1,0,1), vec3f(-1,0,1), vec3f(1,0,-1), vec3f(-1,0,-1),
+        // vec3f(0,1,1), vec3f(0,-1,1), vec3f(0,1,-1), vec3f(0,-1,-1)
+    ];
+
+    // Perlin noise compute shader implementation
+    // Perlin noise compute shader implementation
+    function perlinNoise3D(
+        outputArray = 'array<f32>',
+        permutations = 'array<i32>',
+        gradients = 'array<vec3f>',
+        gridDim = 'vec3u',
+        offset = 'vec3f',
+        zoom = 'f32',
+        octaves = 'i32',
+        lacunarity = 'f32',
+        gain = 'f32',
+        shift = 'vec3f',
+        turbulence = 'i32',
+        seed = 'f32'
+    ) {
+        // Fade function
+        function fade(t) {
+            return t * t * t * (t * (t * 6.0 - 15.0) + 10.0);
+        }
+
+        // Linear interpolation
+        function lerp(t, a, b) {
+            return a + t * (b - a);
+        }
+
+        // Dot product of 3D vectors
+        function dot(x, y, z, g='vec3f') {
+            return g.x * x + g.y * y + g.z * z;
+        }
+
+        // Calculate Perlin noise for a given position
+        function noise(x, y, z) {
+            const X = i32(Math.floor(x)) & 255;
+            const Y = i32(Math.floor(y)) & 255;
+            const Z = i32(Math.floor(z)) & 255;
+
+            const xf = x - Math.floor(x);
+            const yf = y - Math.floor(y);
+            const zf = z - Math.floor(z);
+
+            const u = fade(xf);
+            const v = fade(yf);
+            const w = fade(zf);
+
+            const A = (permutations[X] + Y);
+            const AA = permutations[A] + Z;
+            const AB = permutations[A + 1] + Z;
+            const B = permutations[X + 1] + Y;
+            const BA = permutations[B] + Z;
+            const BB = permutations[B + 1] + Z;
+
+            const permAA = permutations[AA];
+            const permBA = permutations[BA];
+            const permAB = permutations[AB];
+            const permBB = permutations[BB];
+            const permAA1 = permutations[AA + 1];
+            const permBA1 = permutations[BA + 1];
+            const permAB1 = permutations[AB + 1];
+            const permBB1 = permutations[BB + 1];
+
+            const gradAA = gradients[permAA % 12];
+            const gradBA = gradients[permBA % 12];
+            const gradAB = gradients[permAB % 12];
+            const gradBB = gradients[permBB % 12];
+            const gradAA1 = gradients[permAA1 % 12];
+            const gradBA1 = gradients[permBA1 % 12];
+            const gradAB1 = gradients[permAB1 % 12];
+            const gradBB1 = gradients[permBB1 % 12];
+
+            return lerp(w,
+                lerp(v,
+                    lerp(u, dot(xf, yf, zf,gradAA), dot(xf - 1, yf, zf,gradBA)),
+                    lerp(u, dot(xf, yf - 1, zf,gradAB), dot(xf - 1, yf - 1, zf,gradBB))
+                ),
+                lerp(v,
+                    lerp(u, dot(xf, yf, zf - 1, gradAA1), dot(xf - 1, yf, zf - 1, gradBA1)),
+                    lerp(u, dot(xf, yf - 1, zf - 1, gradAB1), dot(xf - 1, yf - 1, zf - 1,gradBB1))
+                )
+            );
+        }
+
+        // Initialize noise generation
+        var x = (f32(threadId.x) + offset.x) / zoom;
+        var y = (f32(threadId.y) + offset.y) / zoom;
+        var z = (f32(threadId.z) + offset.z) / zoom;
+
+        var sum = f32(0.0);
+        var amp = f32(1.0);
+        var freq = f32(1.0);
+        var angle = seed * 2.0 * Math.PI;
+        const angleIncrement = Math.PI / 4.0;
+
+        for (let i = 0; i < octaves; i++) {
+            var noiseValue = noise(x * freq, y * freq, z * freq) * amp;
+            if (turbulence == 1) {
+                noiseValue = Math.abs(noiseValue);
+            }
+            sum += noiseValue;
+
+            freq *= lacunarity;
+            amp *= gain;
+
+            // Apply rotation to the coordinates
+            const cosAngle = Math.cos(angle);
+            const sinAngle = Math.sin(angle);
+
+            const newX = x * cosAngle - y * sinAngle;
+            const newY = x * sinAngle + y * cosAngle;
+
+            x = newX;
+            y = newY;
+
+            x += shift.x;
+            y += shift.y;
+            angle += angleIncrement;
+        }
+
+        if (turbulence == 1) {
+            sum -= 1.0;
+        }
+
+        // Write the result to the output array
+        const index = threadId.x + threadId.y * gridDim.x + threadId.z * gridDim.x * gridDim.y;
+        outputArray[index] = sum;
+
+        return outputArray;
+    }
+
+    WebGPUjs.createPipeline(perlinNoise3D).then((pipeline) => {
+        console.log("Perlin noise pipeline", pipeline);
+    })
+
+
+    console.log(WGSLTranspiler.convertToWebGPU(perlinNoise3D,'compute',0,64).code);
+
+
+}
+
+//createNoiseGeneratorExample();
 
 
 // const dftReference = `

@@ -673,7 +673,7 @@ export class ShaderContext {
             } as GPUBindGroupLayoutEntry)
         }
 
-        console.log(entries);
+        //console.log(entries);
 
         this.bindGroupLayoutEntries = entries;
         return entries as GPUBindGroupLayoutEntry[];
