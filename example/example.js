@@ -4,10 +4,15 @@ import { WGSLTranspiler } from "../src/transpiler";
 import { cubeVertices, cubeIndices } from "./exampleCube";
 import { mat4 as m4, vec3 as v3 } from 'wgpu-matrix' //they'll transform the dummy functions on the bundle step if not renamed
 
+//For now this is the only documentation on using the API.
+//Here you'll see compute, visual, and mixed compute/visual pipeline examples including chained pipelines. That last example is not working yet but the bugs are relatively minor logical upgrades in binding usage under the hood and can be overridden.
+
+
 //dft is an O(n^2) example
 function dft(
-    inputData = new Float32Array(), 
-    outputData = []
+    inputData = new Float32Array(),  //interpreted as array<f32>
+    outputData = []    //interpreted array<f32>, note default values can be used to implicitly type e.g. [1.0,2.0,3.0] = vec3f(1.0,2.0,3.0) = 'vec3f' but it's easier to use the actual type strings e.g. 'f32' or 'vec4f'.
+    //you can also use a variableTypes object on the pipeline creation settings to type variables if you want to avoid default values but this is more convenient imo
 ) {
 
     const N = i32(inputData.length);
@@ -557,7 +562,6 @@ WebGPUjs.createPipeline({
 
         const data = {[input.id]:boidsRules[index]}; //can update UBOs by variable name
         
-        // Assuming pipeline.fragment.updateUBO is a function to update the UBO, and update the resource
         pipeline.compute.updateUBO(data, true); 
     }
 
@@ -649,6 +653,9 @@ WebGPUjs.createPipeline({
 
 
 //Example 5, multiple compute shaders then a render, w/ storage texture usage like a boss
+//FIXES FOUND:
+//     1. Make sure bindings are shared accurately, the issue is mostly with storage texture binding logic not being fully fleshed out
+//     
 
 function texCompute() {
     let coords = vec2f(threadId.xy) / vec2f(textureDimensions(outputTex1));
@@ -780,13 +787,17 @@ async function createTexPipeline() {
 
 //createTexPipeline();
 
-//Example 6 storage texture usage via compute
+//Example 6 storage texture usage via compute so we can run compute operations on an image and return the modified version
 
 //Example 7, multiple vertex shaders for shadowing and render example
 
 
 
 //actually useful example: generating noise textures with various functions
+//NICE TO HAVES FOUND:
+//     1. Nice to have: nested subfunction support. It will just extract it like it does top level functions and consts for efficiency
+//     2. Better control of function output types, right now it sets the output type based on the first input type, which we try to infer hierarchically if not made explicit, defaulting to f32
+//     3. A side effect of compiling the js and stringifying functions is that decimals are removed so e.g 1.0 declarations will be trimmed which is a typical shorthand for declaring f32 or f16 types.
 
 async function createNoiseGeneratorExample() {
 
