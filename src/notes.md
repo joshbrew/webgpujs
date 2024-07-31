@@ -1,8 +1,14 @@
 ### Last major TODO before moving on to other features
 
-Fix data structure linkage across multiple bindgroups when creating bindgroups, the test is linking a Storage texture with an input texture so we can communicate across compute/vertex/fragment via textures, right now it works for linking array buffers and VBOs at least which is similar just not the full scope of possibilities.
+Fix data structure linkage across multiple bindgroups when generating bindgroups automatically, 
+ - the test is linking a Storage texture with an input texture so we can communicate across compute/vertex/fragment via textures,
+ - right now it works for linking array buffers and VBOs (see Boids example) at least which is similar just not the full scope of possibilities.
 
 Then we need to make sure depth textures etc all work by reproducing the more complex WebGPU examples available but in ways made possible in our transpiler which is fairly constrained e.g. no structs right now.
+
+The balance is making sure that when we reproduce examples that it doesn't look like some stupid alt-logic but something fairly native looking and with only minimal input requirements. We are confident we can get even the raytracing examples working where there are multiple compute and vertex passes, as we consider those to be the real tests, just with some more fairly straightforward tweaks to how bindgroups and such are linked. 
+
+We're pretty close we think other than more utilities for handling specific i/o changes, stuff that you see in other shader compiler helpers, then this will be the real thing. 
 
 ### Structs?
 
