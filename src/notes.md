@@ -70,11 +70,25 @@ First: what is it I want to add compatibility for?
 
 Second: Look for relevant transpilation operations in the transpiler.ts,
 
+#### For regex enhancements:
+
 Third: Paste to GPT and ask it to enhance the regex and replacing functions (you will want to look at the ast generators in the parse function and the generateDataStructures and generateMainFunctionWorkGroup functions)
 
 Fourth: Update anything in shader.ts as well related (again just search relevant WebGPU API calls you know need to be adjusted)
 
-Fifth: make sure it runs, and just keep pasting to gpt with errors and make new conversations when it gets stuck in a loop of BS.
+Fifth: Make sure it runs, and just keep pasting to gpt with errors and make new conversations when it gets stuck in a loop of BS.
+
+#### For general API enhancements/updates:
+
+Third: Study the official webgpu docs and examples to figure out what functionality is missing or if we haven't streamlined around it enough to require reworking shader.ts or transpiler.ts (e.g. missing types or hard coded loops etc that work in current examples but don't reflect modular API requirements).
+
+Fourth: Study other people's workflows and consider automation possibilities.
+
+Fifth: Make alterations in the pipeline to attempt to generalize it across more and more complicated examples provided from authortiative, up to date sources, e.g. [webgpu-samples](https://webgpu.github.io/webgpu-samples/)
+
+Then:
+
+Sixth: Make it look not ugly to write the actual code as a user.
 
 And that's pretty much it but I am still reorganizing this stuff slowly so it's a little more modular and easy to tackle. Of course, as context sizes expand we might just be able to dump this entire library to an AI and have it rework it soon haha.
 
