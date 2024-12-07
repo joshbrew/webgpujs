@@ -4,6 +4,8 @@
 
 Write full featured WGSL pipelines in plain(ish) javascript.
 
+I am redoing this so the transpiler is more optional and there is a better up front variable/binding configuration and it's WAY more self explanatory and native-ish. This should help me polish out the transpilation system so I can properly chain shader bindings without all the hairbrained regex. It is just getting too entangled so I'll be re-evaluating the setup sequencing. 
+
 SupportS:
 - Write functional compute shaders etc. and output one or multiple resulting buffers. 
 - Compile compute, vertex, fragment shaders and chain together any combinations thereof.
