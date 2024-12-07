@@ -6,7 +6,7 @@ Write full featured WGSL pipelines in plain(ish) javascript.
 
 I am redoing this so the transpiler is more optional and there is a better up front variable/binding configuration that's WAY more self explanatory and native-ish.
 
-This should help me polish out the transpilation system so I can properly chain shader bindings for a many-shader webgpu program without all the hairbrained regex and recursion. It is just getting too entangled to make sense of so I'll be re-evaluating the setup sequencing. 
+This should help me polish out the transpilation system so I can properly chain shader bindings for a many-shader webgpu program without all the hairbrained regex and recursion. It is just getting too entangled to make sense of so I'll be re-evaluating the setup sequencing. The transpiler is bomb af but chaining multiple shader programs and using storage textures etc is too implicit for comfort so I'd rather make it simple to provide minimal boilerplate up front for the data structures then try to remap the binding generation that way.
 
 SupportS:
 - Write functional compute shaders etc. and output one or multiple resulting buffers. 
