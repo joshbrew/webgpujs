@@ -65,10 +65,11 @@ export declare class WGSLTranspiler {
         defaultUniforms: any;
         lastBinding: number;
     };
-    static extractAndTransposeInnerFunctions: (body: any, extract: boolean, ast: any, params: any, shaderType: any, vertexBufferOptions: any) => {
+    static extractAndTransposeInnerFunctions(body: any, extract: boolean, ast: any, params: any, shaderType: any, vertexBufferOptions: any): {
         body: any;
         extractedFunctions: string;
     };
+    static variablePattern(content: any): any;
     static generateMainFunctionWorkGroup(funcStr: string, ast: any, params: any, shaderType: string, vertexBufferOptions: {
         stepMode?: 'instance' | 'vertex';
         [key: string]: string;

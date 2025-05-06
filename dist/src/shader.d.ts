@@ -1,5 +1,5 @@
-/// <reference types="@webgpu/types" />
 import { ShaderOptions, RenderOptions, ComputeOptions, RenderPassSettings, ComputePassSettings, TranspiledShader, BufferGroup, TextureInfo, Param } from './types';
+import { flattenArray, combineVertices, splitVertices } from './util';
 export declare class ShaderHelper {
     prototypes: {
         compute?: TranspiledShader;
@@ -22,7 +22,7 @@ export declare class ShaderHelper {
     functions: (Function | string)[];
     bindGroupLayouts: GPUBindGroupLayout[];
     bindGroups: GPUBindGroup[];
-    bufferGroups: any[];
+    bufferGroups: BufferGroup[];
     constructor(shaders: {
         compute?: TranspiledShader;
         fragment?: TranspiledShader;
@@ -36,17 +36,9 @@ export declare class ShaderHelper {
     addFunction: (func: Function | string) => void;
     generateShaderBoilerplate: (shaders: any, options: any) => any;
     cleanup: () => void;
-    static flattenArray(arr: any): any[];
-    static combineVertices(vertices: any, //4d vec array
-    colors: any, //4d vec array
-    uvs: any, //2d vec array
-    normals: any): Float32Array;
-    static splitVertices(interleavedVertices: any): {
-        vertices: Float32Array;
-        colors: Float32Array;
-        normal: Float32Array;
-        uvs: Float32Array;
-    };
+    static flattenArray: typeof flattenArray;
+    static combineVertices: typeof combineVertices;
+    static splitVertices: typeof splitVertices;
 }
 export declare class ShaderContext {
     canvas: HTMLCanvasElement | OffscreenCanvas;
@@ -91,9 +83,16 @@ export declare class ShaderContext {
     constructor(props?: any);
     createBindGroupEntries: (textures?: {
         [key: string]: TextureInfo;
-    }, bindGroupNumber?: number, visibility?: number) => GPUBindGroupLayoutEntry[];
+    }, bindGroupNumber?: number, visibility?: number) => {
+        entries: GPUBindGroupLayoutEntry[];
+        texturesToUpdate: [TextureInfo, string, number][];
+        samplersToCreate: {
+            name: string;
+            descriptor: GPUSamplerDescriptor;
+        }[];
+    };
     setBindGroupLayout: (entries?: any[], bindGroupNumber?: number) => GPUBindGroupLayout;
-    updateVBO: (vertices: any, index?: number, bufferOffset?: number, dataOffset?: number, bindGroupNumber?: number, indexBuffer?: boolean, indexFormat?: 'uint32' | 'uint16') => void;
+    updateVBO: (vertices: any, index?: number, bufferOffset?: number, dataOffset?: number, bindGroupNumber?: number, indexBuffer?: boolean, indexFormat?: "uint32" | "uint16") => void;
     updateTextures: (textures: {
         [key: string]: TextureInfo;
     }, updateBindGroup?: boolean, bindGroupNumber?: number) => void;
@@ -109,47 +108,30 @@ export declare class ShaderContext {
     updateBindGroup?: boolean, bindGroupNumber?: number): void;
     updateUBO: (inputs: any[] | {
         [key: string]: any;
-    }, newBuffer?: boolean, updateBindGroup?: boolean, bindGroupNumber?: number) => void;
+    }, newBuffer?: boolean, //set true if you want bind groups to be updated for the shader automatically
+    updateBindGroup?: boolean, bindGroupNumber?: number) => void;
     updateDefaultUBO: (updateBindGroup?: boolean, bindGroupNumber?: number) => void;
-    getUBODataView: (bindGroupNumber?: number) => DataView;
+    getUBODataView: (bindGroupNumber?: number) => DataView<ArrayBuffer>;
     allocateUBO: (bindGroupNumber?: number) => boolean;
     createRenderPipelineDescriptor: (vertexBufferOptions?: {
-        stepMode?: 'vertex' | 'instance';
+        stepMode?: "vertex" | "instance";
         [key: string]: string;
-    }[], swapChainFormat?: GPUTextureFormat, renderPipelineDescriptor?: Partial<GPURenderPipelineDescriptor>, shaderType?: 'fragment' | 'vertex') => Partial<GPURenderPipelineDescriptor>;
+    }[], swapChainFormat?: GPUTextureFormat, renderPipelineDescriptor?: Partial<GPURenderPipelineDescriptor>, shaderType?: "fragment" | "vertex") => Partial<GPURenderPipelineDescriptor>;
     createRenderPassDescriptor: () => GPURenderPassDescriptor;
     updateGraphicsPipeline: (vertexBufferOptions?: {
         [key: string]: string;
-    }[], contextSettings?: GPUCanvasConfiguration, renderPipelineDescriptor?: Partial<GPURenderPipelineDescriptor>, renderPassDescriptor?: GPURenderPassDescriptor, shaderType?: 'fragment' | 'vertex') => void;
+    }[], contextSettings?: GPUCanvasConfiguration, renderPipelineDescriptor?: Partial<GPURenderPipelineDescriptor>, renderPassDescriptor?: GPURenderPassDescriptor, shaderType?: "fragment" | "vertex") => void;
     makeBufferGroup: (bindGroupNumber?: number) => any;
     firstRun: boolean;
-    buffer: ({ vbos, textures, indexBuffer, indexFormat, skipOutputDef, bindGroupNumber, outputVBOs, outputTextures, newBindings, }?: Partial<{
-        vertexCount?: number;
-        instanceCount?: number;
-        firstVertex?: number;
-        firstInstance?: number;
-        viewport?: any;
-        scissorRect?: any;
-        blendConstant?: any;
-        indexBuffer?: any;
-        indexFormat?: "uint16" | "uint32";
-        firstIndex?: number;
-        useRenderBundle?: any;
-        vbos?: ({
-            [key: string]: string;
-            stepMode?: "instance" | "vertex";
-        } | Float32Array | GPUBuffer)[];
-        outputVBOs?: boolean;
-        textures?: {
-            [key: string]: TextureInfo | ImageBitmap;
-        };
-        outputTextures?: boolean;
-        newBindings?: boolean;
-    } & import("./types").ShaderPassSettings & {
-        workgroupsX?: number;
-        workgroupsY?: number;
-        workgroupsZ?: number;
-    }>, ...inputs: any[]) => boolean;
+    buffer: ({ vbos, textures, indexBuffer, indexFormat, skipOutputDef, bindGroupNumber, outputVBOs, outputTextures, newBindings, }?: Partial<RenderPassSettings & ComputePassSettings>, ...inputs: any[]) => boolean;
+    private _ensureBufferGroup;
+    private _handleVertexAndIndex;
+    private _initInputTypes;
+    private _shouldRebuildBindGroup;
+    private _processParameters;
+    private _applyAltBindings;
+    private _ensureDefaultUniformBuffer;
+    private _collectOutputs;
     updateBindGroup: (bindGroupNumber?: number, customBindGroupEntries?: GPUBindGroupEntry[]) => void;
     getOutputData: (commandEncoder: GPUCommandEncoder, outputBuffers?: {
         [key: string]: any;
@@ -171,8 +153,8 @@ export declare class ShaderContext {
         firstIndex?: number;
         useRenderBundle?: any;
         vbos?: ({
-            [key: string]: string;
             stepMode?: "instance" | "vertex";
+            [key: string]: string;
         } | Float32Array | GPUBuffer)[];
         outputVBOs?: boolean;
         textures?: {

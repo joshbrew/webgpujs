@@ -49,12 +49,17 @@ export type RenderPassSettings = {
     indexFormat?:'uint16'|'uint32', //uint16 or uint32
     firstIndex?:number,
     useRenderBundle?:any,
-    vbos?:({
+    vbos?:(({
         //option spec
-        stepMode?:'instance'|'vertex',
-        [key:string]:string
-    }|Float32Array|GPUBuffer)[],
-    outputVBOs?:boolean,
+        vertices?:Float32Array|GPUBuffer,
+        stepMode?:'instance'|'vertex'
+    } & {
+        [key:string]:string //vertex variable names and types e.g. positions:'vec4f'
+    } 
+    //array of objects that specify vertices optionally plus the key value 
+    // pairs in the interleaved vertex buffer structs
+    )|Float32Array|GPUBuffer)[],
+    outputVBOs?:boolean, 
     textures?:{
         [key:string]:TextureInfo|ImageBitmap
     },

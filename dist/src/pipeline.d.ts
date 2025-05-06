@@ -1,4 +1,3 @@
-/// <reference types="@webgpu/types" />
 import { ShaderHelper } from './shader';
 import { ShaderOptions, RenderOptions, ComputeOptions, TranspiledShader } from './types';
 /**

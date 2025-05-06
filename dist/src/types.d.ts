@@ -1,4 +1,3 @@
-/// <reference types="@webgpu/types" />
 export type ShaderOptions = {
     device?: GPUDevice;
     prependCode?: string;
@@ -19,7 +18,7 @@ export type ShaderOptions = {
     };
     lastBinding?: number;
     params?: Param[];
-    bufferGroups?: any;
+    bufferGroups?: BufferGroup[];
     skipCombinedBindings?: boolean;
 };
 export type RenderOptions = {
