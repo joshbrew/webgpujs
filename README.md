@@ -5,7 +5,7 @@
 [![License](https://img.shields.io/npm/l/webgpujs)](LICENSE)
 [![TypeScript declarations included](https://img.shields.io/badge/TypeScript-types%20included-3178c6)](docs/API.md)
 
-### Write the shader. Connect the passes. Keep the data on the GPU.
+### Massively parallel, efficient compute and rendering - in plain JS!
 
 Write compute, vertex and fragment shaders as plain JavaScript functions. WebGPUjs parses them into WGSL and handles bindings, buffers, uniforms and pipelines. Connect stages by variable name, add an explicit alias when names differ, and mix in native WGSL whenever you need it.
 
