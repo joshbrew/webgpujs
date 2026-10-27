@@ -67,6 +67,7 @@
     "dist/index.d.ts",
     "dist/src/*.d.ts",
     "docs/API.md",
+    "docs/SHADER-LANGUAGE.md",
     "WEBGPU-COVERAGE.md",
     "LICENSE",
     "dist/esbuild.d.ts",

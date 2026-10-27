@@ -1,5 +1,7 @@
 # WebGPUjs coverage
 
+Looking up `f32()`, `distance()`, `threadId` or another shader name? Start with [Shader names, types and built-ins](docs/SHADER-LANGUAGE.md), including the complete official function directory and the wrapper's stage aliases.
+
 The wrapper covers the core WebGPU compute/render workflow, with JavaScript shader generation and native WGSL/descriptor interoperability. This table distinguishes **automatic wrapper support**, **tested native integration**, and work deliberately left to the application. It does not imply that every optional feature exists on every adapter.
 
 Reference scope: [WebGPU interfaces](https://developer.mozilla.org/en-US/docs/Web/API/WebGPU_API#interfaces), [WGSL](https://www.w3.org/TR/WGSL/), and the actual regression suites: [pipeline/example tests](tests/gpu.test.js), [feature tests](tests/gpu-features.test.js), [parser tests](tests/parser.test.js), and the [browser VideoFrame check](tests/browser-external.html).

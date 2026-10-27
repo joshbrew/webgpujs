@@ -1,6 +1,6 @@
 # API reference
 
-[← Workflows and screenshots](../README.md) · [WebGPU coverage](../WEBGPU-COVERAGE.md)
+[← Workflows and screenshots](../README.md) · [Shader built-ins and IDs](SHADER-LANGUAGE.md) · [WebGPU coverage](../WEBGPU-COVERAGE.md)
 
 The exported interfaces in [types.ts](../src/types.ts) describe the configuration surface. This reference covers factories, execution, resource sharing, shader syntax and native WebGPU controls.
 
@@ -236,6 +236,8 @@ Caller-owned encoders are never finished or submitted by the wrapper. Compute he
 For video, declare `video="texture_external"` and use `textureSampleBaseClampToEdge`. Pass the video element or VideoFrame each frame with `render({inputs:{video:frame}})`; the wrapper imports it and refreshes its bind group. Application code owns frame closure and source lifetime. [The browser smoke test](http://localhost:8080/external-texture.html) checks import, rendered colors and frame refresh after `npm run build` + `npm run serve`.
 
 ### Supported shader language
+
+For names used inside a shader, see [Shader names, types and built-ins](SHADER-LANGUAGE.md): `f32`/vector constructors, `distance` and other native functions, the exact `threadId`/stage-input mappings, automatic uniform units, and links to all WGSL function families. The [official WGSL catalog](https://www.w3.org/TR/WGSL/#builtin-functions) defines overloads and stage requirements; the wrapper guide explains its supported spellings and native escape hatches.
 
 Supported JavaScript includes synchronous functions/arrows, type-string/numeric defaults, nested helpers, declarations, assignments, arrays with fixed local sizes, indexing, vector swizzles, arithmetic, `if/else`, `for/while`, `break/continue`, strict comparisons, and supported `Math` functions/constants. Atomics accept ordinary references such as `atomicAdd(bins[i],1)`; the compiler emits the WGSL pointer. Call WGSL constructors and built-ins directly: `vec4f`, `mat4x4f`, `select`, `textureLoad`, `textureStore`, etc.
 

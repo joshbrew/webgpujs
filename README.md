@@ -9,7 +9,7 @@
 
 Write compute, vertex and fragment shaders as plain JavaScript functions. WebGPUjs parses them into WGSL and handles bindings, buffers, uniforms and pipelines. Connect stages by variable name, add an explicit alias when names differ, and mix in native WGSL whenever you need it.
 
-**[Explore 100 live examples →](https://webgpujs.netlify.app/)** · **[Open the shader editor →](https://webgpujs.netlify.app/editor.html)** · [API reference](docs/API.md) · [WebGPU coverage](WEBGPU-COVERAGE.md)
+**[Explore 100 live examples →](https://webgpujs.netlify.app/)** · **[Open the shader editor →](https://webgpujs.netlify.app/editor.html)** · [API reference](docs/API.md) · [Shader built-ins and IDs](docs/SHADER-LANGUAGE.md) · [WebGPU coverage](WEBGPU-COVERAGE.md)
 
 ## Install or use a CDN
 
@@ -96,6 +96,8 @@ The same idea extends across passes: an FFT can feed a filter, an inverse transf
 | Vertex/fragment functions and render settings | Layouts, pipelines and bind-group reuse           |
 
 Shader code is parsed without executing it as JavaScript. The GPU runs compiled WGSL; parsing happens when you create or rebuild a pipeline. This is a shader-language subset, so arbitrary closures, objects and library calls are outside its scope. Native WGSL and native WebGPU descriptors provide the escape hatches. [Read the supported syntax and limits →](docs/API.md#supported-shader-language)
+
+**Wondering where `f32()`, `distance()` or `threadId` comes from?** These are shader constructors, WGSL functions and stage inputs; they need no JS imports inside a shader. The [shader-language guide](docs/SHADER-LANGUAGE.md) explains them, lists the wrapper's automatic uniforms, and links every family in the official WGSL function catalog.
 
 ## Choose your starting point
 
@@ -620,6 +622,7 @@ Run the [browser compatibility check](http://localhost:8080/verify.html) to buil
 ## Go deeper
 
 - **[API reference](docs/API.md):** factories, named inputs, explicit bindings, textures, workgroups, native encoders and shader syntax.
+- **[Shader built-ins and IDs](docs/SHADER-LANGUAGE.md):** casts, vector math, `threadId`, stage inputs, automatic uniforms and the complete WGSL function directory.
 - **[WebGPU coverage](WEBGPU-COVERAGE.md):** supported wrapper features, tested native interoperability and remaining boundaries.
 - **[Implementation notes](src/notes.md):** parser, linker, data packing and runtime responsibilities.
 - **[Exported types](src/types.ts):** configuration and descriptor definitions.
