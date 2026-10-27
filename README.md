@@ -1,10 +1,71 @@
 # WebGPUjs
 
+[![npm version](https://img.shields.io/npm/v/webgpujs)](https://www.npmjs.com/package/webgpujs)
+[![npm downloads](https://img.shields.io/npm/dm/webgpujs)](https://www.npmjs.com/package/webgpujs)
+[![License](https://img.shields.io/npm/l/webgpujs)](LICENSE)
+[![TypeScript declarations included](https://img.shields.io/badge/TypeScript-types%20included-3178c6)](docs/API.md)
+
 ### Write the shader. Connect the passes. Keep the data on the GPU.
 
 Write compute, vertex and fragment shaders as plain JavaScript functions. WebGPUjs parses them into WGSL and handles bindings, buffers, uniforms and pipelines. Connect stages by variable name, add an explicit alias when names differ, and mix in native WGSL whenever you need it.
 
 **[Explore 100 live examples →](https://webgpujs.netlify.app/)** · **[Open the shader editor →](https://webgpujs.netlify.app/editor.html)** · [API reference](docs/API.md) · [WebGPU coverage](WEBGPU-COVERAGE.md)
+
+## Install or use a CDN
+
+```sh
+npm install webgpujs
+```
+
+```js
+import { WebGPUjs } from "webgpujs";
+// Default imports also work: import WebGPUjs from "webgpujs";
+```
+
+For a browser page with no build step, use the **1.0.0** CDN bundles below. Serve the page over HTTPS or localhost in a browser with WebGPU support.
+
+**ESM — import directly from the CDN:**
+
+```html
+<script type="module">
+  import { WebGPUjs } from "https://cdn.jsdelivr.net/npm/webgpujs@1.0.0/dist/webgpujs.esm.js";
+
+  function double(values = "array<f32>") {
+    const i = threadId.x;
+    if (i < values.length) values[i] *= 2;
+    return values;
+  }
+
+  const pipeline = await WebGPUjs.createPipeline(double);
+  console.log(Array.from(await pipeline.process(new Float32Array([1, 2, 3])))); // [2, 4, 6]
+  pipeline.dispose();
+</script>
+```
+
+**Global — use a classic script tag:**
+
+```html
+<script src="https://cdn.jsdelivr.net/npm/webgpujs@1.0.0/dist/webgpujs.js"></script>
+<script>
+  (async () => {
+    function double(values = "array<f32>") {
+      const i = threadId.x;
+      if (i < values.length) values[i] *= 2;
+      return values;
+    }
+
+    const pipeline = await WebGPUjs.createPipeline(double);
+    console.log(Array.from(await pipeline.process(new Float32Array([1, 2, 3])))); // [2, 4, 6]
+    pipeline.dispose();
+  })();
+</script>
+```
+
+The classic bundle exposes the factory as `globalThis.WebGPUjs` and all runtime exports as `globalThis.WebGPUjsModule`. For example, use `WebGPUjsModule.WGSLTranspiler` to translate a shader directly.
+
+**CDN files:** [ES module](https://cdn.jsdelivr.net/npm/webgpujs@1.0.0/dist/webgpujs.esm.js) · [Global script](https://cdn.jsdelivr.net/npm/webgpujs@1.0.0/dist/webgpujs.js) · [Published package](https://www.npmjs.com/package/webgpujs/v/1.0.0)
+
+Bundled apps should preserve authored shader source before minifying; the optional [`webgpujs/esbuild` plugin](docs/API.md#supported-shader-language) handles that. The CDN snippets above run directly without a bundler.
 
 [![A playable WebGPUjs scene with compute-generated terrain, a controllable character, lit geometry and collectible crystals.](docs/screenshots/game.jpg)](https://webgpujs.netlify.app/#game)
 
