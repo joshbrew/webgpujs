@@ -4,6 +4,6 @@
 **/*.pfxs
 **/*.key
 **/*.lock
-**/package-lock.json
 **/*.key
 **/*.log
+.temp/

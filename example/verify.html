@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>WebGPUjs compatibility check</title>
+    <link rel="stylesheet" href="gallery.css" />
+  </head>
+  <body>
+    <header>
+      <span class="eyebrow">WebGPUjs / release verification</span>
+      <h1>Check this browser.</h1>
+      <p>
+        Build, run, dispose and rebuild all 100 demos on this browser and GPU.
+        The check keeps going after failures and produces a report you can
+        share.
+      </p>
+      <a href="/">← Gallery</a>
+    </header>
+    <label
+      ><input id="rebuild" type="checkbox" checked /> Rebuild every shader set
+      and verify the replacement after disposing the first instance</label
+    >
+    <p>
+      <button id="run">Run checks</button>
+      <button id="download" disabled>Download report</button>
+    </p>
+    <p>
+      <a href="external-texture.html"
+        >Check external VideoFrame import and refresh →</a
+      >
+    </p>
+    <p id="status" role="status">Ready to test.</p>
+    <pre id="environment"></pre>
+    <details>
+      <summary>View JSON report</summary>
+      <pre id="report">Run the checks to generate a report.</pre>
+    </details>
+    <div id="preview" class="preview"></div>
+    <table>
+      <thead>
+        <tr>
+          <th>Example</th>
+          <th>Result</th>
+          <th>Details</th>
+        </tr>
+      </thead>
+      <tbody id="results"></tbody>
+    </table>
+    <script type="module" src="dist/verify.js"></script>
+  </body>
+</html>

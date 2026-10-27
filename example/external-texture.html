@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>WebGPUjs external VideoFrames</title>
+    <link rel="stylesheet" href="gallery.css" />
+  </head>
+  <body>
+    <h1>External VideoFrame check</h1>
+    <p>
+      Import two distinct frames, verify their pixels, refresh the binding and
+      release the instance.
+    </p>
+    <a href="verify.html">← Compatibility checks</a>
+    <p id="status" role="status">Testing external VideoFrames…</p>
+    <canvas width="128" height="64"></canvas>
+    <script type="module" src="dist/external-texture.js"></script>
+  </body>
+</html>

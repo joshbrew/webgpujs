@@ -1,26 +1,33 @@
 {
   "name": "webgpujs",
-  "version": "0.0.30",
-  "description": "Write full featured WGSL pipelines in plain javascript",
-  "main": "./webgpujs.js",
+  "version": "1.0.0",
+  "description": "Write WebGPU compute and graphics pipelines as JavaScript functions or native WGSL.",
+  "main": "./dist/webgpujs.esm.js",
   "module": "./dist/webgpujs.esm.js",
   "types": "./dist/index.d.ts",
   "type": "module",
   "scripts": {
-    "start": "tinybuild",
-    "example": "cd example && tinybuild",
-    "build": "tinybuild build",
-    "serve": "tinybuild serve",
-    "init": "node tinybuild/init.js",
-    "concurrent": "concurrently \"npm run python\" \"npm start\"",
-    "dev": "npm run pip && npm i --save-dev concurrently && npm i --save-dev nodemon && npm run concurrent",
-    "startdev": "nodemon --exec \"node tinybuild.js\" -e ejs,js,ts,jsx,tsx,css,html,jpg,png,scss,txt,csv",
-    "python": "python python/server.py",
-    "pip": "pip install quart && pip install websockets",
-    "pwa": "npm i workbox-cli && workbox generateSW node_server/pwa/workbox-config.js && npm run build && npm start"
+    "start": "npm run example",
+    "example": "npm run build && node scripts/serve.mjs",
+    "build": "node scripts/build.mjs",
+    "serve": "node scripts/serve.mjs",
+    "test": "node scripts/test.mjs",
+    "test:gpu": "node scripts/test.mjs --gpu",
+    "typecheck": "tsc --noEmit",
+    "benchmark": "node scripts/benchmark.mjs",
+    "test:package": "node scripts/check-package.mjs",
+    "prepack": "npm run build",
+    "prepublishOnly": "npm run typecheck && npm test && npm run test:package -- --offline"
   },
   "keywords": [
-    "esbuild"
+    "webgpu",
+    "wgsl",
+    "gpu",
+    "compute",
+    "shader",
+    "transpiler",
+    "fft",
+    "graphics"
   ],
   "author": "",
   "license": "LGPL-3.0-or-later",
@@ -34,6 +41,40 @@
     ]
   },
   "devDependencies": {
-    "@webgpu/types": "~0.1.42"
-  }
+    "esbuild": "^0.25.12",
+    "prettier": "^3.6.2",
+    "typescript": "~7.0.2",
+    "webgpu": "^0.6.2",
+    "wgpu-matrix": "^2.9.1",
+    "acorn": "^8.19.0"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/webgpujs.esm.js",
+      "default": "./dist/webgpujs.esm.js"
+    },
+    "./webgpujs.js": "./dist/webgpujs.js",
+    "./package.json": "./package.json",
+    "./esbuild": {
+      "types": "./dist/esbuild.d.ts",
+      "import": "./dist/esbuild.js",
+      "default": "./dist/esbuild.js"
+    }
+  },
+  "files": [
+    "dist/*.js",
+    "dist/index.d.ts",
+    "dist/src/*.d.ts",
+    "docs/API.md",
+    "WEBGPU-COVERAGE.md",
+    "LICENSE",
+    "dist/esbuild.d.ts",
+    "docs/RELEASING.md",
+    "docs/COMPATIBILITY.md",
+    "docs/verification/*.json",
+    "CHANGELOG.md"
+  ],
+  "sideEffects": false,
+  "homepage": "https://webgpujs.netlify.app/"
 }

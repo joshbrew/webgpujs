@@ -1,94 +1,36 @@
-### Last major TODO before moving on to other features
+# Implementation notes
 
-Fix data structure linkage across multiple bindgroups when generating bindgroups automatically, 
- - the test is linking a Storage texture with an input texture so we can communicate across compute/vertex/fragment via textures,
- - right now it works for linking array buffers and VBOs (see Boids example) at least which is similar just not the full scope of possibilities.
+The active system separates syntax, resource linking and execution:
 
-Then we need to make sure depth textures etc all work by reproducing the more complex WebGPU examples available but in ways made possible in our transpiler which is fairly constrained e.g. no structs right now.
+- `parser.ts`: parse JavaScript with Acorn, analyze references, infer input types and emit WGSL from syntax nodes. No source function is evaluated. Cached syntax trees are read-only.
+- `bindings.ts`: reflect raw WGSL and resolve resource identities and binding slots once across the shader set. Prior compiled pipelines are immutable.
+- `transpiler.ts`: public conversion facade, legacy binding-combination utility, built-in uniform callbacks and type/format reference tables.
+- `pipeline.ts`: normalize function / source-string inputs, choose a device, transpile stages and construct a helper.
+- `shader.ts`: coordinate stage-specific layouts, uploads and pass submission.
+- `lifecycle.ts`: owned/borrowed resource leases, per-helper registry references, atomic batch rebinding and device-loss state.
+- `readback.ts`: native copy/map operations, data unpacking and unconditional staging cleanup.
+- `vertex-data.ts`: geometry uploads, count/offset validation, index packing and replacement leases.
+- `builtin-inputs.ts`: event listeners and browser resolution inputs without changing application handlers.
+- `shader-source.ts`: common runtime validation for source descriptors and chain stages.
+- `esbuild-plugin.mjs`: optional published build-time preservation of shader function source.
+- `compute-chain.ts`: route named inputs across ordered compute passes and defer readback until explicitly requested.
 
-The balance is making sure that when we reproduce examples that it doesn't look like some stupid alt-logic but something fairly native looking and with only minimal input requirements. We are confident we can get even the raytracing examples working where there are multiple compute and vertex passes, as we consider those to be the real tests, just with some more fairly straightforward tweaks to how bindgroups and such are linked. 
+Resource identity is independent of binding location. A compute storage texture and a fragment sampled texture can share one GPUTexture while using different slots and layouts. A chain shares the allocation registry, not mutable arrays of compiled layouts. Vertex and fragment declarations are combined only for their render pipeline.
 
-We're pretty close we think other than more utilities for handling specific i/o changes, stuff that you see in other shader compiler helpers, then this will be the real thing. 
+Remaining extension points include automatic nested host-shareable structures, richer typed helper signatures and additional texture copy formats. These should extend syntax/resource metadata rather than add global string replacements. New coverage should include actual GPU compilation or numeric results when practical. See README.md and tests/ for the supported contract.
 
-### Structs?
+The named compute chain adds `compute-chain.ts`: it translates named host inputs to each pass's positional inputs, uploads a shared allocation once per run, suppresses intermediate returns, serializes runs/reads and maps only explicitly requested final buffers. `pipeline.ts` resolves friendly aliases, including aliases that point to earlier implicit parameter names, and relocates native module slots unless the caller supplies them explicitly.
 
-Arbitary struct inputs are a little more tricky, how do we declare them? Classes seem like the best way, and we can use a function to identify if a function is a class constructor function (this is just how JS typeof responds)
+Factory-created GPU pipelines compile asynchronously; direct helper construction retains the synchronous path. Native entry points and specialization constants are stage-specific options. JavaScript syntax caching remains independent of GPU pipeline compilation.
 
-e.g. 
+The gallery keeps one shared device, starts or prewarms examples after scrolling settles, pauses based on actual preview visibility, and builds only the selected shader comparison. `scripts/shader-sources.mjs` preserves shader function source before host bundling: source parameter names are part of the binding API, so ordinary bundler renaming must not change them. Browser and GPU-test bundles use the same transformation.
 
-```js
+README.md is the public API contract. WEBGPU-COVERAGE.md distinguishes implemented/tested behavior, native escape hatches and unfinished features.
 
-function fragExample() {
-    
-    class MyStruct {
+Compute chains now give implicit uniform allocations a per-stage identity and batch dispatches in one encoder. Explicit shared uniform allocations retain ordered submissions. Caller-owned encoders stay unsubmitted, enabling native indirect commands, query resolution and copies to compose with the wrapper. Per-call named inputs are normalized in `ShaderContext.buffer`, alongside the existing positional path.
 
-        x = 'f32'
-        y = 'f32'
-        z = 'mat2x2<f32>'
-        w = 'vec4f'
-    }
+`workgroups.ts` validates generated workgroup shapes. Shared workgroup variables are declarations in the AST compiler's type environment, not host inputs or storage bindings. Fragment output objects produce an explicit WGSL output struct for MRT. Native uniform reflection splits nested member/type lists structurally; reflected member align/size attributes participate in layout compatibility. Numeric storage packing and readback handle vec3/matrix padding.
 
-    let instance = new MyStruct(3,4,mat2x2(vec2f(1,2),vec2f(3,4)),vec4f(0.3,0.4,0.5,1));
+Render attachment preparation distinguishes owned canvas attachments from caller-provided views. Canvas multisampling allocates matching color/depth textures and resolves; offscreen views and depth-only passes stay native. Texture uploads cover layers, mips and existing handles; external sources are imported/rebound per call. The browser VideoFrame test is separate from Dawn tests because native Node has no VideoFrame source API.
 
-}
-
-
-```
-
-which should transpile to something like
-
-```wgsl
-
-struct MyStruct {
-    x: f32,
-    y: f2,
-    z: mat2x2<f32>,
-    w: vec4f
-}
-
-
-@fragment
-fn frag(
-    ...
-)-> @location(0) vec4<f32> {
-    let instance = MyStruct(3,4,mat2x2(vec2f(1,2),vec2f(3,4)),vec4f(0.3,0.4,0.5,1));
-
-    //e.g. return an instance value as a color value
-    return instance.w;
-}
-
-```
-
-We may be able to also define input types as structs and then map object values inputted into a uniform buffer, 
-which right now we just generically bundle arrays in their own standalone structs or lump all non-arrays into uniforms.
-
-
-
-### HOW I AM ADDING FUNCTIONALITY
-
-First: what is it I want to add compatibility for?
-
-Second: Look for relevant transpilation operations in the transpiler.ts,
-
-#### For regex enhancements:
-
-Third: Paste to GPT and ask it to enhance the regex and replacing functions (you will want to look at the ast generators in the parse function and the generateDataStructures and generateMainFunctionWorkGroup functions)
-
-Fourth: Update anything in shader.ts as well related (again just search relevant WebGPU API calls you know need to be adjusted)
-
-Fifth: Make sure it runs, and just keep pasting to gpt with errors and make new conversations when it gets stuck in a loop of BS.
-
-#### For general API enhancements/updates:
-
-Third: Study the official webgpu docs and examples to figure out what functionality is missing or if we haven't streamlined around it enough to require reworking shader.ts or transpiler.ts (e.g. missing types or hard coded loops etc that work in current examples but don't reflect modular API requirements).
-
-Fourth: Study other people's workflows and consider automation possibilities.
-
-Fifth: Make alterations in the pipeline to attempt to generalize it across more and more complicated examples provided from authortiative, up to date sources, e.g. [webgpu-samples](https://webgpu.github.io/webgpu-samples/)
-
-Then:
-
-Sixth: Make it look not ugly to write the actual code as a user.
-
-And that's pretty much it but I am still reorganizing this stuff slowly so it's a little more modular and easy to tackle. Of course, as context sizes expand we might just be able to dump this entire library to an AI and have it rework it soon haha.
-
+The example build also attaches original host declaration text as `sourceCode`, including nested update functions. `example/host-source.js` reads this metadata for gallery/editor panels and exports; runtime functions remain ordinary callable functions. Configuration snippets reference shader names and omit presentation metadata and duplicate helper strings. `shader-info.js` provides consistent stage/entry-point labels; `pipeline-overview.js` lets readers navigate the shader set without claiming to infer host dispatch order.

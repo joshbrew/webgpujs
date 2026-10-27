@@ -1,0 +1,621 @@
+{
+  "format": "webgpujs-compatibility",
+  "version": 1,
+  "date": "2026-10-27T01:34:06.363Z",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36",
+  "rebuild": true,
+  "results": [
+    {
+      "id": "triangle",
+      "title": "Triangle",
+      "passed": true,
+      "shaders": 2
+    },
+    {
+      "id": "cube",
+      "title": "Textured cube",
+      "passed": true,
+      "shaders": 2
+    },
+    {
+      "id": "video-ascii",
+      "title": "Video / image → buffers → ASCII",
+      "passed": true,
+      "shaders": 4
+    },
+    {
+      "id": "torus",
+      "title": "Raymarched torus",
+      "passed": true,
+      "shaders": 2
+    },
+    {
+      "id": "soft-shadows",
+      "title": "Spheres and soft shadows",
+      "passed": true,
+      "shaders": 2
+    },
+    {
+      "id": "bump",
+      "title": "Procedural bump lighting",
+      "passed": true,
+      "shaders": 2
+    },
+    {
+      "id": "ocean",
+      "title": "3D water and reflections",
+      "passed": true,
+      "shaders": 3
+    },
+    {
+      "id": "deferred-lighting",
+      "title": "Deferred lighting with a G-buffer",
+      "passed": true,
+      "shaders": 4
+    },
+    {
+      "id": "stencil-portal",
+      "title": "A stencil-masked portal",
+      "passed": true,
+      "shaders": 4
+    },
+    {
+      "id": "shadow-map",
+      "title": "Depth-only shadow map",
+      "passed": true,
+      "shaders": 3
+    },
+    {
+      "id": "indirect-culling",
+      "title": "GPU culling → indirect instancing",
+      "passed": true,
+      "shaders": 4
+    },
+    {
+      "id": "mesh-normals",
+      "title": "Compute-generated mesh and normals",
+      "passed": true,
+      "shaders": 3
+    },
+    {
+      "id": "render-bundles",
+      "title": "Reusable render bundles and instances",
+      "passed": true,
+      "shaders": 2
+    },
+    {
+      "id": "occlusion-query",
+      "title": "Occlusion query and scissor",
+      "passed": true,
+      "shaders": 2
+    },
+    {
+      "id": "timestamp-query",
+      "title": "GPU compute timestamp profiling",
+      "passed": true,
+      "shaders": 3
+    },
+    {
+      "id": "half-precision",
+      "title": "Half-precision storage and error",
+      "passed": true,
+      "shaders": 4
+    },
+    {
+      "id": "mipmaps",
+      "title": "Mip levels and explicit LOD",
+      "passed": true,
+      "shaders": 2
+    },
+    {
+      "id": "texture-array",
+      "title": "Texture-array flipbook",
+      "passed": true,
+      "shaders": 2
+    },
+    {
+      "id": "volume-texture",
+      "title": "3D texture volume raymarch",
+      "passed": true,
+      "shaders": 2
+    },
+    {
+      "id": "cube-reflection",
+      "title": "Cube-map reflection lookup",
+      "passed": true,
+      "shaders": 2
+    },
+    {
+      "id": "voxel-workgroups",
+      "title": "3D workgroups and cooperative voxel reduction",
+      "passed": true,
+      "shaders": 3
+    },
+    {
+      "id": "game",
+      "title": "Crystal meadow · a playable scene",
+      "passed": true,
+      "shaders": 5
+    },
+    {
+      "id": "boids",
+      "title": "Flocking",
+      "passed": true,
+      "shaders": 3
+    },
+    {
+      "id": "particles",
+      "title": "Explicit particle field",
+      "passed": true,
+      "shaders": 3
+    },
+    {
+      "id": "life",
+      "title": "Conway’s Game of Life",
+      "passed": true,
+      "shaders": 4
+    },
+    {
+      "id": "waves",
+      "title": "2D wave equation",
+      "passed": true,
+      "shaders": 4
+    },
+    {
+      "id": "nbody",
+      "title": "N-body gravity",
+      "passed": true,
+      "shaders": 4
+    },
+    {
+      "id": "cloth",
+      "title": "Spring cloth",
+      "passed": true,
+      "shaders": 4
+    },
+    {
+      "id": "reaction",
+      "title": "Reaction-diffusion chemistry",
+      "passed": true,
+      "shaders": 6
+    },
+    {
+      "id": "heat",
+      "title": "Heat diffusion",
+      "passed": true,
+      "shaders": 4
+    },
+    {
+      "id": "cyclic",
+      "title": "Cyclic cellular automaton",
+      "passed": true,
+      "shaders": 4
+    },
+    {
+      "id": "excitable",
+      "title": "Excitable medium",
+      "passed": true,
+      "shaders": 4
+    },
+    {
+      "id": "coupled",
+      "title": "Coupled phase oscillators",
+      "passed": true,
+      "shaders": 4
+    },
+    {
+      "id": "dft",
+      "title": "Fourier transform",
+      "passed": true,
+      "shaders": 1
+    },
+    {
+      "id": "fft",
+      "title": "Radix-2 FFT analyzer",
+      "passed": true,
+      "shaders": 12
+    },
+    {
+      "id": "spectral",
+      "title": "FFT → filter → inverse FFT",
+      "passed": true,
+      "shaders": 22
+    },
+    {
+      "id": "fir",
+      "title": "FIR smoothing → gain",
+      "passed": true,
+      "shaders": 4
+    },
+    {
+      "id": "batch-fft",
+      "title": "256 channels · notch + bandpass",
+      "passed": true,
+      "shaders": 41
+    },
+    {
+      "id": "fft-2d",
+      "title": "2D FFT → spatial filtering → inverse",
+      "passed": true,
+      "shaders": 38
+    },
+    {
+      "id": "correlation",
+      "title": "Template cross-correlation",
+      "passed": true,
+      "shaders": 3
+    },
+    {
+      "id": "interference",
+      "title": "Wave interference",
+      "passed": true,
+      "shaders": 2
+    },
+    {
+      "id": "diffraction",
+      "title": "Seven-slit diffraction",
+      "passed": true,
+      "shaders": 2
+    },
+    {
+      "id": "streaming-biquad",
+      "title": "Streaming multichannel IIR filters",
+      "passed": true,
+      "shaders": 6
+    },
+    {
+      "id": "stft",
+      "title": "Windowed FFT spectrogram",
+      "passed": true,
+      "shaders": 12
+    },
+    {
+      "id": "coherence",
+      "title": "Magnitude-squared spectral coherence",
+      "passed": true,
+      "shaders": 4
+    },
+    {
+      "id": "overlap-add",
+      "title": "Block FIR overlap-add convolution",
+      "passed": true,
+      "shaders": 4
+    },
+    {
+      "id": "haar-wavelet",
+      "title": "Haar wavelet denoising",
+      "passed": true,
+      "shaders": 7
+    },
+    {
+      "id": "hilbert-envelope",
+      "title": "Hilbert FIR envelope detection",
+      "passed": true,
+      "shaders": 3
+    },
+    {
+      "id": "phase-correlation",
+      "title": "FFT phase-correlation registration",
+      "passed": true,
+      "shaders": 44
+    },
+    {
+      "id": "implicit-chain",
+      "title": "Implicit compute chain",
+      "passed": true,
+      "shaders": 2
+    },
+    {
+      "id": "histogram",
+      "title": "Atomic histogram → summary → display",
+      "passed": true,
+      "shaders": 4
+    },
+    {
+      "id": "reduction",
+      "title": "Workgroup parallel reduction",
+      "passed": true,
+      "shaders": 4
+    },
+    {
+      "id": "matrix",
+      "title": "Tiled matrix multiplication",
+      "passed": true,
+      "shaders": 3
+    },
+    {
+      "id": "sort",
+      "title": "Bitonic sorting network",
+      "passed": true,
+      "shaders": 3
+    },
+    {
+      "id": "scan",
+      "title": "Parallel prefix scan",
+      "passed": true,
+      "shaders": 4
+    },
+    {
+      "id": "compact",
+      "title": "Stream compaction",
+      "passed": true,
+      "shaders": 12
+    },
+    {
+      "id": "nearest",
+      "title": "All-pairs nearest neighbors",
+      "passed": true,
+      "shaders": 3
+    },
+    {
+      "id": "rle",
+      "title": "Parallel run-length encoding",
+      "passed": true,
+      "shaders": 11
+    },
+    {
+      "id": "spatial",
+      "title": "Atomic spatial binning",
+      "passed": true,
+      "shaders": 3
+    },
+    {
+      "id": "exclusive-scan",
+      "title": "Exclusive parallel scan",
+      "passed": true,
+      "shaders": 11
+    },
+    {
+      "id": "segmented-scan",
+      "title": "Segmented prefix sums",
+      "passed": true,
+      "shaders": 10
+    },
+    {
+      "id": "l2-norm",
+      "title": "Parallel L2 norm",
+      "passed": true,
+      "shaders": 6
+    },
+    {
+      "id": "argmax",
+      "title": "Argmax with a stable index",
+      "passed": true,
+      "shaders": 6
+    },
+    {
+      "id": "variance",
+      "title": "Stable mean and variance",
+      "passed": true,
+      "shaders": 6
+    },
+    {
+      "id": "softmax",
+      "title": "Stable multi-pass softmax",
+      "passed": true,
+      "shaders": 7
+    },
+    {
+      "id": "row-normalization",
+      "title": "Row-wise feature normalization",
+      "passed": true,
+      "shaders": 4
+    },
+    {
+      "id": "cosine-similarity",
+      "title": "Pairwise cosine similarity",
+      "passed": true,
+      "shaders": 3
+    },
+    {
+      "id": "batched-dot",
+      "title": "Batched vector dot products",
+      "passed": true,
+      "shaders": 3
+    },
+    {
+      "id": "sparse-matvec",
+      "title": "CSR sparse matrix × vector",
+      "passed": true,
+      "shaders": 3
+    },
+    {
+      "id": "jacobi",
+      "title": "Jacobi relaxation solver",
+      "passed": true,
+      "shaders": 66
+    },
+    {
+      "id": "kmeans",
+      "title": "K-means assignment and centroid updates",
+      "passed": true,
+      "shaders": 19
+    },
+    {
+      "id": "gpu-hash",
+      "title": "Atomic GPU hash table",
+      "passed": true,
+      "shaders": 4
+    },
+    {
+      "id": "graph-bfs",
+      "title": "GPU breadth-first grid traversal",
+      "passed": true,
+      "shaders": 51
+    },
+    {
+      "id": "texture-chain",
+      "title": "Generate → blur → sample",
+      "passed": true,
+      "shaders": 4
+    },
+    {
+      "id": "integral",
+      "title": "Summed-area table → box queries",
+      "passed": true,
+      "shaders": 13
+    },
+    {
+      "id": "sobel",
+      "title": "Sobel edge detection",
+      "passed": true,
+      "shaders": 4
+    },
+    {
+      "id": "bloom",
+      "title": "Bright-pass bloom",
+      "passed": true,
+      "shaders": 4
+    },
+    {
+      "id": "sharpen",
+      "title": "Unsharp edge enhancement",
+      "passed": true,
+      "shaders": 4
+    },
+    {
+      "id": "emboss",
+      "title": "Directional emboss",
+      "passed": true,
+      "shaders": 4
+    },
+    {
+      "id": "pixelate",
+      "title": "Pixelation",
+      "passed": true,
+      "shaders": 4
+    },
+    {
+      "id": "dither",
+      "title": "Stochastic dithering",
+      "passed": true,
+      "shaders": 4
+    },
+    {
+      "id": "chromatic",
+      "title": "Chromatic separation",
+      "passed": true,
+      "shaders": 4
+    },
+    {
+      "id": "mosaic",
+      "title": "Mosaic averaging",
+      "passed": true,
+      "shaders": 4
+    },
+    {
+      "id": "convolution",
+      "title": "Storage-buffer image convolution",
+      "passed": true,
+      "shaders": 3
+    },
+    {
+      "id": "median-filter",
+      "title": "Parallel median denoising",
+      "passed": true,
+      "shaders": 3
+    },
+    {
+      "id": "dct-compression",
+      "title": "8×8 DCT image compression",
+      "passed": true,
+      "shaders": 5
+    },
+    {
+      "id": "histogram-equalization",
+      "title": "Histogram → CDF → image equalization",
+      "passed": true,
+      "shaders": 15
+    },
+    {
+      "id": "mandelbrot",
+      "title": "Mandelbrot",
+      "passed": true,
+      "shaders": 2
+    },
+    {
+      "id": "julia",
+      "title": "Julia orbit",
+      "passed": true,
+      "shaders": 2
+    },
+    {
+      "id": "burning-ship",
+      "title": "Burning Ship",
+      "passed": true,
+      "shaders": 2
+    },
+    {
+      "id": "metaballs",
+      "title": "Metaball field",
+      "passed": true,
+      "shaders": 2
+    },
+    {
+      "id": "voronoi",
+      "title": "Animated Voronoi",
+      "passed": true,
+      "shaders": 2
+    },
+    {
+      "id": "terrain",
+      "title": "Fractal terrain",
+      "passed": true,
+      "shaders": 2
+    },
+    {
+      "id": "warp",
+      "title": "Domain warping",
+      "passed": true,
+      "shaders": 2
+    },
+    {
+      "id": "kaleidoscope",
+      "title": "Polar kaleidoscope",
+      "passed": true,
+      "shaders": 2
+    },
+    {
+      "id": "tunnel",
+      "title": "Polar tunnel",
+      "passed": true,
+      "shaders": 2
+    },
+    {
+      "id": "newton",
+      "title": "Newton basins",
+      "passed": true,
+      "shaders": 2
+    },
+    {
+      "id": "gyroid",
+      "title": "Gyroid volume",
+      "passed": true,
+      "shaders": 2
+    },
+    {
+      "id": "menger",
+      "title": "Menger sponge",
+      "passed": true,
+      "shaders": 2
+    },
+    {
+      "id": "caustics",
+      "title": "Refracted caustics",
+      "passed": true,
+      "shaders": 2
+    }
+  ],
+  "uncaptured": [],
+  "adapter": {
+    "vendor": "nvidia",
+    "architecture": "lovelace",
+    "description": ""
+  },
+  "features": [
+    "core-features-and-limits",
+    "shader-f16",
+    "timestamp-query"
+  ],
+  "passed": true
+}

@@ -1,0 +1,16 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>External texture coverage</title>
+  </head>
+  <body>
+    <h1>External texture coverage</h1>
+    <canvas width="128" height="64"></canvas>
+    <pre id="status">Testing VideoFrame import and refresh...</pre>
+    <script type="module">
+      import { checkExternalFrames } from "./browser-external.js";
+      await checkExternalFrames();
+    </script>
+  </body>
+</html>

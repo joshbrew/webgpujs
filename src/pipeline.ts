@@ -1,328 +1,372 @@
-import { WGSLTranspiler } from "./transpiler";
-import {ShaderHelper} from './shader'//'../example/shader_renderer_works'// //'../example/shader_renderer_works'
-import {ShaderOptions, RenderOptions, ComputeOptions, RenderPassSettings, ComputePassSettings, TranspiledShader} from './types'
+import {
+  isShaderSource,
+  shaderDescriptor,
+  type ShaderStages,
+} from "./shader-source.js";
+import { deviceState, assertDeviceAvailable } from "./lifecycle.js";
+import { WGSLTranspiler } from "./transpiler.js";
+import { parseFunction } from "./parser.js";
+import { rawShader, reflectResources } from "./bindings.js";
+import { ShaderHelper } from "./shader.js";
+import {
+  ComputeChain,
+  type ComputeChainStage,
+  type ComputeChainPass,
+} from "./compute-chain.js";
+import type {
+  ShaderOptions,
+  RenderOptions,
+  ComputeOptions,
+  ShaderStage,
+  ShaderSource,
+  TranspiledShader,
+  PipelineOptions,
+} from "./types.js";
 
-// pipeline, transpiler, shader.
-
-// pipeline handles setup and recycling for webgpu and our shader classes
-// transpiler... transpiles
-// shader keeps specific data structures and webgpu logic per compute/render pipeline
-
-/**
- * 
-## WebGPU Pipeline Setup (Generalized for Compute and Rendering)
-
-### 1. Initialization:
-
-#### - Device Setup:
-   * If a device is not provided, request an adapter and then request a device from that adapter.
-
-#### - Bind Group Layout Creation:
-   * Define the layout of resources (like buffers and textures) that will be available to the shader(s).
-
-#### - Pipeline Layout Creation:
-   * Create a pipeline layout using the bind group layout(s).
-
-#### - Shader Module Creation:
-   * Define shader module(s) containing the shader code that will be executed on the GPU. This could be a compute shader for compute pipelines or vertex/fragment shaders for rendering pipelines.
-
-#### - Pipeline Creation:
-   * For a **Compute Pipeline**: Create a compute pipeline using the pipeline layout and the compute shader module.
-   * For a **Rendering Pipeline**: Create a render pipeline using the pipeline layout, vertex shader, fragment shader, and other configurations like blending, rasterization, and depth-stencil operations.
-
-### 2. Data Processing or Rendering:
-
-#### - Buffer Management:
-   * Check if the required buffers exist and if their sizes match the current input or requirements. If not, create and populate them as needed.
-
-#### - Bind Group Creation:
-   * Create bind groups that bind the buffers, textures, or other resources to the bindings defined in the bind group layout.
-
-#### - Command Encoding:
-   * Create a command encoder.
-   * Begin a pass (compute or render pass).
-   * Set the pipeline (compute or render pipeline) and bind group(s).
-   * For a **Compute Pipeline**: Dispatch workgroups to execute the compute shader.
-   * For a **Rendering Pipeline**: Set vertex and index buffers, draw calls, etc.
-   * End the pass.
-
-#### - Data Transfer (if needed):
-   * If results need to be read back from the GPU, create staging buffers and copy the results from the GPU buffers to the staging buffers.
-
-#### - Command Submission:
-   * Submit the commands to the device's queue for execution.
-
-#### - Result Retrieval (if applicable):
-   * Once the GPU finishes processing, map the staging buffer(s) to read the results, copy them to a new array or structure, and return or use them as needed.
-
- * 
- */
+export type ShaderSources = ShaderSource | ShaderStages;
+type Options = PipelineOptions;
+let chainSerial = 0;
 
 export class WebGPUjs {
-    static device:GPUDevice;
-    
-    static createPipeline = async (
-        shaders: Function | {
-                code:Function|string, 
-                transpileString?:boolean //functions are auto-transpiled
-            } | {
-                compute:string|Function,
-                vertex:string|Function,
-                fragment:string|Function,
-                transpileString?:boolean
-            },
-        options:ShaderOptions & ComputeOptions & RenderOptions = {}
-    ):Promise<ShaderHelper> => {
+  static device: GPUDevice;
+  private static defaultDevicePromise?: Promise<GPUDevice>;
+  private static async defaultDevice(): Promise<GPUDevice> {
+    if (this.device && !deviceState(this.device).lost) return this.device;
+    this.device = undefined;
+    if (!this.defaultDevicePromise) {
+      this.defaultDevicePromise = (async () => {
+        if (typeof navigator === "undefined" || !navigator.gpu)
+          throw new Error(
+            "WebGPU is unavailable; supply a GPUDevice or use a supported browser in a secure context",
+          );
+        const adapter = await navigator.gpu.requestAdapter();
+        if (!adapter) throw new Error("No GPU adapter available");
+        const device = await adapter.requestDevice();
+        deviceState(device);
+        this.device = device;
+        return device;
+      })().finally(() => {
+        this.defaultDevicePromise = undefined;
+      });
+    }
+    return this.defaultDevicePromise;
+  }
+  /** Connect compute passes by parameter name, with optional explicit resource aliases. */
+  static async createComputeChain(
+    stages: ComputeChainStage[],
+    options: ShaderOptions & ComputeOptions = {},
+  ) {
+    if (!Array.isArray(stages) || !stages.length)
+      throw new Error("A compute chain needs at least one shader");
+    const definitions: ComputeChainPass[] = stages.map((stage, index) => {
+      if (isShaderSource(stage)) {
+        shaderDescriptor(stage, "compute");
+        return { shader: stage };
+      }
+      if (!stage || typeof stage !== "object" || !isShaderSource(stage.shader))
+        throw new Error(
+          `Pass ${index + 1}: provide a compute shader or {shader,resources?,inputs?,options?}`,
+        );
+      shaderDescriptor(stage.shader, "compute");
+      return {
+        ...stage,
+        resources: { ...stage.resources },
+        inputs: { ...stage.inputs },
+        options: { ...stage.options },
+      };
+    });
+    const passes: ShaderHelper[] = [];
+    const allocations = new Map<string, string>();
+    const namespace = `webgpujs:chain:${chainSerial++}`;
+    try {
+      for (const [index, stage] of definitions.entries()) {
+        const resourceBindings = {
+          ...options.resourceBindings,
+          ...options.shaderBindings?.compute,
+          ...stage.options?.resourceBindings,
+          ...stage.options?.shaderBindings?.compute,
+        };
+        const publicBindings = { ...resourceBindings };
+        // A resource alias can refer to an earlier implicit parameter name.
+        // Keep its actual allocation identity while exposing the friendly name to run().
+        for (const [name, specification] of Object.entries(resourceBindings))
+          if (specification.resource && allocations.has(specification.resource))
+            resourceBindings[name] = {
+              ...specification,
+              resource: allocations.get(specification.resource),
+            };
+        for (const [name, resource] of Object.entries(stage.resources || {}))
+          resourceBindings[name] = {
+            ...resourceBindings[name],
+            resource: allocations.get(resource) || resource,
+          };
+        const code =
+          typeof stage.shader === "string"
+            ? stage.shader
+            : typeof stage.shader === "object" &&
+                !stage.shader.transpileString &&
+                typeof stage.shader.code === "string"
+              ? stage.shader.code
+              : undefined;
+        // A later parameter may use the public name introduced by an earlier alias.
+        // Resolve that name before the general linker considers authored parameter names.
+        const storageNames = code
+          ? reflectResources(code)
+              .filter((resource) => resource.kind === "buffer")
+              .map((resource) => resource.name)
+          : parseFunction(
+              (typeof stage.shader === "object"
+                ? stage.shader.code
+                : stage.shader
+              ).toString(),
+            )
+              .params.filter((parameter) => {
+                const value = parameter.right;
+                const name = (parameter.left || parameter).name;
+                const declared =
+                  resourceBindings[name]?.type ||
+                  stage.options?.variableTypes?.[name] ||
+                  options.variableTypes?.[name];
+                const explicit = (
+                  typeof declared === "string" ? declared : declared?.type
+                )?.replace(/\s/g, "");
+                return (
+                  explicit?.startsWith("array<") ||
+                  (value?.type === "Literal" &&
+                    typeof value.value === "string" &&
+                    value.value.replace(/\s/g, "").startsWith("array<")) ||
+                  value?.type === "ArrayExpression" ||
+                  (value?.type === "NewExpression" &&
+                    /Array$/.test(value.callee?.name))
+                );
+              })
+              .map((parameter) => (parameter.left || parameter).name);
+        for (const name of storageNames)
+          if (allocations.has(name) && !resourceBindings[name]?.resource)
+            resourceBindings[name] = {
+              ...resourceBindings[name],
+              resource: allocations.get(name),
+            };
 
-
-        let device = options.device; //device is required!
-        if (!device) {
-            device = WebGPUjs.device;
-            if(!device) {
-                const gpu = navigator.gpu;
-                const adapter = await gpu.requestAdapter();
-                if(!adapter) throw new Error('No GPU Adapter found!');
-                device = await adapter.requestDevice();
-                WebGPUjs.device = device;
-            }
-            options.device = device;
+        // Per-pass uniforms are snapshots: batched dispatches must not all see the last span/gain.
+        const uniforms = code
+          ? reflectResources(code)
+              .filter((r) => r.kind === "uniform")
+              .map((r) => r.name)
+          : ["uniforms", "defaults"];
+        for (const name of uniforms)
+          resourceBindings[name] = {
+            ...resourceBindings[name],
+            resource:
+              resourceBindings[name]?.resource ||
+              `${namespace}:${index}:${name}`,
+          };
+        if (code) {
+          // Native stages have independent layouts. Relocate their authored slots
+          // automatically inside a chain, unless the caller explicitly assigned one.
+          const group =
+            stage.options?.bindGroupNumber ?? options.bindGroupNumber ?? 0;
+          let binding =
+            Math.max(
+              -1,
+              ...(passes.at(-1)?.linkedResources || [])
+                .filter((r) => r.group === group)
+                .map((r) => r.binding),
+            ) + 1;
+          const reflected = reflectResources(code);
+          const reserved = new Set(
+            Object.values(resourceBindings)
+              .filter(
+                (spec) =>
+                  spec.binding !== undefined && (spec.group ?? group) === group,
+              )
+              .map((spec) => spec.binding),
+          );
+          for (const resource of reflected) {
+            const spec = resourceBindings[resource.name] || {};
+            while (reserved.has(binding)) binding++;
+            resourceBindings[resource.name] = {
+              ...spec,
+              group: spec.group ?? group,
+              binding: spec.binding ?? binding++,
+            };
+          }
         }
-
-        if(options.canvas) {
-            if(!options.context) 
-                options.context = options.canvas.getContext('webgpu') as any;
-        }
-
-        if(typeof shaders === 'function') {
-            const shader = WGSLTranspiler.convertToWebGPU(
-                shaders,
-                options.canvas ? 'fragment' : 'compute', 
-                options.bindGroupNumber, 
-                options.workGroupSize, 
-                options.renderPass?.vbos as any, 
-                options.functions,
-                options.variableTypes,
-                options.renderPass?.textures,
-                options.lastBinding,
-                options.params
+        const settings = {
+          ...options,
+          ...stage.options,
+          resourceBindings,
+          shaderBindings: { compute: resourceBindings },
+          // Each pipeline has its own layout; reuse group zero across arbitrarily many passes.
+          bindGroupNumber:
+            stage.options?.bindGroupNumber ?? options.bindGroupNumber ?? 0,
+          computePass: {
+            ...options.computePass,
+            ...stage.options?.computePass,
+            skipOutputDef: true,
+          },
+        };
+        const pass = passes.length
+          ? await WebGPUjs.combineShaders(
+              { compute: stage.shader },
+              settings,
+              passes.at(-1),
+            )
+          : await WebGPUjs.createPipeline({ compute: stage.shader }, settings);
+        passes.push(pass);
+        for (const descriptor of pass.compute.resources.filter(
+          (resource) => resource.kind === "buffer",
+        )) {
+          const name =
+            stage.resources?.[descriptor.name] ||
+            publicBindings[descriptor.name]?.resource ||
+            descriptor.name;
+          const previous = allocations.get(name);
+          if (previous && previous !== descriptor.resource)
+            throw new Error(
+              `Ambiguous chain resource "${name}"; use an explicit resources mapping`,
             );
-
-            if(options.previousPipeline) {
-                for(const key in options.previousPipeline.prototypes) {
-                    let combined = WGSLTranspiler.combineBindings(
-                        shader.code, 
-                        options.previousPipeline.prototypes[key],
-                        false
-                    );
-                    shader.code = combined.code1;
-                    shader.altBindings = combined.changes1;
-                } 
-            }
-
-            let shaderPipeline;
-            if(shader.type === 'compute') {
-                shaderPipeline = new ShaderHelper({compute:shader}, options);
-            } else {
-                shaderPipeline = new ShaderHelper({fragment:shader}, options);
-            }
-
-            // if(options.inputs || options.renderPass) {
-            //     if(shaderPipeline['compute']) {
-            //         shaderPipeline.process(...options.inputs as any[]);
-            //     }
-            //     if(shaderPipeline['fragment']) {
-            //         let inps = options.inputs? [...options.inputs] : [];
-            //         shaderPipeline.render({...options.renderPass}, ...inps);
-            //     }
-            // }
-    
-            return shaderPipeline;
-
-        } else {
-            const block = shaders as any;
-            if(block.code) {
-                if(typeof block.code === 'function' || block.transpileString) {
-                    block.code = WGSLTranspiler.convertToWebGPU(
-                        block.code, 
-                        options.canvas ? 'fragment' : 'compute', 
-                        options.bindGroupNumber, 
-                        options.workGroupSize, 
-                        options.renderPass?.vbos as any, 
-                        options.functions,
-                        options.variableTypes,
-                        options.renderPass?.textures,
-                        options.lastBinding,
-                        options.params
-                    );
-                }
-
-                if(options.previousPipeline) {
-                    for(const key in options.previousPipeline.prototypes) {
-                        let combined = WGSLTranspiler.combineBindings(
-                            block.code, 
-                            options.previousPipeline.prototypes[key],
-                            false
-                        );
-                        block.code = combined.code1;
-                        block.altBindings = combined.changes1;
-                    } 
-                }
-
-                const shaderPipeline = this.init(block,options);
-
-                // if(options.inputs || options.renderPass) {
-                //     if(shaderPipeline['compute']) {
-                //         shaderPipeline.process(...options.inputs as any[]);
-                //     }
-                //     if(shaderPipeline['fragment']) {
-                //         let inps = options.inputs? [...options.inputs] : [];
-                //         shaderPipeline.render({...options.renderPass}, ...inps);
-                //     }
-                // }
-                
-                return shaderPipeline;
-            } else {
-                if(block.compute) {
-                    if(typeof block.compute === 'function' || block.transpileString) {
-                        block.compute = WGSLTranspiler.convertToWebGPU(
-                            block.compute, 
-                            'compute',
-                            options.bindGroupNumber, 
-                            options.workGroupSize, 
-                            options.renderPass?.vbos as any, 
-                            options.functions,
-                            options.variableTypes,
-                            options.renderPass?.textures,
-                            options.lastBinding,
-                            options.params
-                        );
-                    }
-                }
-                if(block.vertex) {
-                    if(typeof block.vertex === 'function' || block.transpileString) {
-                        block.vertex = WGSLTranspiler.convertToWebGPU(
-                            block.vertex, 
-                            'vertex', 
-                            block.compute ? block.compute.bindGroupNumber + 1 : options.bindGroupNumber, 
-                            options.workGroupSize, 
-                            options.renderPass?.vbos as any, 
-                            options.functions,
-                            options.variableTypes,
-                            options.renderPass?.textures,
-                            options.lastBinding,
-                            block.compute?.params || options.params
-                        );
-                        options.lastBinding = block.vertex.lastBinding;
-                    }
-                }
-                if(block.fragment) {
-                    if(typeof block.fragment === 'function' || block.transpileString) {
-                        block.fragment = WGSLTranspiler.convertToWebGPU(
-                            block.fragment, 
-                            'fragment', 
-                            block.compute ? block.compute.bindGroupNumber + 1 : options.bindGroupNumber,
-                            options.workGroupSize,  
-                            options.renderPass?.vbos as any, 
-                            options.functions,
-                            options.variableTypes,
-                            options.renderPass?.textures,
-                            options.lastBinding,
-                            block.vertex?.params || block.compute?.params || options.params
-                        );
-                    }
-                }
-
-                //combine shader bindings where variable names are shared.
-                if(options.previousPipeline) {
-                    for(const key in block) {
-                        for(const key2 in options.previousPipeline.prototypes) {
-                            let combined = WGSLTranspiler.combineBindings(
-                                options.previousPipeline.prototypes[key2].code,
-                                block[key].code, 
-                                false,
-                                block[key].params
-                            );
-                            block[key].code = combined.code2;
-                            block[key].altBindings = combined.changes2;
-                        }
-                        
-                    }
-                }
-
-                const shaderPipeline = new ShaderHelper(block,options);
-
-                // if(options.inputs || options.renderPass) {
-                //     let inps = options.inputs? [...options.inputs] : [];
-                //     if(options.inputs && shaderPipeline['compute']) {
-                //         shaderPipeline.process(...inps as any[]);
-                //     }
-                //     if(shaderPipeline['fragment'] || shaderPipeline['vertex']) {
-                //         let opts; 
-                //         if(options.renderPass) {
-                //             opts = {...options.renderPass, newBindings:true}; 
-                //             delete opts.textures; //prevent rewriting textures
-                //         }
-                //         shaderPipeline.render(opts, ...inps);
-                //     }
-                // }
-        
-                return shaderPipeline;
-                
-            }
+          allocations.set(name, descriptor.resource);
         }
-
-        
+        stage.options = {
+          ...options,
+          ...stage.options,
+          resourceBindings: publicBindings,
+        };
+      }
+      return new ComputeChain(passes, definitions);
+    } catch (error) {
+      for (const pass of passes) pass.dispose();
+      throw error;
     }
-
-    static init = (
-        shaders:{
-            compute?:TranspiledShader,
-            fragment?:TranspiledShader,
-            vertex?:TranspiledShader
-        },
-        options?:ShaderOptions & ComputeOptions & RenderOptions
-    ) => {
-        return new ShaderHelper(shaders, options);
+  }
+  static createPipeline = async (
+    sources: ShaderSources,
+    options: Options = {},
+  ): Promise<ShaderHelper> => {
+    options = {
+      ...options,
+      entryPoints: { ...options.entryPoints },
+      constants: { ...options.constants },
+    };
+    if (!sources || !["function", "string", "object"].includes(typeof sources))
+      throw new Error(
+        "Provide shader functions, WGSL strings or stage descriptors",
+      );
+    options.device ||= await this.defaultDevice();
+    assertDeviceAvailable(options.device);
+    if (options.canvas && !options.context) {
+      options.context = options.canvas.getContext("webgpu") as GPUCanvasContext;
+      if (!options.context)
+        throw new Error("Cannot create a WebGPU canvas context");
     }
-
-    //we can compile shaders linearly so that bindings with the same variable names/usage become shared
-    static combineShaders = (
-        shaders: Function | {
-            code:Function|string, 
-            transpileString?:boolean //functions are auto-transpiled
-        } | {
-            compute:string|Function,
-            vertex:string|Function,
-            fragment:string|Function,
-            transpileString?:boolean
-        },
-        options:ShaderOptions & ComputeOptions & RenderOptions = {},
-        previousPipeline:ShaderHelper
-    ):Promise<ShaderHelper> => {
-
-        let bindGroupNumber = previousPipeline.bindGroupLayouts.length;
-        options.device = previousPipeline.device;
-        if(options.bindGroupLayouts) 
-            previousPipeline.bindGroupLayouts.push(...options.bindGroupLayouts);
-        options.bindGroupNumber = bindGroupNumber;
-        options.bindGroupLayouts = previousPipeline.bindGroupLayouts;
-        options.bindGroups = previousPipeline.bindGroups;
-        options.bufferGroups = previousPipeline.bufferGroups;
-        options.previousPipeline = previousPipeline;
-        options.params = previousPipeline.prototypes['fragment'] ? previousPipeline.prototypes['fragment'].params : previousPipeline.prototypes['compute'].params; //get prev params for shader transpilation
-
-        return WebGPUjs.createPipeline(
-            shaders,
-            options
-        ); //generate a new helper for the new shaders that combines previous information like layouts and buffers. Variable names can reference the same bindings now inputted in whatever order.
+    const single = isShaderSource(sources);
+    const block: ShaderStages = single
+      ? { [options.canvas ? "fragment" : "compute"]: sources }
+      : sources;
+    const shaders: Partial<Record<ShaderStage, TranspiledShader>> = {};
+    const baseGroup = options.bindGroupNumber ?? 0;
+    for (const stage of ["compute", "vertex", "fragment"] as ShaderStage[]) {
+      const source = block[stage];
+      if (source === undefined) continue;
+      const descriptor = shaderDescriptor(source, stage);
+      if (descriptor.entryPoint && !options.entryPoints[stage])
+        options.entryPoints[stage] = descriptor.entryPoint;
+      if (descriptor.constants)
+        options.constants[stage] = {
+          ...descriptor.constants,
+          ...options.constants[stage],
+        };
+      const bindings = {
+        ...options.resourceBindings,
+        ...options.shaderBindings?.[stage],
+      };
+      const group =
+        stage === "compute" || !block.compute ? baseGroup : baseGroup + 1;
+      const transpile =
+        typeof descriptor.code === "function" ||
+        descriptor.transpileString ||
+        block.transpileString;
+      const shader = transpile
+        ? WGSLTranspiler.convertToWebGPU(
+            descriptor.code,
+            stage,
+            group,
+            options.workGroupSize,
+            options.renderPass?.vbos as any,
+            options.functions,
+            options.variableTypes,
+            options.renderPass?.textures,
+            options.lastBinding,
+            options.params,
+            bindings,
+            stage === "compute" ? options.workgroupVariables : undefined,
+          )
+        : rawShader(descriptor.code as string, stage, group, bindings);
+      if (options.prependCode)
+        shader.code = options.prependCode + "\n" + shader.code;
+      shaders[stage] = shader;
     }
-
-    static cleanup = (shaderPipeline) => {
-        if(shaderPipeline.device) shaderPipeline.device.destroy(); //destroys all info associated with pipelines on this device
-        if(shaderPipeline.context) shaderPipeline.context.unconfigure();
+    if (!Object.keys(shaders).length)
+      throw new Error(
+        "Provide at least one compute, vertex or fragment shader",
+      );
+    const helper = new ShaderHelper(shaders, {
+      asyncCompilation: true,
+      ...options,
+    });
+    try {
+      const compiled = await Promise.allSettled(helper.pendingCompilation);
+      const failure = compiled.find((result) => result.status === "rejected");
+      if (failure?.status === "rejected") throw failure.reason;
+    } catch (error) {
+      helper.dispose();
+      const diagnostics = await Promise.all(
+        [helper.compute, helper.vertex, helper.fragment]
+          .filter(Boolean)
+          .map(async (context) => {
+            const info = await context.shaderModule.getCompilationInfo();
+            return info.messages
+              .filter((message) => message.type === "error")
+              .map((message) => `line ${message.lineNum}: ${message.message}`)
+              .join("\n");
+          }),
+      );
+      throw new Error(diagnostics.filter(Boolean).join("\n") || error.message);
     }
+    return helper;
+  };
 
+  static init = (
+    shaders: Partial<Record<ShaderStage, TranspiledShader>>,
+    options?: Options,
+  ) => new ShaderHelper(shaders, options);
+
+  /** Share allocations with an earlier helper without changing its compiled layouts or parameter order. */
+  static combineShaders = (
+    shaders: ShaderSources,
+    options: Options = {},
+    previousPipeline: ShaderHelper,
+  ): Promise<ShaderHelper> => {
+    if (!previousPipeline)
+      throw new Error("combineShaders requires a previous pipeline");
+    previousPipeline.assertUsable();
+    if (options.device && options.device !== previousPipeline.device)
+      throw new Error("Chained shaders must use the same GPUDevice");
+    const group =
+      Math.max(-1, ...previousPipeline.linkedResources.map((r) => r.group)) + 1;
+    return WebGPUjs.createPipeline(shaders, {
+      ...options,
+      device: previousPipeline.device,
+      bindGroupNumber: options.bindGroupNumber ?? group,
+      previousPipeline,
+    });
+  };
+
+  static dispose = (pipeline: ShaderHelper | ComputeChain) =>
+    pipeline.dispose();
+  /** Compatibility alias for dispose(). Does not destroy the GPUDevice. */
+  static cleanup = (pipeline: ShaderHelper | ComputeChain) =>
+    pipeline.dispose();
 }
-
 export default WebGPUjs;
-

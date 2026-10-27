@@ -1,25 +1,26 @@
-import { Param, TranspiledShader } from "./types";
+import { Param, TranspiledShader, ShaderBinding } from "./types.js";
+/** JavaScript shader syntax is parsed before WGSL is generated. No JavaScript is evaluated. */
 export declare class WGSLTranspiler {
     static builtInUniforms: {
         resX: {
             type: string;
-            callback: (shaderContext: any) => any;
+            callback: (context: any) => number;
         };
         resY: {
             type: string;
-            callback: (shaderContext: any) => any;
+            callback: (context: any) => number;
         };
         mouseX: {
             type: string;
-            callback: (shaderContext: any) => any;
+            callback: (context: any) => any;
         };
         mouseY: {
             type: string;
-            callback: (shaderContext: any) => any;
+            callback: (context: any) => any;
         };
         clicked: {
             type: string;
-            callback: (shaderContext: any) => any;
+            callback: (context: any) => any;
         };
         frame: {
             type: string;
@@ -30,117 +31,69 @@ export declare class WGSLTranspiler {
             callback: (shaderContext: any) => number;
         };
     };
-    static getFunctionHead: (methodString: any) => any;
-    static splitIgnoringBrackets: (str: any) => any[];
-    static tokenize(funcStr: any): {
-        token: any;
-        isInput: boolean;
-    }[];
-    static excludedNames: {
-        position: boolean;
-        pixel: boolean;
-    };
-    static parse: (fstr: any, tokens: any, shaderType: string, vertexBufferOptions: any) => any[];
-    static inferTypeFromValue(value: any, funcStr: any, ast: any, defaultValue?: any): any;
-    static flattenStrings(arr: any): any;
-    static generateDataStructures(funcStr: any, ast: any, bindGroup?: number, shaderType?: 'compute' | 'fragment' | 'vertex', variableTypes?: {
+    static convertToWebGPU(func: Function | string, shaderType?: "compute" | "vertex" | "fragment", bindGroupNumber?: number, workGroupSize?: import("./types.js").WorkgroupSize, vertexBufferOptions?: any[], gpuFuncs?: (Function | string)[], variableTypes?: {
         [key: string]: string | {
             prefix?: string;
             type: string;
         };
     }, textureOptions?: {
-        [key: string]: {
-            binding?: string | number;
-            group?: string | number;
-            type?: string;
-            isDepth?: boolean;
-            isStorage?: boolean;
-            isSampler?: boolean;
-            isComparisonSampler?: boolean;
-            [key: string]: any;
-        };
-    }, minBinding?: number, prevParams?: Param[]): {
-        code: string;
-        params: Param[];
-        defaultUniforms: any;
-        lastBinding: number;
-    };
-    static extractAndTransposeInnerFunctions(body: any, extract: boolean, ast: any, params: any, shaderType: any, vertexBufferOptions: any): {
-        body: any;
-        extractedFunctions: string;
-    };
-    static variablePattern(content: any): any;
-    static generateMainFunctionWorkGroup(funcStr: string, ast: any, params: any, shaderType: string, vertexBufferOptions: {
-        stepMode?: 'instance' | 'vertex';
-        [key: string]: string;
-    }[], workGroupSize: number, gpuFuncs: (Function | string)[]): string;
-    static transposeBody: (body: any, funcStr: any, params: any, shaderType: any, returns: boolean, shaderHead: string, extractConsts: boolean, vertexBufferOptions: any) => {
-        code: string;
-        consts: any;
-    };
-    static indentCode(code: any): string;
-    static combineBindings(bindings1str: string, bindings2str: string, noOverlap?: boolean, bindings2params?: Param[]): {
+        [key: string]: any;
+    }, lastBinding?: number, params?: Param[], resourceBindings?: Record<string, ShaderBinding>, workgroupVariables?: Record<string, string>): TranspiledShader;
+    static combineBindings(code1: string, code2: string, noOverlap?: boolean, params?: Param[]): {
         code1: string;
-        changes1: any;
         code2: string;
-        changes2: any;
+        changes1: {
+            [k: string]: any;
+        };
+        changes2: {
+            [k: string]: any;
+        };
     };
-    static combineShaderParams(shader1Obj: TranspiledShader, shader2Obj: TranspiledShader): void;
-    static convertToWebGPU(func: Function | string, shaderType?: 'compute' | 'vertex' | 'fragment', bindGroupNumber?: number, workGroupSize?: number, vertexBufferOptions?: {
-        stepMode?: 'instance' | 'vertex';
-        [key: string]: string;
-    }[], gpuFuncs?: (Function | string)[], variableTypes?: {
-        [key: string]: string | {
-            prefix?: string;
-            type: string;
-        };
-    }, textureOptions?: {
-        [key: string]: {
-            binding?: string | number;
-            group?: string | number;
-            isDepth?: boolean;
-            isStorage?: boolean;
-            isSampler?: boolean;
-            isComparisonSampler?: boolean;
-            [key: string]: any;
-        };
-    }, lastBinding?: number, params?: Param[]): TranspiledShader;
+    static combineShaderParams(first: TranspiledShader, second: TranspiledShader): Param[];
+    static getFunctionHead(source: string): string;
+    static splitIgnoringBrackets(source: string): string[];
+    static tokenize(source: string): any;
+    static parse(source: string, _tokens?: any, stage?: any, vbos?: any): any[];
+    static inferTypeFromValue(value: string, _source?: string, _ast?: any, defaultValue?: string): string;
+    static flattenStrings(values?: string[]): string[];
+    static variablePattern(value: string): string;
+    static indentCode(code: string): string;
 }
 export declare const replacements: {
-    'Math.PI': string;
-    'Math.E': string;
-    'Math.LN10': string;
-    'Math.LN2': string;
-    'Math.LOG10E': string;
-    'Math.LOG2E': string;
-    'Math.SQRT1_2': string;
-    'Math.SQRT2': string;
-    'Math.abs': string;
-    'Math.acos': string;
-    'Math.acosh': string;
-    'Math.asin': string;
-    'Math.asinh': string;
-    'Math.atan': string;
-    'Math.atan2': string;
-    'Math.atanh': string;
-    'Math.ceil': string;
-    'Math.cos': string;
-    'Math.cosh': string;
-    'Math.clz32': string;
-    'Math.exp': string;
-    'Math.floor': string;
-    'Math.log': string;
-    'Math.log2': string;
-    'Math.max': string;
-    'Math.min': string;
-    'Math.pow': string;
-    'Math.round': string;
-    'Math.sin': string;
-    'Math.sinh': string;
-    'Math.sqrt': string;
-    'Math.tan': string;
-    'Math.tanh': string;
-    'Math.trunc': string;
+    "Math.PI": string;
+    "Math.E": string;
+    "Math.LN10": string;
+    "Math.LN2": string;
+    "Math.LOG10E": string;
+    "Math.LOG2E": string;
+    "Math.SQRT1_2": string;
+    "Math.SQRT2": string;
+    "Math.abs": string;
+    "Math.acos": string;
+    "Math.acosh": string;
+    "Math.asin": string;
+    "Math.asinh": string;
+    "Math.atan": string;
+    "Math.atan2": string;
+    "Math.atanh": string;
+    "Math.ceil": string;
+    "Math.cos": string;
+    "Math.cosh": string;
+    "Math.clz32": string;
+    "Math.exp": string;
+    "Math.floor": string;
+    "Math.log": string;
+    "Math.log2": string;
+    "Math.max": string;
+    "Math.min": string;
+    "Math.pow": string;
+    "Math.round": string;
+    "Math.sin": string;
+    "Math.sinh": string;
+    "Math.sqrt": string;
+    "Math.tan": string;
+    "Math.tanh": string;
+    "Math.trunc": string;
 };
 export declare const vertexFormats: {
     uint8x2: {
@@ -375,153 +328,153 @@ export declare const WGSLTypeSizes: {
             float16x4: boolean;
         };
     };
-    'vec2<f16>': {
+    "vec2<f16>": {
         alignment: number;
         size: number;
         vertexFormats: {
             float16x2: boolean;
         };
     };
-    'vec2<i16>': {
+    "vec2<i16>": {
         alignment: number;
         size: number;
     };
-    'vec2<u16>': {
+    "vec2<u16>": {
         alignment: number;
         size: number;
     };
-    'vec3<f16>': {
+    "vec3<f16>": {
         alignment: number;
         size: number;
     };
-    'vec3<i16>': {
+    "vec3<i16>": {
         alignment: number;
         size: number;
     };
-    'vec3<u16>': {
+    "vec3<u16>": {
         alignment: number;
         size: number;
     };
-    'vec4<f16>': {
+    "vec4<f16>": {
         alignment: number;
         size: number;
         vertexFormats: {
             float16x4: boolean;
         };
     };
-    'vec4<i16>': {
+    "vec4<i16>": {
         alignment: number;
         size: number;
     };
-    'vec4<u16>': {
+    "vec4<u16>": {
         alignment: number;
         size: number;
     };
-    'mat2x2<f16>': {
+    "mat2x2<f16>": {
         alignment: number;
         size: number;
     };
-    'mat2x2<i16>': {
+    "mat2x2<i16>": {
         alignment: number;
         size: number;
     };
-    'mat2x2<u16>': {
+    "mat2x2<u16>": {
         alignment: number;
         size: number;
     };
-    'mat3x2<f16>': {
+    "mat3x2<f16>": {
         alignment: number;
         size: number;
     };
-    'mat3x2<i16>': {
+    "mat3x2<i16>": {
         alignment: number;
         size: number;
     };
-    'mat3x2<u16>': {
+    "mat3x2<u16>": {
         alignment: number;
         size: number;
     };
-    'mat4x2<f16>': {
+    "mat4x2<f16>": {
         alignment: number;
         size: number;
     };
-    'mat4x2<i16>': {
+    "mat4x2<i16>": {
         alignment: number;
         size: number;
     };
-    'mat4x2<u16>': {
+    "mat4x2<u16>": {
         alignment: number;
         size: number;
     };
-    'mat2x3<f16>': {
+    "mat2x3<f16>": {
         alignment: number;
         size: number;
     };
-    'mat2x3<i16>': {
+    "mat2x3<i16>": {
         alignment: number;
         size: number;
     };
-    'mat2x3<u16>': {
+    "mat2x3<u16>": {
         alignment: number;
         size: number;
     };
-    'mat3x3<f16>': {
+    "mat3x3<f16>": {
         alignment: number;
         size: number;
     };
-    'mat3x3<i16>': {
+    "mat3x3<i16>": {
         alignment: number;
         size: number;
     };
-    'mat3x3<u16>': {
+    "mat3x3<u16>": {
         alignment: number;
         size: number;
     };
-    'mat4x3<f16>': {
+    "mat4x3<f16>": {
         alignment: number;
         size: number;
     };
-    'mat4x3<i16>': {
+    "mat4x3<i16>": {
         alignment: number;
         size: number;
     };
-    'mat4x3<u16>': {
+    "mat4x3<u16>": {
         alignment: number;
         size: number;
     };
-    'mat2x4<f16>': {
+    "mat2x4<f16>": {
         alignment: number;
         size: number;
     };
-    'mat2x4<i16>': {
+    "mat2x4<i16>": {
         alignment: number;
         size: number;
     };
-    'mat2x4<u16>': {
+    "mat2x4<u16>": {
         alignment: number;
         size: number;
     };
-    'mat3x4<f16>': {
+    "mat3x4<f16>": {
         alignment: number;
         size: number;
     };
-    'mat3x4<i16>': {
+    "mat3x4<i16>": {
         alignment: number;
         size: number;
     };
-    'mat3x4<u16>': {
+    "mat3x4<u16>": {
         alignment: number;
         size: number;
     };
-    'mat4x4<f16>': {
+    "mat4x4<f16>": {
         alignment: number;
         size: number;
     };
-    'mat4x4<i16>': {
+    "mat4x4<i16>": {
         alignment: number;
         size: number;
     };
-    'mat4x4<u16>': {
+    "mat4x4<u16>": {
         alignment: number;
         size: number;
     };
@@ -616,17 +569,17 @@ export declare const WGSLTypeSizes: {
         size: number;
         ct: number;
     };
-    'atomic<u32>': {
+    "atomic<u32>": {
         alignment: number;
         size: number;
         ct: number;
     };
-    'atomic<i32>': {
+    "atomic<i32>": {
         alignment: number;
         size: number;
         ct: number;
     };
-    'vec2<i32>': {
+    "vec2<i32>": {
         alignment: number;
         size: number;
         vertexFormats: {
@@ -636,7 +589,7 @@ export declare const WGSLTypeSizes: {
         };
         ct: number;
     };
-    'vec2<u32>': {
+    "vec2<u32>": {
         alignment: number;
         size: number;
         vertexFormats: {
@@ -646,7 +599,7 @@ export declare const WGSLTypeSizes: {
         };
         ct: number;
     };
-    'vec2<f32>': {
+    "vec2<f32>": {
         alignment: number;
         size: number;
         vertexFormats: {
@@ -658,7 +611,7 @@ export declare const WGSLTypeSizes: {
         };
         ct: number;
     };
-    'vec3<i32>': {
+    "vec3<i32>": {
         alignment: number;
         size: number;
         vertexFormats: {
@@ -666,7 +619,7 @@ export declare const WGSLTypeSizes: {
         };
         ct: number;
     };
-    'vec3<u32>': {
+    "vec3<u32>": {
         alignment: number;
         size: number;
         vertexFormats: {
@@ -674,7 +627,7 @@ export declare const WGSLTypeSizes: {
         };
         ct: number;
     };
-    'vec3<f32>': {
+    "vec3<f32>": {
         alignment: number;
         size: number;
         vertexFormats: {
@@ -682,7 +635,7 @@ export declare const WGSLTypeSizes: {
         };
         ct: number;
     };
-    'vec4<i32>': {
+    "vec4<i32>": {
         alignment: number;
         size: number;
         vertexFormats: {
@@ -692,7 +645,7 @@ export declare const WGSLTypeSizes: {
         };
         ct: number;
     };
-    'vec4<u32>': {
+    "vec4<u32>": {
         alignment: number;
         size: number;
         vertexFormats: {
@@ -702,7 +655,7 @@ export declare const WGSLTypeSizes: {
         };
         ct: number;
     };
-    'vec4<f32>': {
+    "vec4<f32>": {
         alignment: number;
         size: number;
         vertexFormats: {
@@ -804,137 +757,137 @@ export declare const WGSLTypeSizes: {
         };
         ct: number;
     };
-    'mat2x2<f32>': {
+    "mat2x2<f32>": {
         alignment: number;
         size: number;
         ct: number;
     };
-    'mat2x2<i32>': {
+    "mat2x2<i32>": {
         alignment: number;
         size: number;
         ct: number;
     };
-    'mat2x2<u32>': {
+    "mat2x2<u32>": {
         alignment: number;
         size: number;
         ct: number;
     };
-    'mat3x2<f32>': {
+    "mat3x2<f32>": {
         alignment: number;
         size: number;
         ct: number;
     };
-    'mat3x2<i32>': {
+    "mat3x2<i32>": {
         alignment: number;
         size: number;
         ct: number;
     };
-    'mat3x2<u32>': {
+    "mat3x2<u32>": {
         alignment: number;
         size: number;
         ct: number;
     };
-    'mat4x2<f32>': {
+    "mat4x2<f32>": {
         alignment: number;
         size: number;
         ct: number;
     };
-    'mat4x2<i32>': {
+    "mat4x2<i32>": {
         alignment: number;
         size: number;
         ct: number;
     };
-    'mat4x2<u32>': {
+    "mat4x2<u32>": {
         alignment: number;
         size: number;
         ct: number;
     };
-    'mat2x3<f32>': {
+    "mat2x3<f32>": {
         alignment: number;
         size: number;
         ct: number;
     };
-    'mat2x3<i32>': {
+    "mat2x3<i32>": {
         alignment: number;
         size: number;
         ct: number;
     };
-    'mat2x3<u32>': {
+    "mat2x3<u32>": {
         alignment: number;
         size: number;
         ct: number;
     };
-    'mat3x3<f32>': {
+    "mat3x3<f32>": {
         alignment: number;
         size: number;
         ct: number;
     };
-    'mat3x3<i32>': {
+    "mat3x3<i32>": {
         alignment: number;
         size: number;
         ct: number;
     };
-    'mat3x3<u32>': {
+    "mat3x3<u32>": {
         alignment: number;
         size: number;
         ct: number;
     };
-    'mat4x3<f32>': {
+    "mat4x3<f32>": {
         alignment: number;
         size: number;
         ct: number;
     };
-    'mat4x3<i32>': {
+    "mat4x3<i32>": {
         alignment: number;
         size: number;
         ct: number;
     };
-    'mat4x3<u32>': {
+    "mat4x3<u32>": {
         alignment: number;
         size: number;
         ct: number;
     };
-    'mat2x4<f32>': {
+    "mat2x4<f32>": {
         alignment: number;
         size: number;
         ct: number;
     };
-    'mat2x4<i32>': {
+    "mat2x4<i32>": {
         alignment: number;
         size: number;
         ct: number;
     };
-    'mat2x4<u32>': {
+    "mat2x4<u32>": {
         alignment: number;
         size: number;
         ct: number;
     };
-    'mat3x4<f32>': {
+    "mat3x4<f32>": {
         alignment: number;
         size: number;
         ct: number;
     };
-    'mat3x4<i32>': {
+    "mat3x4<i32>": {
         alignment: number;
         size: number;
         ct: number;
     };
-    'mat3x4<u32>': {
+    "mat3x4<u32>": {
         alignment: number;
         size: number;
         ct: number;
     };
-    'mat4x4<f32>': {
+    "mat4x4<f32>": {
         alignment: number;
         size: number;
         ct: number;
     };
-    'mat4x4<i32>': {
+    "mat4x4<i32>": {
         alignment: number;
         size: number;
         ct: number;
     };
-    'mat4x4<u32>': {
+    "mat4x4<u32>": {
         alignment: number;
         size: number;
         ct: number;

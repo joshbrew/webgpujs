@@ -1,0 +1,38 @@
+// Gyroid volume
+// Setup and update are independent of the gallery. Call setup(canvas, device), then demo.frame(timeInMilliseconds, controls).
+import { WebGPUjs } from "../../../src/pipeline";
+import { gyroid } from "./shaders.js";
+
+const demoDefinition = {
+  id: "gyroid",
+  title: "Gyroid volume",
+  description:
+    "Seventy-two ray samples reveal a glowing triply periodic implicit surface.",
+  shader: gyroid,
+  category: "Interactive shader studies",
+  interactive: true,
+};
+
+export async function setup(canvas, device, options = {}) {
+  const definition = { ...demoDefinition, ...options };
+  const pipeline = await WebGPUjs.createPipeline(definition.shader, {
+    device,
+    canvas,
+    renderPass: { vbos: [], vertexCount: 3 },
+  });
+  async function frame(time, controls = {}) {
+    await pipeline.render(
+      {},
+      time / 1000,
+      controls.zoom ?? 1,
+      controls.pointer ?? [0, 0],
+    );
+  }
+  return { pipelines: [pipeline], frame };
+}
+
+export default {
+  ...demoDefinition,
+  setup,
+  controls: [["zoom", "Zoom", 0.4, 5, 0.05, 1]],
+};

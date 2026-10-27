@@ -1,0 +1,145 @@
+{
+  "version": 1,
+  "files": [
+    {
+      "path": "dist/webgpujs.js",
+      "kind": "build",
+      "hash": "bacc0670670c860effc06e73722898e7804568bcf068d5e523004506321c4635"
+    },
+    {
+      "path": "dist/webgpujs.esm.js",
+      "kind": "build",
+      "hash": "0e737ae7f523c5716111c304c2871363c5df74008e2279166a628f80c5cc41b6"
+    },
+    {
+      "path": "dist/index.d.ts",
+      "kind": "build",
+      "hash": "ea4283cf252ad8cd9a78b474f7c19f0dfb258a0866a3d38c3fe92ff0c4e29cf2"
+    },
+    {
+      "path": "dist/src/bindings.d.ts",
+      "kind": "build",
+      "hash": "8ed287a0d594ae3b21500b27cc68cf0dc2412867c5a3bbff54613b3bdb3792b5"
+    },
+    {
+      "path": "dist/src/compute-chain.d.ts",
+      "kind": "build",
+      "hash": "ad3b706c2f23ef8716479a907f16def31da390102b39c18208d145106e0d8ea8"
+    },
+    {
+      "path": "dist/src/data.d.ts",
+      "kind": "build",
+      "hash": "ffebf7adc6caf3e353a26322ec2b39491fbc0561a5a37509335a109d8c8c6443"
+    },
+    {
+      "path": "dist/src/parser.d.ts",
+      "kind": "build",
+      "hash": "49a9fa00e3c7a2aeeade7689be02dc2d25f9a1a79088baa63b1a5e352ade2e34"
+    },
+    {
+      "path": "dist/src/pipeline.d.ts",
+      "kind": "build",
+      "hash": "8a20881df93ac235d5062025436ade256a8e31f170a2a2ee061396eb7a22849f"
+    },
+    {
+      "path": "dist/src/shader.d.ts",
+      "kind": "build",
+      "hash": "c8087ad6ab1228a020cccd4485e4d2da06201849331a1fc9590e27a093724ff3"
+    },
+    {
+      "path": "dist/src/transpiler.d.ts",
+      "kind": "build",
+      "hash": "49bce4e15c5255db2a395f5f7544200aaefda64781ba19dc9c270117ef7e6307"
+    },
+    {
+      "path": "dist/src/types.d.ts",
+      "kind": "build",
+      "hash": "2a13f4c8dbba856caa9392932bca509010f4efda0dffa2f4ccdb2f14d82cc54a"
+    },
+    {
+      "path": "dist/src/util.d.ts",
+      "kind": "build",
+      "hash": "ef355915e55f120ee8d2a72a36000a262df874c7205dec47ec60eed4a0bbcc72"
+    },
+    {
+      "path": "dist/src/wgsl.d.ts",
+      "kind": "build",
+      "hash": "041f6fe3e5a7130bc601dcc8c708a2518221f2e1a5571962b3256f48dfa06618"
+    },
+    {
+      "path": "dist/src/workgroups.d.ts",
+      "kind": "build",
+      "hash": "a0d78050f0dbce7b7073789cae987a390721c91306df3b181d65db65083eee0f"
+    },
+    {
+      "path": "example/dist/example.js",
+      "kind": "build",
+      "hash": "3533553cac00155c6ca01b7cb0ef928f83f85dfbd1c1232c737ac3c6555e5961"
+    },
+    {
+      "path": "example/dist/editor.js",
+      "kind": "build",
+      "hash": "a5ca608e9733aa99a972b2641fec67c6be393c80b33bbd31a36670f171197ddc"
+    },
+    {
+      "path": "example/dist/knucks-UYHBZ44J.jpg",
+      "kind": "build",
+      "hash": "003fad3b292365201acec6576bd1338f3050c3b94b0bb07292f25ef6bdfa5701"
+    },
+    {
+      "path": "dist/src/constants.d.ts",
+      "kind": "build",
+      "hash": "345705a386a9b5e72547d02118559b068ae323b32cbc79ff8ef408f2f3626e33"
+    },
+    {
+      "path": "dist/src/media.d.ts",
+      "kind": "build",
+      "hash": "6fae80db6710bfb31d69e1bd30042038c128192c8da9d13fec9afec10abe0cc9"
+    },
+    {
+      "path": "example/dist/standalone.js",
+      "kind": "build",
+      "hash": "4e5dbe19e49e41550101297497059cc09d12cdb8f5bd990f2e4066378f4e8f96"
+    },
+    {
+      "path": "dist/src/lifecycle.d.ts",
+      "kind": "build",
+      "hash": "d082457b52b39f934caadf0fa66b190ba331038e83e182d44b9e33228e56aabc"
+    },
+    {
+      "path": "dist/src/vertex-data.d.ts",
+      "kind": "build",
+      "hash": "393c9a03bc379d4b6437a03a19bb8681768ef513e63edce242ea1f090c2dd8ec"
+    },
+    {
+      "path": "dist/src/builtin-inputs.d.ts",
+      "kind": "build",
+      "hash": "1dd035d9c8534c22af4d5ec6d5f83841d2a6df941bee114cd7415f8e06e4ce5f"
+    },
+    {
+      "path": "dist/src/readback.d.ts",
+      "kind": "build",
+      "hash": "4d77576e40896c59b2f916a08e771523a2acbc90c0ee312e3828366e3b59658c"
+    },
+    {
+      "path": "example/dist/verify.js",
+      "kind": "build",
+      "hash": "c64d2f927fc626dad9f5e558f35325967f4cd7860fdf5788d27c222a55d3f42d"
+    },
+    {
+      "path": "dist/src/shader-source.d.ts",
+      "kind": "build",
+      "hash": "560a67763b10776611919fd329e684e73f8ede89d6f1ff6c3ac31fd6757a3b88"
+    },
+    {
+      "path": "dist/esbuild.js",
+      "kind": "build",
+      "hash": "e4829c38f18ca355eb3dcc40aba9c324a785576ec0f87cd962ffdce83342407d"
+    },
+    {
+      "path": "example/dist/external-texture.js",
+      "kind": "build",
+      "hash": "adc522045c69d10e371b383bec7ef6e79c4047d3f1f4b52954ca1943f97d128f"
+    }
+  ]
+}

@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>WebGPUjs · Live shader editor</title>
+    <link rel="stylesheet" href="gallery.css" />
+  </head>
+  <body class="editor-page" data-gallery="editor">
+    <header>
+      <span class="eyebrow">WebGPUjs / live shader editor</span>
+      <h1>Edit. Translate. Rebuild.</h1>
+      <p>
+        Choose an existing example. Every shader gets an editable source window
+        with linked WGSL beside it, including native WGSL stages. Typing
+        JavaScript updates the translation;
+        <strong>Rebuild</strong> applies the complete shader set and restarts
+        the example. A failed build keeps the last working preview.
+      </p>
+      <a href="index.html">← All examples</a>
+    </header>
+    <div class="editor-toolbar">
+      <label
+        >Example
+        <select id="example-select" aria-label="Example"></select
+      ></label>
+      <label
+        >Jump to shader
+        <select id="shader-select" aria-label="Jump to shader"></select
+      ></label>
+      <button id="rebuild" type="button">Rebuild</button
+      ><button id="reset-code" type="button">Reset code</button
+      ><button id="pause" type="button">Pause preview</button>
+      <button id="export-js" type="button">Download shader JS</button>
+      <button id="export-wgsl" type="button">Download shader WGSL</button>
+      <button id="export-example" type="button">Export example</button>
+      <span id="dirty" aria-live="polite">Loading…</span>
+    </div>
+    <section class="editor-preview">
+      <div id="preview"></div>
+      <div>
+        <h2 id="example-title">Preparing WebGPU…</h2>
+        <p id="build-status" role="status">Loading the selected example.</p>
+        <p id="translate-status" role="status"></p>
+        <pre id="preview-output" hidden></pre>
+        <p>
+          Ctrl/⌘ + Enter rebuilds. Edits stay in this tab when you switch
+          examples. Reset code restores the original source; the preview changes
+          when you rebuild.
+        </p>
+      </div>
+    </section>
+    <div id="pipeline-overview"></div>
+    <div id="shader-editors" class="shader-editors"></div>
+    <details id="host-code">
+      <summary>Example setup and animation code</summary>
+      <div class="source-columns">
+        <section>
+          <h4>Setup</h4>
+          <pre id="setup-code"></pre>
+        </section>
+        <section>
+          <h4>Animation / update</h4>
+          <pre id="animation-code"></pre>
+        </section>
+      </div>
+    </details>
+    <script type="module" src="dist/editor.js"></script>
+  </body>
+</html>

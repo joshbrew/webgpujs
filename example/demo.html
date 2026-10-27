@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>WebGPUjs demo</title>
+    <link rel="stylesheet" href="gallery.css" />
+  </head>
+  <body>
+    <header>
+      <span class="eyebrow">WebGPUjs / standalone demo</span>
+      <h1 id="title">Preparing WebGPU…</h1>
+      <p id="description"></p>
+      <a href="/">← All examples</a> · <a id="edit">Edit the shaders →</a>
+    </header>
+    <div id="controls"></div>
+    <canvas id="gpu" width="512" height="320" tabindex="0"></canvas>
+    <pre id="output" role="status"></pre>
+    <script type="module" src="dist/standalone.js"></script>
+  </body>
+</html>

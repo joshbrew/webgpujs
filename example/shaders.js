@@ -1,0 +1,23 @@
+// Compatibility exports. Authored shader sources live beside each demo.
+export { dft } from "./demos/dft/shaders.js";
+export { triangleVertex } from "./demos/triangle/shaders.js";
+export { colorFragment } from "./demos/boids/shaders.js";
+export { cubeVertex } from "./demos/cube/shaders.js";
+export { cubeFragment } from "./demos/cube/shaders.js";
+export { boidsCompute } from "./demos/boids/shaders.js";
+export { boidsVertex } from "./demos/boids/shaders.js";
+export { mandelbrot } from "./demos/mandelbrot/shaders.js";
+export { scaleSamples } from "./demos/implicit-chain/shaders.js";
+export { offsetSamples } from "./demos/implicit-chain/shaders.js";
+export { particleField } from "./demos/particles/shaders.js";
+export { particleVertex } from "./demos/nbody/shaders.js";
+export { particleFragment } from "./demos/cloth/shaders.js";
+export { generateTexture } from "./demos/bloom/shaders.js";
+export { blurTexture } from "./demos/texture-chain/shaders.js";
+export { textureVertex } from "./demos/bloom/shaders.js";
+export { textureFragment } from "./demos/bloom/shaders.js";
+export { histogramCompute } from "./demos/histogram/shaders.js";
+export { histogramSummary } from "./demos/histogram/shaders.js";
+export { histogramFragment } from "./demos/histogram/shaders.js";
+export { reactionStep } from "./demos/reaction/shaders.js";
+export { reactionFragment } from "./demos/reaction/shaders.js";

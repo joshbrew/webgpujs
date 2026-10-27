@@ -1,0 +1,25 @@
+// Compatibility exports. Authored shader sources live beside each demo.
+export { julia } from "./demos/julia/shaders.js";
+export { burningShip } from "./demos/burning-ship/shaders.js";
+export { torusMarch } from "./demos/torus/shaders.js";
+export { sphereMarch } from "./demos/soft-shadows/shaders.js";
+export { metaballs } from "./demos/metaballs/shaders.js";
+export { voronoi } from "./demos/voronoi/shaders.js";
+export { terrainNoise } from "./demos/terrain/shaders.js";
+export { domainWarp } from "./demos/warp/shaders.js";
+export { kaleidoscope } from "./demos/kaleidoscope/shaders.js";
+export { interference } from "./demos/interference/shaders.js";
+export { polarTunnel } from "./demos/tunnel/shaders.js";
+export { bumpLighting } from "./demos/bump/shaders.js";
+export { lifeStep } from "./demos/life/shaders.js";
+export { lifeFragment } from "./demos/life/shaders.js";
+export { waveStep } from "./demos/waves/shaders.js";
+export { waveFragment } from "./demos/coupled/shaders.js";
+export { nbodyStep } from "./demos/nbody/shaders.js";
+export { clothStep } from "./demos/cloth/shaders.js";
+export { clothVertex } from "./demos/cloth/shaders.js";
+export { bitonicStep } from "./demos/sort/shaders.js";
+export { scanStep } from "./demos/scan/shaders.js";
+export { barsFragment } from "./demos/scan/shaders.js";
+export { sobelTexture } from "./demos/sobel/shaders.js";
+export { bloomTexture } from "./demos/bloom/shaders.js";

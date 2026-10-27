@@ -1,0 +1,35 @@
+// Fractal terrain
+// Setup and update are independent of the gallery. Call setup(canvas, device), then demo.frame(timeInMilliseconds, controls).
+import { WebGPUjs } from "../../../src/pipeline";
+import { terrainNoise } from "./shaders.js";
+
+const demoDefinition = {
+  id: "terrain",
+  title: "Fractal terrain",
+  description:
+    "Six octaves of interpolated value noise create a terrain palette.",
+  shader: terrainNoise,
+  category: "Fragment studies",
+};
+
+export async function setup(canvas, device, options = {}) {
+  const definition = { ...demoDefinition, ...options };
+  const pipeline = await WebGPUjs.createPipeline(definition.shader, {
+    device,
+    canvas,
+    renderPass: { vbos: [], vertexCount: 3 },
+  });
+  async function frame(time, controls = {}) {
+    if (definition.interactive)
+      await pipeline.render(
+        {},
+        time / 1000,
+        controls.zoom ?? 1,
+        controls.pointer ?? [0, 0],
+      );
+    else await pipeline.render({}, time / 1000);
+  }
+  return { pipelines: [pipeline], frame };
+}
+
+export default { ...demoDefinition, setup };

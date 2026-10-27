@@ -1,36 +1,37 @@
-<html>
-    <head>
-        <style>
-            * {
-                background-color: black;
-                color:white;
-                text-wrap:nowrap;
-            }
-        </style>
-    </head>
-    <body>
-        Example 1: Compute shader DFT (F12 to see output)
-        <div id="ex1"></div>
-        <hr>
-        Example 2: Triangle vertex + fragment shader
-        <div id="ex2"></div>
-        <hr>
-        Example 3: Vertex buffers and textures. FPS: <span id="ex3fps"></span>
-        <div id="ex3"></div>
-        <hr>
-        Example 4: Compute + Render shader loop with access to each other's input buffers. FPS: <span id="ex4fps"></span>
-        <div id="ex4"></div> 
-        <hr>
-        Example 5: Mandelbrot fractal.
-        <div id="ex5"></div>
-        <hr>
-        Example 6: Chaining multiple compute and render shaders.
-        <div id="ex6"></div>
-        <script src="./dist/example.js" type="module"></script>
-
-
-<script>
-
-</script>
-    </body>
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>WebGPUjs · JavaScript GPU examples</title>
+    <link rel="stylesheet" href="gallery.css" />
+  </head>
+  <body data-gallery="all">
+    <header>
+      <span class="eyebrow" id="example-count">WebGPUjs / examples</span>
+      <h1>JavaScript, at GPU scale.</h1>
+      <p>
+        Explore rendering, parallel algorithms, simulations and multi-shader
+        pipelines in one gallery. Every example shows JavaScript and generated
+        WGSL side by side. Previews run only while in view.
+      </p>
+      <p><a href="editor.html">Open the live shader editor →</a></p>
+    </header>
+    <p id="status" role="status" class="status">Preparing WebGPU…</p>
+    <div class="gallery-toolbar">
+      <button id="pause" type="button" aria-pressed="false">
+        Pause animations
+      </button>
+      <label
+        >Jump to example
+        <select id="jump" aria-label="Jump to example">
+          <option value="">Choose an example…</option>
+        </select></label
+      >
+      <a href="#nav">Browse all examples</a>
+    </div>
+    <nav id="nav" class="catalog-nav" aria-label="All examples"></nav>
+    <main id="examples" class="catalog"></main>
+    <script type="module" src="dist/example.js"></script>
+  </body>
 </html>

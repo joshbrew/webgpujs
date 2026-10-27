@@ -6,16 +6,9 @@
   "module": "./dist/webgpujs.esm.js",
   "type": "module",
   "scripts": {
-    "start": "tinybuild",
-    "build": "tinybuild build",
-    "serve": "tinybuild serve",
-    "init": "node tinybuild/init.js",
-    "concurrent": "concurrently \"npm run python\" \"npm start\"",
-    "dev": "npm run pip && npm i --save-dev concurrently && npm i --save-dev nodemon && npm run concurrent",
-    "startdev": "nodemon --exec \"node tinybuild.js\" -e ejs,js,ts,jsx,tsx,css,html,jpg,png,scss,txt,csv",
-    "python": "python python/server.py",
-    "pip": "pip install quart && pip install websockets",
-    "pwa": "npm i workbox-cli && workbox generateSW node_server/pwa/workbox-config.js && npm run build && npm start"
+    "start": "npm --prefix .. run example",
+    "build": "npm --prefix .. run build",
+    "serve": "npm --prefix .. run serve"
   },
   "keywords": [
     "esbuild"

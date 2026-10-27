@@ -1,0 +1,8 @@
+{
+  "format": "webgpujs-external-texture",
+  "version": 1,
+  "date": "2026-10-27T00:14:54.817Z",
+  "environmentReport": "windows-chromium.json",
+  "passed": true,
+  "result": "PASS: two VideoFrames imported, sampled and refreshed. [[0,255,0,255],[255,255,255,255]]"
+}

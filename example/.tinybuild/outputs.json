@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "files": [
+    {
+      "path": "dist/example.js",
+      "kind": "build",
+      "hash": "2e6dc1441a7820a41842b8e1ff13639fdae1886e6667631137fe529015b1eb24"
+    },
+    {
+      "path": "dist/editor.js",
+      "kind": "build",
+      "hash": "6c6c94b9055f59c990ce293947efb0314061468cf2b0ae131100bde185a9874f"
+    }
+  ]
+}
