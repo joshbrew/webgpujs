@@ -132,6 +132,68 @@ function disc(center = "vec2f", radius = "f32") {
 
 Use this as a fragment shader with `center` and `radius` uniforms. `fwidth` is a fragment derivative; it is not a compute-shader operation. The same `position` name has different roles in the vertex and fragment stages. [Derivative reference](https://www.w3.org/TR/WGSL/#derivative-builtin-functions).
 
+### Add your own automatic uniforms
+
+`WGSLTranspiler.builtInUniforms` is a public registry of **name → `{type, callback}`** entries. Add entries before creating or translating the shaders that use them. The key becomes a shader identifier; the synchronous callback runs on the CPU and returns the value to upload. It receives the `ShaderContext` performing the update, with access to its `canvas`, `device` and other context data.
+
+```js
+import { WebGPUjs, WGSLTranspiler } from "webgpujs";
+
+const state = { seconds: 0, gain: 1 };
+Object.assign(WGSLTranspiler.builtInUniforms, {
+  appTime: {
+    type: "f32",
+    callback: () => state.seconds,
+  },
+  appGain: {
+    type: "f32",
+    callback: () => state.gain,
+  },
+  viewSize: {
+    type: "vec2f",
+    callback: (context) => [context.canvas.width, context.canvas.height],
+  },
+});
+
+function pulse() {
+  const uv = position.xy / viewSize;
+  const glow = (0.5 + 0.5 * sin(appTime)) * appGain;
+  return vec4f(uv, glow, 1);
+}
+
+const canvas = document.querySelector("canvas");
+const pipeline = await WebGPUjs.createPipeline(pulse, { canvas });
+async function animate(time) {
+  state.seconds = time / 1000;
+  await pipeline.render(); // Reads the registered callbacks and uploads their values.
+  requestAnimationFrame(animate);
+}
+requestAnimationFrame(animate);
+
+// From a slider or another host-side event:
+// state.gain = 0.4;
+```
+
+The shader references `appTime`, `appGain` and `viewSize` directly: no parameter declaration or per-call `inputs` entry is needed. WebGPUjs detects referenced registry keys, emits fields in its `defaults` uniform buffer, packs the callback results and updates that buffer when the stage runs. Unused registrations do not add shader fields. A local variable or shader parameter with the same name shadows the automatic identifier.
+
+| Entry field         | Contract                                                                                                          |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| Key                 | A valid, non-reserved shader identifier; choose application-specific names to avoid collisions                    |
+| `type`              | A supported numeric uniform type, such as `f32`, `u32`, `vec2f` or `mat4x4f`; use integer flags instead of `bool` |
+| `callback(context)` | Return the matching number or numeric vector/matrix data synchronously; a promise is not a uniform value          |
+
+For browser ESM, import `WGSLTranspiler` from the same CDN module as `WebGPUjs`. With the classic bundle, the registry is `WebGPUjsModule.WGSLTranspiler.builtInUniforms`. In TypeScript, `Object.assign` lets you add keys to the registry without declaration merging. Use `import type { ShaderContext } from "webgpujs"` to annotate a context-taking callback, e.g. `callback: (context: ShaderContext) => [...]`.
+
+Registrations are global to that imported copy of the library. Each new `ShaderContext` shallow-copies the entry definitions, so register names and types **before pipeline creation**. Changing a closure value such as `state.gain` updates existing pipelines on their next run. Replacing a global entry's callback affects subsequently created contexts; existing contexts retain their callback references. Closures can intentionally share application state across contexts.
+
+For an existing context, a callback can be replaced without rebuilding if its name and type stay the same:
+
+```js
+pipeline.fragment.builtInUniforms.appGain.callback = () => 0.4;
+```
+
+Adding a new shader identifier or changing its type requires rebuilding the affected shader/layout. Callbacks may run for multiple stages or passes in one animation frame; keep them cheap and do not depend on exactly one invocation per displayed frame. Update shared state once in the host loop when every pass should see the same time or input snapshot. Native WGSL stages do not receive this JS-identifier discovery automatically; declare their uniforms explicitly and supply named inputs or native buffers. Buffers, textures and samplers also belong in normal inputs/bindings, rather than this uniform callback registry.
+
 ## Complete WGSL function directory
 
 Follow a family link for **every function and overload in that family**. The names below are examples for finding the right section, not a separate wrapper whitelist.

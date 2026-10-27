@@ -99,6 +99,8 @@ Shader code is parsed without executing it as JavaScript. The GPU runs compiled 
 
 **Wondering where `f32()`, `distance()` or `threadId` comes from?** These are shader constructors, WGSL functions and stage inputs; they need no JS imports inside a shader. The [shader-language guide](docs/SHADER-LANGUAGE.md) explains them, lists the wrapper's automatic uniforms, and links every family in the official WGSL function catalog.
 
+You can also [register your own automatic uniforms](docs/SHADER-LANGUAGE.md#add-your-own-automatic-uniforms): add a name with `{type, callback(context)}` to `WGSLTranspiler.builtInUniforms`, then reference that name inside a shader.
+
 ## Choose your starting point
 
 Each workflow includes its shaders, allocation and execution. Start small, then add the pieces your application needs.
