@@ -638,4 +638,4 @@ npm run build        # library, declarations, gallery and editor
 npm run benchmark    # cold and cached transpilation timings
 ```
 
-The GPU suite uses the development-only Dawn runtime and needs an adapter. The gallery and tests preserve authored shader source before bundling; see [the build contract](docs/API.md#supported-shader-language). Screenshots above were captured from the local gallery and editor. The hosted demo stays at **[webgpujs.netlify.app](https://webgpujs.netlify.app/)**; repository changes appear there after deployment.
+The GPU suite uses the development-only Dawn runtime and needs an adapter. The gallery and tests preserve authored shader source before bundling; see [the build contract](docs/API.md#supported-shader-language). Screenshots above were captured from the local gallery and editor. The hosted demo is at **[webgpujs.netlify.app](https://webgpujs.netlify.app/)**
