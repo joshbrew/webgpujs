@@ -1,6 +1,3 @@
-[build]
-  command = "npm run build"
-  publish = "example"
 
 # Keep the existing public site at https://webgpujs.netlify.app/.
 # Old repository-style links should reach the same gallery and assets.
