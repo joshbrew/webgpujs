@@ -1,7 +1,7 @@
 # WebGPUjs
 
 [![npm version](https://img.shields.io/npm/v/webgpujs)](https://www.npmjs.com/package/webgpujs)
-[![npm downloads](https://img.shields.io/npm/dm/webgpujs)](https://www.npmjs.com/package/webgpujs)
+[![npm downloads](https://img.shields.io/npm/dt/webgpujs)](https://www.npmjs.com/package/webgpujs)
 [![License](https://img.shields.io/npm/l/webgpujs)](LICENSE)
 [![TypeScript declarations included](https://img.shields.io/badge/TypeScript-types%20included-3178c6)](docs/API.md)
 
